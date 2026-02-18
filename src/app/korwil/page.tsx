@@ -7,7 +7,6 @@ import {
   Package, 
   TrendingUp, 
   Users, 
-  Calendar,
   Search,
   ChevronRight,
   LogOut,
@@ -16,8 +15,7 @@ import {
   School,
   GraduationCap,
   ArrowUpRight,
-  CheckCircle2,
-  XCircle
+  Box
 } from 'lucide-react'
 
 export default function ElegantKorwilDashboard() {
@@ -25,8 +23,6 @@ export default function ElegantKorwilDashboard() {
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0])
   const [units, setUnits] = useState<any[]>([])
   const [laporan, setLaporan] = useState<any[]>([])
-  
-  // PERBAIKAN: Nama variabel disamakan dengan tampilan (porsiSD & porsiMenengah)
   const [stats, setStats] = useState({ total: 0, porsiSD: 0, porsiMenengah: 0 })
 
   const fetchData = async () => {
@@ -47,7 +43,6 @@ export default function ElegantKorwilDashboard() {
           else m += porsi
         })
       })
-      // Update state dengan nama variabel yang benar
       setStats({ total: t, porsiSD: sd, porsiMenengah: m })
     }
   }
@@ -94,19 +89,16 @@ export default function ElegantKorwilDashboard() {
               <h3 className="text-2xl font-bold text-slate-900 mb-2">{stats.total.toLocaleString()}</h3>
               <div className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full w-fit">Terkirim</div>
            </div>
-
            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Porsi SD / MI</p>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">{stats.porsiSD.toLocaleString()}</h3>
               <div className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-full w-fit">Sekolah Dasar</div>
            </div>
-
            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Porsi Menengah</p>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">{stats.porsiMenengah.toLocaleString()}</h3>
               <div className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded-full w-fit">SMP / SMA / SMK</div>
            </div>
-
            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Laporan Unit</p>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">{laporan.length} / {units.length}</h3>
@@ -114,40 +106,55 @@ export default function ElegantKorwilDashboard() {
            </div>
         </div>
 
-        {/* RECENT DISTRIBUTIONS */}
+        {/* RECENT DISTRIBUTIONS (FIXED NAVIGATION) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
            <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-50">
               <h3 className="text-lg font-bold text-slate-900 mb-6">Recent Distributions</h3>
               <div className="space-y-4">
                  {laporan.map((l, i) => (
-                    <div key={i} onClick={() => router.push(`/korwil/detail/${l.unit_id}`)} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-2xl cursor-pointer transition-all">
+                    /* PERBAIKAN: Fungsi klik sekarang mengarah ke detail/[id] */
+                    <div 
+                      key={i} 
+                      onClick={() => router.push(`/korwil/detail/${l.unit_id}`)} 
+                      className="flex items-center justify-between p-4 hover:bg-[#EEF2FF] rounded-2xl cursor-pointer transition-all border border-transparent hover:border-indigo-100 group"
+                    >
                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center font-bold text-xs">{l.nama_unit.substring(0,2).toUpperCase()}</div>
-                          <span className="font-bold text-slate-700">{l.nama_unit}</span>
+                          <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center font-bold text-xs group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                             {l.nama_unit.substring(0,2).toUpperCase()}
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-700 block">{l.nama_unit}</span>
+                            <span className="text-[10px] text-slate-400 font-medium">Laporan Harian Selesai</span>
+                          </div>
                        </div>
-                       <ChevronRight className="text-slate-300" size={18}/>
+                       <ChevronRight className="text-slate-300 group-hover:text-indigo-500" size={18}/>
                     </div>
                  ))}
               </div>
            </div>
 
            {/* BREAKDOWN BAR */}
-           <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-50">
+           <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-50 h-fit">
               <h3 className="text-lg font-bold text-slate-900 mb-6">Porsi Breakdown</h3>
               <div className="space-y-6">
                  <div className="flex justify-between text-sm font-bold">
-                    <span className="text-slate-400">SD / MI</span>
+                    <span className="text-slate-400 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> SD / MI</span>
                     <span>{stats.porsiSD.toLocaleString()}</span>
                  </div>
                  <div className="flex justify-between text-sm font-bold">
-                    <span className="text-slate-400">SMP / SMA</span>
+                    <span className="text-slate-400 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-200"></div> SMP / SMA</span>
                     <span>{stats.porsiMenengah.toLocaleString()}</span>
                  </div>
-                 <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
-                    <div style={{ width: `${(stats.porsiSD/stats.total)*100}%` }} className="h-full bg-indigo-500"></div>
-                    <div style={{ width: `${(stats.porsiMenengah/stats.total)*100}%` }} className="h-full bg-indigo-200"></div>
+                 <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex shadow-inner mt-2">
+                    <div style={{ width: `${stats.total > 0 ? (stats.porsiSD/stats.total)*100 : 0}%` }} className="h-full bg-indigo-500"></div>
+                    <div style={{ width: `${stats.total > 0 ? (stats.porsiMenengah/stats.total)*100 : 0}%` }} className="h-full bg-indigo-200"></div>
                  </div>
-                 <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest mt-4">Visualisasi Proporsi Distribusi</p>
+                 <div className="bg-indigo-50 p-4 rounded-2xl mt-4">
+                    <p className="text-[10px] text-[#6366F1] font-black uppercase tracking-widest text-center leading-relaxed">
+                       Total Target Hari Ini:<br/>
+                       <span className="text-xl italic">{stats.total.toLocaleString()} Porsi</span>
+                    </p>
+                 </div>
               </div>
            </div>
         </div>
