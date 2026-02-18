@@ -1,158 +1,190 @@
 "use client"
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { 
-  ArrowLeft, 
-  Calendar, 
-  ExternalLink, 
+  BarChart3, 
+  LogOut, 
   CheckCircle2, 
-  Database,
-  UtensilsCrossed,
-  Activity,
-  Image as ImageIcon
+  XCircle,
+  ChevronRight,
+  Settings,
+  Users,
+  Utensils,
+  GraduationCap,
+  School,
+  Box
 } from 'lucide-react'
 
-export default function DetailLaporanPage() {
-  const { id } = useParams()
+export default function SuperKorwilPage() {
   const router = useRouter()
-  const [unit, setUnit] = useState<any>(null)
-  const [laporan, setLaporan] = useState<any>(null)
-  const [tanggal, setTanggal] = useState('2026-02-18')
+  
+  // --- STATE DATA ---
+  const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0])
+  const [units, setUnits] = useState<any[]>([])
+  const [laporan, setLaporan] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<'monitor' | 'control'>('monitor')
 
-  const fetchDetail = async () => {
-    // 1. Ambil Info Unit
-    const { data: u } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
-    if (u) setUnit(u)
+  // --- STATISTIK PORSI ---
+  const [stats, setStats] = useState({
+    totalPorsi: 0,
+    porsiSD: 0,
+    porsiMenengah: 0 // SMP, SMA, SMK
+  })
 
-    // 2. Ambil Laporan berdasarkan Tanggal
-    const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('unit_id', id).eq('tanggal_ops', tanggal).single()
-    setLaporan(l || null)
+  const fetchData = async () => {
+    // 1. Ambil Data Unit & Laporan
+    const { data: u } = await supabase.from('daftar_sppg').select('*').order('nama_unit')
+    const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', tanggal)
+    
+    // 2. Ambil Detail Sekolah untuk hitung porsi per jenjang
+    const { data: s } = await supabase.from('daftar_sekolah').select('jenjang, target_porsi, sppg_id')
+
+    if(u) setUnits(u)
+    if(l) {
+      setLaporan(l)
+      
+      // Hitung Infografis Porsi hanya dari unit yang SUDAH lapor
+      let total = 0
+      let sd = 0
+      let menengah = 0
+
+      l.forEach(lap => {
+        const sekolahUnit = s?.filter(sekolah => sekolah.sppg_id === lap.unit_id)
+        sekolahUnit?.forEach(sekolah => {
+          const porsi = Number(sekolah.target_porsi) || 0
+          total += porsi
+          if(sekolah.jenjang?.toUpperCase().includes('SD') || sekolah.jenjang?.toUpperCase().includes('MI')) {
+            sd += porsi
+          } else {
+            menengah += porsi
+          }
+        })
+      })
+
+      setStats({ totalPorsi: total, porsiSD: sd, porsiMenengah: menengah })
+    }
   }
 
-  useEffect(() => { fetchDetail() }, [id, tanggal])
+  useEffect(() => { fetchData() }, [tanggal])
 
-  // LINK GDRIVE EMAIL ANDA
-  const linkGDrive = "https://drive.google.com/drive/u/0/my-drive"
+  const sudahCount = laporan.length
+  const progres = units.length > 0 ? Math.round((sudahCount / units.length) * 100) : 0
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 lg:p-10 font-sans text-slate-800">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-slate-800">
+      
+      {/* SIDEBAR */}
+      <aside className="w-64 bg-[#0F2650] text-white flex flex-col shrink-0 fixed h-full">
+        <div className="p-6 border-b border-white/10 flex items-center gap-3">
+          <div className="p-2 bg-yellow-400 rounded-lg text-[#0F2650] shadow-lg shadow-yellow-400/20">
+            <Settings size={20} />
+          </div>
+          <span className="font-black tracking-tighter text-lg uppercase italic">SUPER KORWIL</span>
+        </div>
         
-        {/* TOP BAR */}
-        <header className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-           <button onClick={() => router.back()} className="flex items-center gap-2 text-xs font-black text-[#0F2650] uppercase tracking-widest hover:text-blue-600 transition-all">
-              <ArrowLeft size={18} /> Kembali ke Monitor
-           </button>
-           <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
-              <Calendar size={16} className="text-[#0F2650]" />
-              <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className="bg-transparent text-xs font-black outline-none" />
-           </div>
-        </header>
+        <nav className="flex-1 p-4 space-y-2">
+          <button onClick={() => setActiveTab('monitor')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'monitor' ? 'bg-white/10 text-white shadow-inner' : 'text-slate-400 hover:bg-white/5'}`}>
+            <BarChart3 size={18} /> Monitoring
+          </button>
+        </nav>
 
-        {/* HERO BANNER UNIT */}
-        {unit && (
-          <div className="bg-[#0F2650] rounded-[2.5rem] p-8 lg:p-12 text-white relative overflow-hidden shadow-2xl">
-            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-               <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-3xl flex items-center justify-center border border-white/20">
-                     <Database size={32} className="text-yellow-400" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-blue-300 uppercase tracking-[0.4em] mb-1">Data Unit Operasional</p>
-                    <h1 className="text-2xl lg:text-4xl font-black italic uppercase tracking-tighter">{unit.nama_unit}</h1>
-                    <p className="text-xs font-bold opacity-70 mt-2 flex items-center gap-2 uppercase">
-                       <div className="w-2 h-2 bg-emerald-400 rounded-full"></div> {unit.kepala_unit} | ID: {unit.id.substring(0,8)}...
-                    </p>
-                  </div>
-               </div>
-               {laporan && <div className="bg-emerald-500 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20">Sudah Lapor</div>}
+        <div className="p-4 border-t border-white/10">
+          <button onClick={() => router.push('/')} className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-xl transition-all uppercase tracking-widest">
+            <LogOut size={16} /> Keluar Sistem
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-1 ml-64 p-8 overflow-y-auto">
+        <div className="max-w-6xl mx-auto space-y-8">
+          
+          <header className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-black text-[#0F2650] uppercase tracking-tighter italic">Infografis Wilayah</h2>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em]">Monitoring Distribusi Porsi Kab. Pasuruan</p>
             </div>
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            <input type="date" className="p-2 bg-white rounded-xl border border-slate-200 text-xs font-bold" value={tanggal} onChange={e => setTanggal(e.target.value)} />
+          </header>
+
+          {/* ROW 1: PROGRES & TOTAL PORSI */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col justify-center">
+                <div className="flex justify-between items-end mb-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Progres Pengiriman Laporan SPPG</p>
+                  <span className="text-3xl font-black text-[#0F2650]">{progres}%</span>
+                </div>
+                <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden">
+                  <div style={{ width: `${progres}%` }} className="h-full bg-blue-600 rounded-full transition-all duration-1000"></div>
+                </div>
+            </div>
+
+            <div className="bg-[#0F2650] p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden group">
+                <Box className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-110 transition-transform" size={120} />
+                <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1 relative z-10">Total Distribusi Hari Ini</p>
+                <h4 className="text-5xl font-black italic relative z-10">{stats.totalPorsi.toLocaleString()}</h4>
+                <p className="text-[10px] font-bold opacity-60 mt-2 relative z-10 uppercase">Paket Porsi Terkirim</p>
+            </div>
           </div>
-        )}
 
-        {laporan ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* CONTENT KIRI: MENU & GIZI */}
-            <div className="lg:col-span-2 space-y-8">
-               <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-6">
-                  <h3 className="flex items-center gap-3 text-[10px] font-black text-[#0F2650] uppercase tracking-[0.3em] italic border-b pb-4">
-                     <UtensilsCrossed size={18}/> Menu Makan Bergizi Harian
-                  </h3>
-                  <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center">
-                     <p className="text-2xl lg:text-3xl font-black text-[#0F2650] italic leading-tight">"{laporan.menu_makanan}"</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                     <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Waktu Input</p>
-                        <p className="text-sm font-black text-[#0F2650]">18:53:32</p>
-                     </div>
-                     <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                        <div>
-                           <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Validasi</p>
-                           <p className="text-sm font-black text-emerald-600 uppercase italic">Terverifikasi</p>
-                        </div>
-                        <CheckCircle2 className="text-emerald-500" size={24}/>
-                     </div>
-                  </div>
-               </div>
-
-               {/* ANALISIS GIZI */}
-               <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-6">
-                  <h3 className="flex items-center gap-3 text-[10px] font-black text-[#0F2650] uppercase tracking-[0.3em] italic">
-                     <Activity size={18}/> Analisis Kandungan Gizi
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                     {['Besar', 'Kecil'].map((tipe) => (
-                        <div key={tipe}>
-                           <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${tipe === 'Besar' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>Porsi {tipe}</span>
-                           <div className="mt-4 space-y-3">
-                              {['Energi', 'Protein', 'Lemak', 'Karbo', 'Serat'].map(g => (
-                                 <div key={g} className="flex justify-between items-center border-b border-slate-50 pb-2">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{g}</span>
-                                    <span className="text-xs font-black text-[#0F2650]">{laporan.data_gizi?.[tipe.toLowerCase()]?.[g.toLowerCase()] || '0'} <span className="text-[9px] text-slate-300 font-bold">{g === 'Energi' ? 'kkal' : 'gr'}</span></span>
-                                 </div>
-                              ))}
-                           </div>
-                        </div>
-                     ))}
-                  </div>
-               </div>
-            </div>
-
-            {/* CONTENT KANAN: DOKUMENTASI GDRIVE & DISTRIBUSI */}
-            <div className="space-y-8">
-               <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm text-center space-y-6">
-                  <div className="w-full aspect-square bg-slate-100 rounded-[2rem] flex flex-col items-center justify-center border-2 border-dashed border-slate-200">
-                     <ImageIcon size={48} className="text-slate-300 mb-4" />
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-6 leading-relaxed">Dokumentasi tersimpan di Google Drive</p>
-                  </div>
-                  {/* TOMBOL BUKA GDRIVE SESUAI REQUEST ANDA */}
-                  <a 
-                    href={linkGDrive} 
-                    target="_blank" 
-                    className="w-full flex items-center justify-center gap-3 py-4 bg-[#0F2650] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:shadow-blue-900/30 transition-all group"
-                  >
-                    <ExternalLink size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"/> Buka Dokumentasi Foto
-                  </a>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Terlampir: 1 Berkas Foto di Drive</p>
-               </div>
-            </div>
-
-          </div>
-        ) : (
-          <div className="bg-white rounded-[2.5rem] p-20 text-center border border-slate-100 shadow-sm">
-             <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <XCircle size={40} />
+          {/* ROW 2: DETAIL JENJANG (INFOGRAFIS) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-8">
+                <div className="p-6 bg-orange-50 text-orange-500 rounded-3xl">
+                   <School size={40} />
+                </div>
+                <div>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Jenjang SD / MI</p>
+                   <h3 className="text-4xl font-black text-slate-800">{stats.porsiSD.toLocaleString()}</h3>
+                   <p className="text-[9px] font-bold text-orange-600 uppercase italic mt-1">Total Porsi Anak Sekolah Dasar</p>
+                </div>
              </div>
-             <h2 className="text-xl font-black text-[#0F2650] uppercase italic tracking-tighter">Laporan Belum Tersedia</h2>
-             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-2">Pilih tanggal lain atau hubungi admin unit terkait.</p>
-          </div>
-        )}
 
-      </div>
+             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-8">
+                <div className="p-6 bg-indigo-50 text-indigo-500 rounded-3xl">
+                   <GraduationCap size={40} />
+                </div>
+                <div>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Jenjang SMP / SMA / SMK</p>
+                   <h3 className="text-4xl font-black text-slate-800">{stats.porsiMenengah.toLocaleString()}</h3>
+                   <p className="text-[9px] font-bold text-indigo-600 uppercase italic mt-1">Total Porsi Pendidikan Menengah</p>
+                </div>
+             </div>
+          </div>
+
+          {/* ROW 3: LIST STATUS UNIT */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2 italic"><XCircle size={16}/> Belum Mengirim Laporan</h3>
+              <div className="space-y-2">
+                {units.filter(u => !laporan.find(l => l.unit_id === u.id)).map(u => (
+                  <div key={u.id} onClick={() => router.push(`/korwil/detail/${u.id}`)} className="bg-white p-5 rounded-2xl border border-slate-200 flex justify-between items-center group cursor-pointer hover:border-red-300 transition-all shadow-sm">
+                     <span className="text-xs font-black text-slate-700 uppercase">{u.nama_unit}</span>
+                     <ChevronRight className="text-slate-200 group-hover:text-red-500" size={20} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2 italic"><CheckCircle2 size={16}/> Laporan Sudah Masuk</h3>
+              <div className="space-y-2">
+                {laporan.map(l => (
+                  <div key={l.id} onClick={() => router.push(`/korwil/detail/${l.unit_id}`)} className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex justify-between items-center group cursor-pointer hover:border-emerald-500 transition-all">
+                     <div className="flex items-center gap-3">
+                        <Utensils size={16} className="text-emerald-500"/>
+                        <span className="text-xs font-black text-[#0F2650] uppercase">{l.nama_unit}</span>
+                     </div>
+                     <ChevronRight className="text-emerald-100 group-hover:text-emerald-500" size={20} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </main>
     </div>
   )
 }
