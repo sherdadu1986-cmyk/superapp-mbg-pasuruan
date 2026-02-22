@@ -50,7 +50,7 @@ export default function DashboardSPPGPage() {
 
   useEffect(() => { if (id) loadData() }, [id])
 
-  // --- FUNGSI SIMPAN DENGAN UPLOAD FOTO ---
+  // --- FUNGSI SIMPAN DENGAN UPLOAD FOTO (FIXED & INTEGRATED) ---
   const handleSimpanLaporan = async () => {
     if(!tanggal || !menu) return alert("⚠️ Wajib isi Tanggal & Menu!")
     setLoading(true)
@@ -78,9 +78,9 @@ export default function DashboardSPPGPage() {
         publicUrl = linkData.publicUrl
       }
 
-      // 2. MEMBERSIHKAN DATA REALISASI
+      // 2. MEMBERSIHKAN DATA REALISASI (Agar tidak ada input kosong)
       const cleanRealisasi = Object.fromEntries(
-        Object.entries(realisasi).filter(([_, v]) => v !== "")
+        Object.entries(realisasi).filter(([_, v]) => v !== "" && v !== null)
       );
 
       // 3. SIMPAN KE DATABASE
@@ -93,21 +93,21 @@ export default function DashboardSPPGPage() {
             menu_makanan: menu, 
             data_gizi: gizi,
             realisasi_sekolah: cleanRealisasi,
-            foto_url: publicUrl // Kolom link foto
+            foto_url: publicUrl // Menyimpan link foto publik
         }])
 
       if (error) {
         console.error("Supabase Error:", error)
         alert("❌ Gagal Simpan: " + error.message)
       } else {
-        alert("✅ LAPORAN & FOTO BERHASIL TERKIRIM!")
-        setFoto(null) // Reset foto setelah berhasil
+        alert("✅ LAPORAN & FOTO BERHASIL TERKIRIM KE KORWIL!")
+        setFoto(null) // Reset input foto
         setView('dashboard')
         loadData()
       }
     } catch (err: any) {
       console.error("System Error:", err)
-      alert("Terjadi kesalahan sistem atau koneksi.")
+      alert("Terjadi kesalahan sistem atau koneksi saat mengunggah. Pastikan Bucket 'dokumentasi' di Supabase sudah diset Public.")
     } finally {
       setLoading(false)
     }
