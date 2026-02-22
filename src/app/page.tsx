@@ -159,14 +159,14 @@ export default function LoginPage() {
 
           {/* REGISTER SECTION */}
           <div className="pt-8 border-t border-slate-50 flex flex-col items-center gap-4">
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unit Baru Belum Terdaftar?</p>
-             <button 
-               onClick={() => router.push('/register')} 
-               className="flex items-center gap-2 text-xs font-black text-indigo-600 hover:text-indigo-800 transition-all uppercase tracking-widest"
-             >
-                <UserPlus size={18} /> Daftar Akun Unit Sekarang
-             </button>
-          </div>
+   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SPPG Baru Belum Terdaftar?</p>
+   <button 
+     onClick={() => router.push('/register')} 
+     className="flex items-center gap-2 text-xs font-black text-indigo-600 hover:text-indigo-800 transition-all uppercase tracking-widest"
+   >
+      <UserPlus size={18} /> Daftar Akun SPPG Sekarang
+   </button>
+</div>
 
           <div className="text-center pt-10">
             <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.4em]">sydhq dev © 2026</p>

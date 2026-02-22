@@ -41,7 +41,7 @@ export default function SuperAdminITPage() {
   })
 
   const fetchData = async () => {
-    // Load Members & Units
+    // Load Members & SPPG Units
     const { data: usr } = await supabase.from('users_app').select(`*, daftar_sppg(nama_unit, kepala_unit)`).order('created_at', { ascending: false })
     const { data: unt } = await supabase.from('daftar_sppg').select('*')
     const { data: lap } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', tanggal)
@@ -57,7 +57,7 @@ export default function SuperAdminITPage() {
   const handleApprove = async (id: string) => {
     const { error } = await supabase.from('users_app').update({ role: 'sppg' }).eq('id', id)
     if (!error) {
-      alert("✅ Akun Unit Telah Diaktifkan! Sekarang unit bisa mulai mengirim laporan.")
+      alert("✅ Akun SPPG Telah Diaktifkan! Sekarang mereka bisa mulai mengirim laporan.")
       fetchData()
     }
   }
@@ -78,7 +78,7 @@ export default function SuperAdminITPage() {
         if (unit) {
           await supabase.from('users_app').insert([{ email: form.email, password: form.password, role: form.role, sppg_unit_id: unit.id }])
         }
-        alert("✅ Unit & Akun Berhasil Dibuat!")
+        alert("✅ SPPG & Akun Berhasil Dibuat!")
       }
       setForm({ nama_unit: '', kepala_unit: '', email: '', password: '', role: 'sppg' })
       setIsEdit(false)
@@ -101,7 +101,7 @@ export default function SuperAdminITPage() {
   }
 
   const handleDelete = async (userId: string, unitId: string) => {
-    if (confirm("Hapus akun ini permanen?")) {
+    if (confirm("Hapus akun SPPG ini secara permanen?")) {
       await supabase.from('users_app').delete().eq('id', userId)
       if (unitId) await supabase.from('daftar_sppg').delete().eq('id', unitId)
       fetchData()
@@ -145,7 +145,7 @@ export default function SuperAdminITPage() {
                 </div>
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input type="text" placeholder="Cari unit..." className="pl-12 pr-6 py-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:border-[#4F46E5] w-64 shadow-sm" onChange={(e) => setSearchTerm(e.target.value)} />
+                  <input type="text" placeholder="Cari SPPG..." className="pl-12 pr-6 py-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:border-[#4F46E5] w-64 shadow-sm" onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
               </header>
 
@@ -154,16 +154,16 @@ export default function SuperAdminITPage() {
                 <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-6 flex justify-between items-center px-2">
                    <div className="flex items-center gap-2">
                      {isEdit ? <Edit3 size={18} className="text-amber-600" /> : <Plus size={18} className="text-[#4F46E5]" />}
-                     {isEdit ? 'Edit Akun Unit' : 'Registrasi Unit & Akun Baru'}
+                     {isEdit ? 'Edit Akun SPPG' : 'Registrasi SPPG & Akun Baru'}
                    </div>
                    {isEdit && <button onClick={() => { setIsEdit(false); setForm({nama_unit:'', kepala_unit:'', email:'', password:'', role:'sppg'}) }} className="text-red-500"><X size={18}/></button>}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Nama Unit</label>
+                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Nama SPPG</label>
                     <div className="relative"><Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
                     <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5]" placeholder="SPPG..." value={form.nama_unit} onChange={e => setForm({...form, nama_unit: e.target.value})} /></div>
                   </div>
-                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Kepala Unit</label>
+                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Kepala SPPG</label>
                     <div className="relative"><UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
                     <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5]" placeholder="Nama..." value={form.kepala_unit} onChange={e => setForm({...form, kepala_unit: e.target.value})} /></div>
                   </div>
@@ -186,7 +186,7 @@ export default function SuperAdminITPage() {
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/50 border-b border-slate-100">
                     <tr>
-                      <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unit & Kepala</th>
+                      <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">SPPG & Kepala</th>
                       <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Login</th>
                       <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Password</th>
                       <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Operation</th>
@@ -198,7 +198,7 @@ export default function SuperAdminITPage() {
                         <td className="p-6">
                           <div className="flex items-center gap-4">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-sm ${u.role === 'pending' ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-indigo-500'}`}>
-                              {u.daftar_sppg?.nama_unit?.charAt(0) || 'A'}
+                              {u.daftar_sppg?.nama_unit?.charAt(0) || 'S'}
                             </div>
                             <div>
                               <p className="text-sm font-bold text-slate-800">{u.daftar_sppg?.nama_unit || 'ADMIN AKSES'}</p>
@@ -222,7 +222,7 @@ export default function SuperAdminITPage() {
                                 onClick={() => handleApprove(u.id)} 
                                 className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-[9px] font-black rounded-xl uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all"
                               >
-                                <CheckCircle2 size={14}/> Approve
+                                <CheckCircle2 size={14}/> Aktifkan SPPG
                               </button>
                             ) : (
                               <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ export default function SuperAdminITPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-center gap-6 group hover:border-[#4F46E5] transition-all">
                   <div className="w-16 h-16 bg-blue-50 text-[#4F46E5] rounded-[1.5rem] flex items-center justify-center font-bold text-2xl shadow-inner group-hover:bg-[#4F46E5] group-hover:text-white transition-all">{units.length}</div>
-                  <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Unit</p><p className="text-lg font-bold text-slate-800 uppercase italic">Registered</p></div>
+                  <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total SPPG</p><p className="text-lg font-bold text-slate-800 uppercase italic">Registered</p></div>
                 </div>
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex items-center gap-6 group hover:border-emerald-500 transition-all">
                   <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-[1.5rem] flex items-center justify-center font-bold text-2xl shadow-inner group-hover:bg-emerald-500 group-hover:text-white transition-all">{laporanHarian.length}</div>
