@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, LogOut, Menu, X, Utensils, 
-  CheckCircle2, Activity, School, FileText, ArrowRight
+  CheckCircle2, Activity, School, FileText, ArrowRight, Trash2, Plus
 } from 'lucide-react'
 
 export default function DashboardSPPGPage() {
@@ -19,7 +19,11 @@ export default function DashboardSPPGPage() {
   const [activeTab, setActiveTab] = useState<'sekolah' | 'riwayat'>('sekolah')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  // Form States
+  // Fitur Tambah Sekolah Mandiri
+  const [newSekolah, setNewSekolah] = useState({ nama: '', target: '', jenjang: 'SD/MI' })
+  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
+
+  // Form States Laporan
   const [tanggal, setTanggal] = useState('')
   const [menu, setMenu] = useState('')
   const [foto, setFoto] = useState<any>(null)
@@ -36,7 +40,7 @@ export default function DashboardSPPGPage() {
       const { data: unit } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
       if (unit) setSelectedUnit(unit)
       
-      const { data: sekolah } = await supabase.from('daftar_sekolah').select('*').eq('sppg_id', id)
+      const { data: sekolah } = await supabase.from('daftar_sekolah').select('*').eq('sppg_id', id).order('nama_sekolah', { ascending: true })
       if (sekolah) setListSekolah(sekolah)
       
       const { data: laporan } = await supabase.from('laporan_harian_final').select('*').eq('unit_id', id).order('tanggal_ops', { ascending: false })
@@ -50,7 +54,37 @@ export default function DashboardSPPGPage() {
 
   useEffect(() => { if (id) loadData() }, [id])
 
-  // --- FUNGSI SIMPAN DENGAN UPLOAD FOTO (FIXED & INTEGRATED) ---
+  // --- FUNGSI TAMBAH SEKOLAH MANDIRI ---
+  const handleAddSekolah = async () => {
+    if(!newSekolah.nama || !newSekolah.target) return alert("Lengkapi nama sekolah dan target porsi!")
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('daftar_sekolah').insert([{ 
+        sppg_id: id, 
+        nama_sekolah: newSekolah.nama, 
+        target_porsi: parseInt(newSekolah.target), 
+        jenjang: newSekolah.jenjang 
+      }])
+      
+      if(!error) {
+        setNewSekolah({ nama: '', target: '', jenjang: 'SD/MI' })
+        loadData()
+      } else {
+        alert("Gagal tambah sekolah: " + error.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteSekolah = async (sid: string) => {
+    if(confirm("Hapus sekolah ini dari daftar?")) {
+      await supabase.from('daftar_sekolah').delete().eq('id', sid)
+      loadData()
+    }
+  }
+
+  // --- FUNGSI SIMPAN DENGAN UPLOAD FOTO ---
   const handleSimpanLaporan = async () => {
     if(!tanggal || !menu) return alert("⚠️ Wajib isi Tanggal & Menu!")
     setLoading(true)
@@ -70,7 +104,6 @@ export default function DashboardSPPGPage() {
 
         if (uploadError) throw uploadError
 
-        // Ambil Link Publik
         const { data: linkData } = supabase.storage
           .from('dokumentasi')
           .getPublicUrl(filePath)
@@ -78,7 +111,7 @@ export default function DashboardSPPGPage() {
         publicUrl = linkData.publicUrl
       }
 
-      // 2. MEMBERSIHKAN DATA REALISASI (Agar tidak ada input kosong)
+      // 2. MEMBERSIHKAN DATA REALISASI
       const cleanRealisasi = Object.fromEntries(
         Object.entries(realisasi).filter(([_, v]) => v !== "" && v !== null)
       );
@@ -93,7 +126,7 @@ export default function DashboardSPPGPage() {
             menu_makanan: menu, 
             data_gizi: gizi,
             realisasi_sekolah: cleanRealisasi,
-            foto_url: publicUrl // Menyimpan link foto publik
+            foto_url: publicUrl 
         }])
 
       if (error) {
@@ -101,13 +134,13 @@ export default function DashboardSPPGPage() {
         alert("❌ Gagal Simpan: " + error.message)
       } else {
         alert("✅ LAPORAN & FOTO BERHASIL TERKIRIM KE KORWIL!")
-        setFoto(null) // Reset input foto
+        setFoto(null)
         setView('dashboard')
         loadData()
       }
     } catch (err: any) {
       console.error("System Error:", err)
-      alert("Terjadi kesalahan sistem atau koneksi saat mengunggah. Pastikan Bucket 'dokumentasi' di Supabase sudah diset Public.")
+      alert("Terjadi kesalahan sistem atau koneksi.")
     } finally {
       setLoading(false)
     }
@@ -166,13 +199,44 @@ export default function DashboardSPPGPage() {
                  </div>
                  <div className="p-6">
                     {activeTab === 'sekolah' ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
-                        {listSekolah.map(s => (
-                          <div key={s.id} className="p-4 border border-slate-100 rounded-2xl flex justify-between items-center">
-                             <div><p className="text-[11px] font-black text-slate-700 uppercase leading-none">{s.nama_sekolah}</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{s.target_porsi} Porsi</p></div>
-                             <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center"><CheckCircle2 size={16}/></div>
-                          </div>
-                        ))}
+                      <div className="space-y-6 animate-in fade-in">
+                        {/* FORM TAMBAH SEKOLAH MANDIRI */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                           <div className="space-y-1">
+                             <label className="text-[9px] font-black text-slate-400 uppercase">Jenjang</label>
+                             <select className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none" value={newSekolah.jenjang} onChange={e => setNewSekolah({...newSekolah, jenjang: e.target.value})}>
+                               {KATEGORI_PM.map(k => <option key={k} value={k}>{k}</option>)}
+                             </select>
+                           </div>
+                           <div className="md:col-span-1 space-y-1">
+                             <label className="text-[9px] font-black text-slate-400 uppercase">Nama Sekolah</label>
+                             <input className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none" placeholder="MISAL: SD NEGERI..." value={newSekolah.nama} onChange={e => setNewSekolah({...newSekolah, nama: e.target.value})} />
+                           </div>
+                           <div className="space-y-1">
+                             <label className="text-[9px] font-black text-slate-400 uppercase">Target (Pack)</label>
+                             <input type="number" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none" placeholder="0" value={newSekolah.target} onChange={e => setNewSekolah({...newSekolah, target: e.target.value})} />
+                           </div>
+                           <button onClick={handleAddSekolah} className="bg-[#0F2650] text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-md flex items-center justify-center gap-2">
+                             <Plus size={14}/> Simpan Sekolah
+                           </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
+                          {listSekolah.map(s => (
+                            <div key={s.id} className="p-4 border border-slate-100 rounded-2xl flex justify-between items-center hover:border-indigo-100 transition-all bg-white group">
+                               <div>
+                                 <p className="text-[11px] font-black text-slate-700 uppercase leading-none">{s.nama_sekolah}</p>
+                                 <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{s.jenjang} • {s.target_porsi} Porsi</p>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                 <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center"><CheckCircle2 size={16}/></div>
+                                 <button onClick={() => handleDeleteSekolah(s.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                                   <Trash2 size={16}/>
+                                 </button>
+                               </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-3 animate-in fade-in">
