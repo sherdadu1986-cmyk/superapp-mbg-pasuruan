@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, LogOut, Menu, X, Utensils, 
   CheckCircle2, School, Trash2, Plus, Edit3, ClipboardList, Users,
-  ChevronLeft, Calendar as CalendarIcon, AlertCircle
+  ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText
 } from 'lucide-react'
 
 export default function DashboardSPPGPage() {
