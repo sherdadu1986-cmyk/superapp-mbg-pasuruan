@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, LogOut, Menu, X, Utensils, 
-  CheckCircle2, Activity, School, FileText, ArrowRight, Trash2, Plus
+  CheckCircle2, Activity, School, FileText, ArrowRight, Trash2, Plus, RotateCcw
 } from 'lucide-react'
 
 export default function DashboardSPPGPage() {
@@ -279,14 +279,46 @@ export default function DashboardSPPGPage() {
                      ))}
                   </div>
 
-                  {/* REALISASI */}
+                  {/* REALISASI PENERIMA MANFAAT DENGAN SHORTCUT */}
                   <div className="space-y-4">
                     <h4 className="text-[10px] font-black text-[#0F2650] uppercase tracking-widest italic ml-1">Realisasi Penerima Manfaat</h4>
-                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 max-h-60 overflow-y-auto space-y-2 shadow-inner">
+                    <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 max-h-80 overflow-y-auto space-y-3 shadow-inner">
                         {listSekolah.map(s => (
-                        <div key={s.id} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
-                            <div className="text-[10px] font-black text-slate-700 w-1/2 uppercase leading-none">{s.nama_sekolah} <br/><span className="text-[8px] text-slate-400 mt-1 block">TARGET: {s.target_porsi}</span></div>
-                            <div className="flex items-center gap-2"><input type="number" className="w-20 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-black outline-none focus:border-blue-500" placeholder="0" onChange={e => setRealisasi(prev => ({...prev, [s.id]: e.target.value}))} /><span className="text-[9px] font-black text-slate-400 uppercase">Pack</span></div>
+                        <div key={s.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="flex-1 w-full md:w-auto">
+                              <p className="text-[11px] font-black text-slate-700 uppercase leading-none mb-1">{s.nama_sekolah}</p>
+                              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">TARGET: {s.target_porsi}</p>
+                            </div>
+                            
+                            <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                              {/* SHORTCUT ANGKA TARGET */}
+                              <button 
+                                onClick={() => setRealisasi(prev => ({...prev, [s.id]: s.target_porsi.toString()}))}
+                                className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-all"
+                              >
+                                {s.target_porsi}
+                              </button>
+
+                              {/* RESTART / RESET KE 0 */}
+                              <button 
+                                onClick={() => setRealisasi(prev => ({...prev, [s.id]: '0'}))}
+                                className="p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                                title="Reset ke 0"
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+
+                              <div className="relative flex items-center">
+                                <input 
+                                  type="number" 
+                                  className="w-24 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-black outline-none focus:border-indigo-500" 
+                                  placeholder="0" 
+                                  value={realisasi[s.id] || ''}
+                                  onChange={e => setRealisasi(prev => ({...prev, [s.id]: e.target.value}))} 
+                                />
+                                <span className="ml-2 text-[9px] font-black text-slate-400 uppercase">Pack</span>
+                              </div>
+                            </div>
                         </div>
                         ))}
                     </div>
