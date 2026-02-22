@@ -16,8 +16,9 @@ import {
   BarChart3,
   Edit3,
   X,
-  Eye,
-  Key
+  Key,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react'
 
 export default function SuperAdminITPage() {
@@ -26,11 +27,13 @@ export default function SuperAdminITPage() {
   const [activeTab, setActiveTab] = useState<'members' | 'monitor'>('members')
   const [searchTerm, setSearchTerm] = useState('')
   
+  // Data State
   const [dataMaster, setDataMaster] = useState<any[]>([])
   const [units, setUnits] = useState<any[]>([])
   const [laporanHarian, setLaporanHarian] = useState<any[]>([])
   const [tanggal] = useState(new Date().toISOString().split('T')[0])
 
+  // Form State
   const [isEdit, setIsEdit] = useState(false)
   const [editId, setEditId] = useState('')
   const [form, setForm] = useState({
@@ -38,6 +41,7 @@ export default function SuperAdminITPage() {
   })
 
   const fetchData = async () => {
+    // Load Members & Units
     const { data: usr } = await supabase.from('users_app').select(`*, daftar_sppg(nama_unit, kepala_unit)`).order('created_at', { ascending: false })
     const { data: unt } = await supabase.from('daftar_sppg').select('*')
     const { data: lap } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', tanggal)
@@ -48,6 +52,15 @@ export default function SuperAdminITPage() {
   }
 
   useEffect(() => { fetchData() }, [])
+
+  // FITUR APPROVE AKUN MANDIRI
+  const handleApprove = async (id: string) => {
+    const { error } = await supabase.from('users_app').update({ role: 'sppg' }).eq('id', id)
+    if (!error) {
+      alert("✅ Akun Unit Telah Diaktifkan! Sekarang unit bisa mulai mengirim laporan.")
+      fetchData()
+    }
+  }
 
   const handleSimpan = async () => {
     if (!form.nama_unit || !form.email) return alert("Lengkapi data!")
@@ -97,6 +110,8 @@ export default function SuperAdminITPage() {
 
   return (
     <div className="min-h-screen bg-[#F3F4F9] flex font-sans">
+      
+      {/* SIDEBAR */}
       <aside className="w-64 bg-[#4F46E5] text-white flex flex-col shrink-0 fixed h-full z-50 shadow-2xl">
         <div className="p-8 border-b border-white/10 flex items-center gap-3">
           <ShieldCheck size={28} className="text-yellow-400" />
@@ -117,6 +132,7 @@ export default function SuperAdminITPage() {
         </div>
       </aside>
 
+      {/* MAIN CONTENT */}
       <main className="flex-1 pl-64 p-8 lg:p-12">
         <div className="max-w-7xl mx-auto space-y-8">
           
@@ -125,7 +141,7 @@ export default function SuperAdminITPage() {
               <header className="flex justify-between items-center">
                 <div>
                   <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Management</h1>
-                  <p className="text-sm text-slate-400 font-medium italic">Manajemen Akun SPPG & Wilayah</p>
+                  <p className="text-sm text-slate-400 font-medium italic">Kendali Akun SPPG & Wilayah</p>
                 </div>
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -133,41 +149,31 @@ export default function SuperAdminITPage() {
                 </div>
               </header>
 
+              {/* FORM UNIFIED */}
               <div className={`rounded-[2.5rem] p-8 border transition-all duration-500 ${isEdit ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100 shadow-sm'}`}>
                 <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-6 flex justify-between items-center px-2">
                    <div className="flex items-center gap-2">
                      {isEdit ? <Edit3 size={18} className="text-amber-600" /> : <Plus size={18} className="text-[#4F46E5]" />}
                      {isEdit ? 'Edit Akun Unit' : 'Registrasi Unit & Akun Baru'}
                    </div>
+                   {isEdit && <button onClick={() => { setIsEdit(false); setForm({nama_unit:'', kepala_unit:'', email:'', password:'', role:'sppg'}) }} className="text-red-500"><X size={18}/></button>}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Nama Unit</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                      <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="SPPG..." value={form.nama_unit} onChange={e => setForm({...form, nama_unit: e.target.value})} />
-                    </div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Nama Unit</label>
+                    <div className="relative"><Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                    <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5]" placeholder="SPPG..." value={form.nama_unit} onChange={e => setForm({...form, nama_unit: e.target.value})} /></div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Kepala Unit</label>
-                    <div className="relative">
-                      <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                      <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Nama..." value={form.kepala_unit} onChange={e => setForm({...form, kepala_unit: e.target.value})} />
-                    </div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Kepala Unit</label>
+                    <div className="relative"><UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                    <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5]" placeholder="Nama..." value={form.kepala_unit} onChange={e => setForm({...form, kepala_unit: e.target.value})} /></div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Email</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                      <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Email..." value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
-                    </div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Email</label>
+                    <div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                    <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5]" placeholder="Email..." value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Password</label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                      <input type="text" className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Pass..." value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                    </div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Password</label>
+                    <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                    <input type="text" className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5]" placeholder="Pass..." value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>
                   </div>
                   <button onClick={handleSimpan} disabled={loading} className={`py-4 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest text-white shadow-xl transition-all flex items-center justify-center gap-2 ${isEdit ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#4F46E5] hover:bg-[#4338CA]'}`}>
                     {loading ? '...' : isEdit ? 'Update Data' : 'Add Member'}
@@ -175,14 +181,14 @@ export default function SuperAdminITPage() {
                 </div>
               </div>
 
-              {/* TABLE WITH PASSWORD COLUMN */}
+              {/* TABLE WITH PASSWORD & APPROVE FEATURE */}
               <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/50 border-b border-slate-100">
                     <tr>
                       <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unit & Kepala</th>
                       <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Login</th>
-                      <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Access Key (Pass)</th>
+                      <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Password</th>
                       <th className="p-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Operation</th>
                     </tr>
                   </thead>
@@ -191,7 +197,7 @@ export default function SuperAdminITPage() {
                       <tr key={u.id} className="hover:bg-slate-50/50 transition-all group">
                         <td className="p-6">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-indigo-50 text-[#4F46E5] rounded-xl flex items-center justify-center font-bold text-xs shadow-sm">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-sm ${u.role === 'pending' ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-indigo-500'}`}>
                               {u.daftar_sppg?.nama_unit?.charAt(0) || 'A'}
                             </div>
                             <div>
@@ -200,23 +206,30 @@ export default function SuperAdminITPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="p-6">
-                           <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                              <Mail size={14} className="text-slate-300" />
-                              {u.email}
-                           </div>
-                        </td>
-                        {/* KOLOM PASSWORD BARU */}
-                        <td className="p-6">
-                           <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg w-fit">
+                        <td className="p-6 text-sm font-medium text-slate-600">{u.email}</td>
+                        {/* PASSWORD COLUMN */}
+                        <td className="p-6 text-center">
+                           <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg w-fit mx-auto">
                               <Key size={12} className="text-amber-500" />
                               <span className="text-xs font-mono font-bold text-slate-700 tracking-wider">{u.password}</span>
                            </div>
                         </td>
                         <td className="p-6 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleEditClick(u)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit3 size={16}/></button>
-                            <button onClick={() => handleDelete(u.id, u.sppg_unit_id)} className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={16}/></button>
+                          <div className="flex justify-end gap-2">
+                            {/* APPROVE BUTTON */}
+                            {u.role === 'pending' ? (
+                              <button 
+                                onClick={() => handleApprove(u.id)} 
+                                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-[9px] font-black rounded-xl uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all"
+                              >
+                                <CheckCircle2 size={14}/> Approve
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => handleEditClick(u)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit3 size={16}/></button>
+                                <button onClick={() => handleDelete(u.id, u.sppg_unit_id)} className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={16}/></button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -226,12 +239,11 @@ export default function SuperAdminITPage() {
               </div>
             </div>
           ) : (
-            /* MONITORING TAB TETAP SAMA */
             <div className="space-y-8 animate-in slide-in-from-right">
               <header className="flex justify-between items-center">
                 <div>
                   <h1 className="text-3xl font-bold text-slate-800 tracking-tight">System Monitor</h1>
-                  <p className="text-sm text-slate-400 font-medium italic">Status Pengiriman Laporan Wilayah</p>
+                  <p className="text-sm text-slate-400 font-medium italic italic">Status Pengiriman Laporan Wilayah</p>
                 </div>
                 <div className="bg-white px-5 py-2.5 rounded-2xl border border-slate-200 font-bold text-xs text-[#4F46E5] uppercase shadow-sm tracking-widest">{tanggal}</div>
               </header>

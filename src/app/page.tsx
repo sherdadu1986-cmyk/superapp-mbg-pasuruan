@@ -2,7 +2,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { User, Lock } from 'lucide-react' // Shield dihapus karena diganti logo gambar
+import { motion, AnimatePresence } from 'framer-motion'
+import { Lock, Mail, ShieldCheck, ArrowRight, UserPlus, Sparkles } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -10,151 +11,150 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    // 1. Cek User di Database
-    const { data, error } = await supabase
-      .from('users_app')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single()
+    try {
+      const { data: user, error } = await supabase
+        .from('users_app')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single()
 
-    if (error || !data) {
-      alert("❌ Login Gagal! Nama Akun atau Kata Sandi salah.")
+      if (error || !user) {
+        alert("Email atau Password salah!")
+      } else {
+        if (user.role === 'pending') {
+          alert("⚠️ Akun Anda masih dalam proses verifikasi oleh IT Admin.")
+          setLoading(false)
+          return
+        }
+        localStorage.setItem('user_role', user.role)
+        localStorage.setItem('unit_id', user.sppg_unit_id)
+
+        if (user.role === 'admin') router.push('/it')
+        else if (user.role === 'korwil') router.push('/korwil')
+        else router.push('/sppg')
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan sistem")
+    } finally {
       setLoading(false)
-      return
     }
-
-    // 2. Simpan Sesi
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('user_role', data.role)
-      localStorage.setItem('user_unit_id', data.sppg_unit_id || '')
-      localStorage.setItem('user_email', data.email)
-    }
-
-    // 3. Arahkan sesuai Role
-    if (data.role === 'it') router.push('/it')
-    else if (data.role === 'korwil') router.push('/korwil')
-    else if (data.role === 'sppg') router.push('/sppg')
-    
-    setLoading(false)
   }
 
   return (
-    <div className="min-h-screen flex font-sans">
+    <div className="min-h-screen bg-[#F3F4F9] flex items-center justify-center p-6 font-sans overflow-hidden relative">
       
-      {/* BAGIAN KIRI (BIRU GELAP & LOGO BESAR) */}
-      <div className="hidden lg:flex w-1/2 bg-[#0F2650] flex-col justify-center items-center relative overflow-hidden">
-        {/* Dekorasi Bulatan Background */}
-        <div className="absolute top-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3"></div>
+      {/* ANIMASI BACKGROUND FLOATING SHAPES */}
+      <motion.div 
+        animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
+        transition={{ duration: 20, repeat: Infinity }}
+        className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"
+      />
+      <motion.div 
+        animate={{ scale: [1, 1.5, 1], x: [0, 50, 0] }}
+        transition={{ duration: 15, repeat: Infinity }}
+        className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-3xl"
+      />
 
-        <div className="relative z-10 text-center p-10">
-            {/* LOGO GAMBAR BESAR */}
-            <div className="bg-white/10 p-6 rounded-3xl inline-block mb-8 backdrop-blur-sm border border-white/10 shadow-2xl">
-                {/* Pastikan file logo.png ada di folder public */}
-                <img 
-                  src="/logo.png" 
-                  alt="Logo Kab Pasuruan" 
-                  className="w-24 h-auto mx-auto" 
-                  onError={(e) => {
-                    // Fallback kalau gambar tidak ketemu (biar tidak rusak)
-                    e.currentTarget.style.display = 'none'; 
-                    alert("Gambar logo.png belum dimasukkan ke folder public!"); 
-                  }}
-                />
-            </div>
-
-            <h1 className="text-3xl font-bold text-white mb-2 leading-tight">
-                Sistem Manajemen <br/>
-                <span className="text-yellow-400 bg-white/10 px-2 rounded">Operasional SPPG</span><br/>
-                Kab. Pasuruan
-            </h1>
-            <p className="text-slate-300 text-sm mt-4 max-w-md mx-auto leading-relaxed opacity-80">
-                Platform terintegrasi untuk pemantauan distribusi gizi dan operasional unit layanan di wilayah Kabupaten Pasuruan.
-            </p>
-        </div>
-      </div>
-
-      {/* BAGIAN KANAN (FORM PUTIH) */}
-      <div className="w-full lg:w-1/2 bg-white flex flex-col justify-center items-center p-8 lg:p-16">
+      <motion.div 
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="max-w-md w-full bg-white rounded-[3.5rem] p-10 lg:p-14 shadow-[0_30px_100px_rgba(0,0,0,0.05)] border border-white/50 relative z-10 backdrop-blur-sm"
+      >
         
-        <div className="w-full max-w-md space-y-8">
-            {/* Header Form */}
-            <div className="text-center">
-                <div className="flex justify-center items-center gap-3 mb-4">
-                    {/* LOGO KECIL DI SAMPING JUDUL */}
-                    <img src="/logo.png" alt="Logo" className="w-12 h-auto" />
-                    <div className="text-left">
-                        <h2 className="text-xl font-black text-[#0F2650] uppercase leading-none">Kabupaten<br/>Pasuruan</h2>
-                    </div>
-                </div>
-                <h3 className="text-2xl font-bold text-slate-800">Silakan Login</h3>
-                <p className="text-slate-400 text-xs mt-1">Masuk untuk mengakses dashboard operasional</p>
+        {/* LOGO DENGAN ANIMASI PULSE & BOUNCE */}
+        <motion.div 
+          whileHover={{ scale: 1.1, rotate: 5 }}
+          className="text-center mb-10"
+        >
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.2 }}
+            className="w-20 h-20 bg-gradient-to-tr from-[#0F2650] to-[#6366F1] rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-indigo-300 ring-4 ring-white"
+          >
+            <ShieldCheck size={40} className="text-white" />
+          </motion.div>
+          <motion.h1 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="text-4xl font-black text-[#0F2650] uppercase italic tracking-tighter leading-none"
+          >
+            MBG App
+          </motion.h1>
+          <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.4em] mt-3 flex items-center justify-center gap-2">
+            <Sparkles size={12} /> Kabupaten Pasuruan <Sparkles size={12} />
+          </p>
+        </motion.div>
+
+        {/* LOGIN FORM */}
+        <form onSubmit={handleLogin} className="space-y-6">
+          <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.5 }}>
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-widest">Email Access</label>
+            <div className="relative group">
+              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#6366F1] transition-colors" size={20} />
+              <input 
+                required 
+                type="email" 
+                className="w-full pl-14 pr-6 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] text-sm font-bold text-slate-700 outline-none focus:border-indigo-100 focus:bg-white transition-all shadow-inner" 
+                placeholder="name@example.com" 
+                onChange={(e) => setEmail(e.target.value)} 
+              />
             </div>
+          </motion.div>
 
-            <form onSubmit={handleLogin} className="space-y-6">
-                
-                {/* Input Nama Akun (Email) */}
-                <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Nama Akun / Email</label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <User size={18} className="text-slate-400" />
-                        </div>
-                        <input 
-                            type="email" 
-                            placeholder="Contoh: wonorejo@mbg.com" 
-                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0F2650] focus:ring-1 focus:ring-[#0F2650] transition-all"
-                            onChange={e => setEmail(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {/* Input Kata Sandi */}
-                <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 ml-1">Kata Sandi</label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Lock size={18} className="text-slate-400" />
-                        </div>
-                        <input 
-                            type="password" 
-                            placeholder="Masukkan kata sandi..." 
-                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-[#0F2650] focus:ring-1 focus:ring-[#0F2650] transition-all"
-                            onChange={e => setPassword(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                <div className="flex justify-between items-center">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" className="rounded text-[#0F2650] focus:ring-[#0F2650]" />
-                        <span className="text-xs font-bold text-slate-500">Ingat Saya</span>
-                    </label>
-                    <a href="#" className="text-xs font-bold text-blue-600 hover:underline">Lupa Password?</a>
-                </div>
-
-                {/* Button Login */}
-                <button disabled={loading} className="w-full py-4 bg-[#0F2650] text-white rounded-xl font-bold shadow-lg hover:bg-[#1a3a70] transition-all flex justify-center items-center gap-2 uppercase tracking-wider text-sm">
-                    {loading ? 'Memproses...' : 'MASUK SISTEM'}
-                </button>
-
-            </form>
-
-            {/* Footer */}
-            <div className="text-center mt-12 space-y-2 border-t border-slate-100 pt-6">
-                <p className="text-[10px] text-slate-400">sydhq dev © 2026</p>
-                <div className="flex justify-center gap-4 text-[10px] text-slate-500 font-bold">
-                    <a href="#">Bantuan IT</a>
-                    <a href="#">Panduan Pengguna</a>
-                </div>
+          <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-widest">Security Password</label>
+            <div className="relative group">
+              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#6366F1] transition-colors" size={20} />
+              <input 
+                required 
+                type="password" 
+                className="w-full pl-14 pr-6 py-5 bg-slate-50 border-2 border-transparent rounded-[1.8rem] text-sm font-bold text-slate-700 outline-none focus:border-indigo-100 focus:bg-white transition-all shadow-inner" 
+                placeholder="••••••••" 
+                onChange={(e) => setPassword(e.target.value)} 
+              />
             </div>
-        </div>
-      </div>
+          </motion.div>
+
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            disabled={loading} 
+            className="w-full py-5 bg-[#0F2650] text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(15,38,80,0.3)] hover:bg-[#1a3a70] transition-all flex items-center justify-center gap-3 mt-10"
+          >
+            {loading ? (
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
+            ) : (
+              <>MASUK KE SISTEM <ArrowRight size={18} /></>
+            )}
+          </motion.button>
+        </form>
+
+        {/* REGISTER SECTION WITH STAGGERED ANIMATION */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="mt-12 pt-8 border-t border-slate-100 text-center"
+        >
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Unit Baru Belum Terdaftar?</p>
+          <motion.button 
+            whileHover={{ y: -3 }}
+            onClick={() => router.push('/register')} 
+            className="flex items-center justify-center gap-3 mx-auto px-8 py-4 bg-indigo-50 text-[#6366F1] rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-100 transition-all border border-indigo-100 shadow-sm"
+          >
+            <UserPlus size={18} /> Daftar Akun Unit
+          </motion.button>
+        </motion.div>
+
+      </motion.div>
     </div>
   )
 }
