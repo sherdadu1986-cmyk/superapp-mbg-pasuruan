@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, LogOut, Menu, X, Utensils, 
-  CheckCircle2, Trash2, Activity, School, FileText, ArrowRight
+  CheckCircle2, Activity, School, FileText, ArrowRight
 } from 'lucide-react'
 
 export default function DashboardSPPGPage() {
@@ -50,17 +50,40 @@ export default function DashboardSPPGPage() {
 
   useEffect(() => { if (id) loadData() }, [id])
 
-  // --- FUNGSI SIMPAN (FIXED) ---
+  // --- FUNGSI SIMPAN DENGAN UPLOAD FOTO ---
   const handleSimpanLaporan = async () => {
     if(!tanggal || !menu) return alert("⚠️ Wajib isi Tanggal & Menu!")
     setLoading(true)
 
     try {
-      // Membersihkan data realisasi agar tidak ada string kosong yang bikin error
+      let publicUrl = ""
+
+      // 1. PROSES UPLOAD FOTO KE SUPABASE STORAGE
+      if (foto) {
+        const fileExt = foto.name.split('.').pop()
+        const fileName = `${Date.now()}_${id}.${fileExt}`
+        const filePath = `dokumentasi_harian/${fileName}`
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('dokumentasi')
+          .upload(filePath, foto)
+
+        if (uploadError) throw uploadError
+
+        // Ambil Link Publik
+        const { data: linkData } = supabase.storage
+          .from('dokumentasi')
+          .getPublicUrl(filePath)
+        
+        publicUrl = linkData.publicUrl
+      }
+
+      // 2. MEMBERSIHKAN DATA REALISASI
       const cleanRealisasi = Object.fromEntries(
         Object.entries(realisasi).filter(([_, v]) => v !== "")
       );
 
+      // 3. SIMPAN KE DATABASE
       const { error } = await supabase
         .from('laporan_harian_final')
         .insert([{ 
@@ -69,20 +92,22 @@ export default function DashboardSPPGPage() {
             tanggal_ops: tanggal, 
             menu_makanan: menu, 
             data_gizi: gizi,
-            realisasi_sekolah: cleanRealisasi 
+            realisasi_sekolah: cleanRealisasi,
+            foto_url: publicUrl // Kolom link foto
         }])
 
       if (error) {
         console.error("Supabase Error:", error)
         alert("❌ Gagal Simpan: " + error.message)
       } else {
-        alert("✅ LAPORAN BERHASIL TERKIRIM KE KORWIL!")
+        alert("✅ LAPORAN & FOTO BERHASIL TERKIRIM!")
+        setFoto(null) // Reset foto setelah berhasil
         setView('dashboard')
         loadData()
       }
     } catch (err: any) {
       console.error("System Error:", err)
-      alert("Terjadi kesalahan koneksi (Connection Closed). Silakan coba lagi.")
+      alert("Terjadi kesalahan sistem atau koneksi.")
     } finally {
       setLoading(false)
     }
@@ -119,9 +144,9 @@ export default function DashboardSPPGPage() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-white border-b h-16 flex items-center justify-between px-6 shrink-0">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-[#0F2650]"><Menu size={24} /></button>
-          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operasional / <span className="text-[#0F2650]">{selectedUnit?.nama_unit}</span></div>
+          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden lg:block">Operasional / <span className="text-[#0F2650]">{selectedUnit?.nama_unit}</span></div>
           <div className="flex items-center gap-3">
-             <div className="text-right hidden md:block"><p className="text-xs font-black text-[#0F2650] uppercase">{selectedUnit?.kepala_unit}</p></div>
+             <div className="text-right hidden md:block"><p className="text-xs font-black text-[#0F2650] uppercase leading-none">{selectedUnit?.kepala_unit}</p></div>
              <div className="w-9 h-9 bg-[#0F2650] rounded-xl flex items-center justify-center text-white font-black text-xs">{selectedUnit?.kepala_unit?.charAt(0)}</div>
           </div>
         </header>

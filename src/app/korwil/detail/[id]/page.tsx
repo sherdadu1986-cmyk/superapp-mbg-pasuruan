@@ -41,7 +41,7 @@ export default function DetailLaporanUnitPage() {
       .select('*')
       .eq('unit_id', id)
       .eq('tanggal_ops', tanggal)
-      .single()
+      .maybeSingle() // Gunakan maybeSingle agar tidak error jika data kosong
     
     setLaporan(l || null)
     setLoading(false)
@@ -151,36 +151,47 @@ export default function DetailLaporanUnitPage() {
 
             {/* KANAN: DOKUMENTASI & DISTRIBUSI */}
             <div className="lg:col-span-4 space-y-10">
-               {/* GDrive Card */}
+               {/* Dokumentasi Card - TERINTEGRASI SUPABASE STORAGE */}
                <div className="bg-white rounded-[3rem] p-8 shadow-sm border border-slate-100 text-center space-y-8">
                   <div className="w-full aspect-square bg-[#F8FAFF] rounded-[2.5rem] flex flex-col items-center justify-center border-2 border-dashed border-indigo-100 relative group overflow-hidden">
-                     <ImageIcon size={56} className="text-indigo-200 mb-4 group-hover:scale-110 transition-transform" />
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-10 leading-relaxed italic">Dokumentasi Operasional G-Drive</p>
+                      {laporan.foto_url ? (
+                        <img src={laporan.foto_url} className="w-full h-full object-cover rounded-[2rem]" alt="Dokumentasi" />
+                      ) : (
+                        <>
+                          <ImageIcon size={56} className="text-indigo-200 mb-4 group-hover:scale-110 transition-transform" />
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-10 leading-relaxed italic">Belum Ada Dokumentasi Foto</p>
+                        </>
+                      )}
                   </div>
-                  <a 
-                    href="https://drive.google.com/drive/u/0/my-drive" 
-                    target="_blank" 
-                    className="w-full flex items-center justify-center gap-3 py-5 bg-[#6366F1] text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-200 hover:bg-[#4F46E5] transition-all group"
-                  >
-                    Buka Berkas Foto <ExternalLink size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                  </a>
+                  {laporan.foto_url && (
+                    <a 
+                      href={laporan.foto_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-3 py-5 bg-[#0F2650] text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-200 hover:bg-[#6366F1] transition-all group"
+                    >
+                      Buka Berkas Foto <ExternalLink size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    </a>
+                  )}
                </div>
 
                {/* Distribusi Sekolah Card */}
                <div className="bg-white rounded-[3rem] p-8 shadow-sm border border-slate-100 space-y-6">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3 italic">
-                    <School size={18} className="text-amber-500"/> Titik Layanan
+                    <School size={18} className="text-amber-500"/> Realisasi Distribusi
                   </h3>
                   <div className="space-y-3">
                     {listSekolah.length > 0 ? listSekolah.map((s, idx) => (
                       <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-all">
                         <div>
                            <p className="text-[11px] font-black text-slate-700 uppercase leading-none mb-1">{s.nama_sekolah}</p>
-                           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{s.jenjang}</p>
+                           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Target: {s.target_porsi} Pack</p>
                         </div>
                         <div className="text-right">
-                           <p className="text-xs font-black text-[#6366F1]">{s.target_porsi}</p>
-                           <p className="text-[8px] font-bold text-slate-300 uppercase">Pack</p>
+                           <p className="text-xs font-black text-emerald-600">
+                             {laporan.realisasi_sekolah?.[s.id] || '0'}
+                           </p>
+                           <p className="text-[8px] font-bold text-slate-300 uppercase italic">Terkirim</p>
                         </div>
                       </div>
                     )) : (
@@ -198,8 +209,8 @@ export default function DetailLaporanUnitPage() {
                 <XCircle size={48} />
              </div>
              <h2 className="text-2xl font-black text-[#0F2650] uppercase italic tracking-tighter">Laporan Belum Terbit</h2>
-             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-3">SPPG ini belum mengirimkan data operasional untuk tanggal ini.</p>
-             <button onClick={() => setTanggal(new Date().toISOString().split('T')[0])} className="mt-8 text-[9px] font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-200 pb-1">Kembali ke Tanggal Hari Ini</button>
+             <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-3">SPPG ini belum mengirimkan data operasional untuk tanggal {tanggal}.</p>
+             <button onClick={() => setTanggal(new Date().toISOString().split('T')[0])} className="mt-8 text-[9px] font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-200 pb-1 transition-all hover:text-indigo-700">Kembali ke Tanggal Hari Ini</button>
           </div>
         )}
 
