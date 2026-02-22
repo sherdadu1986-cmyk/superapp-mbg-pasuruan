@@ -11,7 +11,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,7 +18,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // 1. Ambil data user dari tabel
+      // 1. Ambil data user
       const { data: user, error } = await supabase
         .from('users_app')
         .select('*')
@@ -33,21 +32,21 @@ export default function LoginPage() {
         return
       }
 
-      // 2. Cek proteksi akun pending
       if (user.role === 'pending') {
-        alert("⚠️ Akun Anda sedang dalam verifikasi Admin.")
+        alert("⚠️ Akun Anda sedang dalam verifikasi.")
         setLoading(false)
         return
       }
 
-      // 3. Simpan data session agar tidak terpental
-      localStorage.clear() // Bersihkan session lama agar tidak bentrok
+      // 2. Simpan session
+      localStorage.clear()
       localStorage.setItem('user_role', user.role)
       localStorage.setItem('unit_id', user.sppg_unit_id)
 
-      // 4. Pengarahan Role yang Tegas
-      if (user.role === 'admin') {
-        router.push('/it')
+      // 3. PENGARAHAN SESUAI DATABASE ANDA
+      // Kita ganti 'admin' menjadi 'it' sesuai isi tabel anda
+      if (user.role === 'it') { 
+        router.push('/it') 
       } else if (user.role === 'korwil') {
         router.push('/korwil')
       } else if (user.role === 'sppg') {
@@ -64,82 +63,49 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row font-sans overflow-hidden">
       
-      {/* SISI KIRI: BRANDING (BIRU GELAP) */}
+      {/* SISI KIRI */}
       <div className="md:w-1/2 bg-[#0F2650] flex flex-col items-center justify-center p-12 text-center text-white relative">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8 }}
-          className="relative z-10 space-y-8 max-w-lg"
-        >
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10 space-y-8 max-w-lg">
           <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl inline-block border border-white/20 mb-4 shadow-2xl">
             <Image src="/logo.png" alt="Logo" width={140} height={140} className="object-contain" />
           </div>
-          <div className="space-y-4">
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-tight">
-              Sistem Manajemen <br/> 
-              <span className="bg-yellow-400 text-[#0F2650] px-3 py-1 rounded-xl">Operasional SPPG</span> <br/>
-              Kab. Pasuruan
-            </h1>
-          </div>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-tight">
+            Sistem Manajemen <br/> 
+            <span className="bg-yellow-400 text-[#0F2650] px-3 py-1 rounded-xl">Operasional SPPG</span> <br/>
+            Kab. Pasuruan
+          </h1>
         </motion.div>
       </div>
 
-      {/* SISI KANAN: LOGIN FORM */}
-      <div className="md:w-1/2 flex flex-col items-center justify-center p-8 md:p-24 bg-white relative">
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="w-full max-w-md space-y-10"
-        >
+      {/* SISI KANAN */}
+      <div className="md:w-1/2 flex flex-col items-center justify-center p-8 md:p-24 bg-white">
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="w-full max-w-md space-y-10">
           <div className="text-center md:text-left">
              <h2 className="text-4xl font-black text-[#0F2650] tracking-tight mb-2 uppercase italic">Silakan Login</h2>
-             <p className="text-sm text-slate-400 font-medium">Masuk untuk mengakses dashboard operasional</p>
+             <p className="text-sm text-slate-400 font-medium tracking-wide">Masuk menggunakan akun {email.includes('admin') ? 'IT Admin' : 'SPPG'}</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Email / Akun</label>
               <div className="relative group">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-600" size={20} />
-                <input 
-                  required 
-                  type="email" 
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all" 
-                  placeholder="admin@example.com" 
-                  onChange={(e) => setEmail(e.target.value)} 
-                />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                <input required type="email" className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all" placeholder="admin@mbg.com" onChange={(e) => setEmail(e.target.value)} />
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Kata Sandi</label>
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-600" size={20} />
-                <input 
-                  required 
-                  type="password" 
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all" 
-                  placeholder="••••••••" 
-                  onChange={(e) => setPassword(e.target.value)} 
-                />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                <input required type="password" className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all" placeholder="••••••••" onChange={(e) => setPassword(e.target.value)} />
               </div>
             </div>
 
-            <button 
-              disabled={loading} 
-              className="w-full py-5 bg-[#0F2650] text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl hover:bg-[#1a3a70] transition-all flex items-center justify-center gap-3 mt-4"
-            >
+            <button disabled={loading} className="w-full py-5 bg-[#0F2650] text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl hover:bg-[#1a3a70] transition-all flex items-center justify-center gap-3">
               {loading ? 'MEMPROSES...' : <>MASUK SISTEM <ArrowRight size={18} /></>}
             </button>
           </form>
-
-          <div className="pt-8 border-t border-slate-50 flex flex-col items-center gap-4">
-             <button onClick={() => router.push('/register')} className="text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline">
-                Daftar Akun SPPG Baru
-             </button>
-          </div>
         </motion.div>
       </div>
     </div>
