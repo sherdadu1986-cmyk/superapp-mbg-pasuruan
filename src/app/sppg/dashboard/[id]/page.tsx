@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, LogOut, Menu, X, Utensils, 
-  CheckCircle2, Activity, School, FileText, ArrowRight, Trash2, Plus, RotateCcw
+  CheckCircle2, Activity, School, FileText, ArrowRight, Trash2, Plus, RotateCcw, Edit3
 } from 'lucide-react'
 
 export default function DashboardSPPGPage() {
@@ -19,25 +19,30 @@ export default function DashboardSPPGPage() {
   const [activeTab, setActiveTab] = useState<'sekolah' | 'riwayat'>('sekolah')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  // Fitur Tambah Sekolah Mandiri
-  const [newSekolah, setNewSekolah] = useState({ nama: '', target: '', jenjang: 'SD/MI' })
-  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
+  // --- STATE EDIT MODE ---
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editLaporanId, setEditLaporanId] = useState<string | null>(null)
 
   // Form States Laporan
   const [tanggal, setTanggal] = useState('')
   const [menu, setMenu] = useState('')
   const [foto, setFoto] = useState<any>(null)
+  const [existingFotoUrl, setExistingFotoUrl] = useState('')
   const [realisasi, setRealisasi] = useState<Record<string, string>>({})
   const [gizi, setGizi] = useState({
     besar: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
     kecil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
   })
 
+  // Fitur Tambah Sekolah Mandiri
+  const [newSekolah, setNewSekolah] = useState({ nama: '', target: '', jenjang: 'SD/MI' })
+  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
+
   // --- LOAD DATA ---
   const loadData = async () => {
     setLoading(true)
     try {
-      const { data: unit } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
+      const { data: unit } = await supabase.from('daftar_sppg').select('*').eq(id as string, id).single()
       if (unit) setSelectedUnit(unit)
       
       const { data: sekolah } = await supabase.from('daftar_sekolah').select('*').eq('sppg_id', id).order('nama_sekolah', { ascending: true })
@@ -53,6 +58,39 @@ export default function DashboardSPPGPage() {
   }
 
   useEffect(() => { if (id) loadData() }, [id])
+
+  // --- FUNGSI MASUK KE MODE EDIT ---
+  const handleEditLaporan = (lap: any) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (lap.tanggal_ops !== today) {
+      return alert("⚠️ Laporan hari sebelumnya sudah terkunci dan tidak bisa diedit.");
+    }
+
+    setIsEditMode(true)
+    setEditLaporanId(lap.id)
+    setTanggal(lap.tanggal_ops)
+    setMenu(lap.menu_makanan)
+    setGizi(lap.data_gizi)
+    setRealisasi(lap.realisasi_sekolah)
+    setExistingFotoUrl(lap.foto_url || '')
+    setView('form')
+  }
+
+  // --- FUNGSI RESET FORM ---
+  const resetForm = () => {
+    setIsEditMode(false)
+    setEditLaporanId(null)
+    setTanggal('')
+    setMenu('')
+    setFoto(null)
+    setExistingFotoUrl('')
+    setRealisasi({})
+    setGizi({
+      besar: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+      kecil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
+    })
+    setView('dashboard')
+  }
 
   // --- FUNGSI TAMBAH SEKOLAH MANDIRI ---
   const handleAddSekolah = async () => {
@@ -84,63 +122,56 @@ export default function DashboardSPPGPage() {
     }
   }
 
-  // --- FUNGSI SIMPAN DENGAN UPLOAD FOTO ---
+  // --- FUNGSI SIMPAN (BISA INSERT MAUPUN UPDATE) ---
   const handleSimpanLaporan = async () => {
     if(!tanggal || !menu) return alert("⚠️ Wajib isi Tanggal & Menu!")
     setLoading(true)
 
     try {
-      let publicUrl = ""
+      let finalFotoUrl = existingFotoUrl
 
-      // 1. PROSES UPLOAD FOTO KE SUPABASE STORAGE
+      // Proses Upload Foto Baru jika ada
       if (foto) {
         const fileExt = foto.name.split('.').pop()
         const fileName = `${Date.now()}_${id}.${fileExt}`
         const filePath = `dokumentasi_harian/${fileName}`
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('dokumentasi')
-          .upload(filePath, foto)
-
+        const { error: uploadError } = await supabase.storage.from('dokumentasi').upload(filePath, foto)
         if (uploadError) throw uploadError
-
-        const { data: linkData } = supabase.storage
-          .from('dokumentasi')
-          .getPublicUrl(filePath)
-        
-        publicUrl = linkData.publicUrl
+        const { data: linkData } = supabase.storage.from('dokumentasi').getPublicUrl(filePath)
+        finalFotoUrl = linkData.publicUrl
       }
 
-      // 2. MEMBERSIHKAN DATA REALISASI
       const cleanRealisasi = Object.fromEntries(
         Object.entries(realisasi).filter(([_, v]) => v !== "" && v !== null)
       );
 
-      // 3. SIMPAN KE DATABASE
-      const { error } = await supabase
-        .from('laporan_harian_final')
-        .insert([{ 
-            unit_id: id, 
-            nama_unit: selectedUnit.nama_unit, 
-            tanggal_ops: tanggal, 
-            menu_makanan: menu, 
-            data_gizi: gizi,
-            realisasi_sekolah: cleanRealisasi,
-            foto_url: publicUrl 
-        }])
-
-      if (error) {
-        console.error("Supabase Error:", error)
-        alert("❌ Gagal Simpan: " + error.message)
-      } else {
-        alert("✅ LAPORAN & FOTO BERHASIL TERKIRIM KE KORWIL!")
-        setFoto(null)
-        setView('dashboard')
-        loadData()
+      const payload = { 
+        unit_id: id, 
+        nama_unit: selectedUnit.nama_unit, 
+        tanggal_ops: tanggal, 
+        menu_makanan: menu, 
+        data_gizi: gizi,
+        realisasi_sekolah: cleanRealisasi,
+        foto_url: finalFotoUrl 
       }
+
+      if (isEditMode && editLaporanId) {
+        // Mode Update
+        const { error } = await supabase.from('laporan_harian_final').update(payload).eq('id', editLaporanId)
+        if (error) throw error
+        alert("✅ LAPORAN BERHASIL DIPERBARUI!")
+      } else {
+        // Mode Insert Baru
+        const { error } = await supabase.from('laporan_harian_final').insert([payload])
+        if (error) throw error
+        alert("✅ LAPORAN & FOTO BERHASIL TERKIRIM!")
+      }
+
+      resetForm()
+      loadData()
     } catch (err: any) {
       console.error("System Error:", err)
-      alert("Terjadi kesalahan sistem atau koneksi.")
+      alert("Terjadi kesalahan: " + err.message)
     } finally {
       setLoading(false)
     }
@@ -162,12 +193,12 @@ export default function DashboardSPPGPage() {
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${view === 'dashboard' ? 'bg-[#0F2650] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
+          <button onClick={() => { resetForm(); setView('dashboard') }} className={`w-full flex items-center gap-3 px-4 py-3.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${view === 'dashboard' ? 'bg-[#0F2650] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
             <LayoutDashboard size={18} /> Dashboard
           </button>
         </nav>
         <div className="p-4 border-t">
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3.5 text-[10px] font-black text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest">
             <LogOut size={16} /> Logout
           </button>
         </div>
@@ -242,8 +273,16 @@ export default function DashboardSPPGPage() {
                       <div className="space-y-3 animate-in fade-in">
                         {riwayat.map(l => (
                           <div key={l.id} className="p-4 border border-slate-50 rounded-2xl flex justify-between items-center hover:bg-slate-50 transition-all">
-                             <div><p className="text-[10px] font-black text-slate-700 uppercase italic">"{l.menu_makanan}"</p><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">{l.tanggal_ops}</p></div>
-                             <div className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">Terkirim</div>
+                             <div>
+                               <p className="text-[10px] font-black text-slate-700 uppercase italic leading-none">"{l.menu_makanan}"</p>
+                               <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-2">{l.tanggal_ops}</p>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               <button onClick={() => handleEditLaporan(l)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[9px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                                  <Edit3 size={14}/> Edit
+                               </button>
+                               <div className="text-[8px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">Terkirim</div>
+                             </div>
                           </div>
                         ))}
                       </div>
@@ -252,17 +291,26 @@ export default function DashboardSPPGPage() {
               </div>
             </div>
           ) : (
-            /* VIEW FORM LAPORAN */
+            /* VIEW FORM LAPORAN (UNIFIED INSERT & EDIT) */
             <div className="max-w-4xl mx-auto bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden mb-20 animate-in zoom-in-95">
                <div className="bg-[#0F2650] p-8 text-white flex justify-between items-center">
-                  <div><h2 className="text-lg font-black uppercase italic tracking-widest leading-none">Laporan Operasional</h2><p className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mt-2 opacity-60">Harian SPPG</p></div>
-                  <button onClick={() => setView('dashboard')} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><X size={20}/></button>
+                  <div>
+                    <h2 className="text-lg font-black uppercase italic tracking-widest leading-none">{isEditMode ? 'Perbarui Laporan' : 'Laporan Operasional'}</h2>
+                    <p className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mt-2 opacity-60">{isEditMode ? 'Mode Edit Aktif' : 'Harian SPPG'}</p>
+                  </div>
+                  <button onClick={resetForm} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><X size={20}/></button>
                </div>
                
                <div className="p-10 space-y-10">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tgl Distribusi</label><input type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-[#0F2650]" onChange={e => setTanggal(e.target.value)} /></div>
-                     <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Menu Utama</label><input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-[#0F2650]" placeholder="Nasi, Ayam goreng..." onChange={e => setMenu(e.target.value)} /></div>
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tgl Distribusi</label>
+                        <input type="date" disabled={isEditMode} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-[#0F2650] disabled:opacity-50" value={tanggal} onChange={e => setTanggal(e.target.value)} />
+                     </div>
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Menu Utama</label>
+                        <input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-[#0F2650]" placeholder="Nasi, Ayam goreng..." value={menu} onChange={e => setMenu(e.target.value)} />
+                     </div>
                   </div>
 
                   {/* NUTRISI */}
@@ -272,7 +320,16 @@ export default function DashboardSPPGPage() {
                           <h4 className="text-[10px] font-black text-[#0F2650] uppercase tracking-widest mb-4 flex items-center gap-2 border-b pb-3"><Activity size={16} className="text-blue-500" /> Nutrisi {tipe}</h4>
                           <div className="space-y-4">
                              {['Energi', 'Protein', 'Lemak', 'Karbo', 'Serat'].map(g => (
-                                <div key={g} className="flex justify-between items-center text-[9px] font-black uppercase text-slate-400">{g}<input type="number" className="w-24 p-2 bg-white border border-slate-200 rounded-xl text-xs text-right font-black outline-none focus:border-blue-500" placeholder="0" onChange={e => setGizi(prev => ({...prev, [tipe.toLowerCase()]: {...prev[tipe.toLowerCase() as 'besar'|'kecil'], [g.toLowerCase()]: e.target.value}}))} /></div>
+                                <div key={g} className="flex justify-between items-center text-[9px] font-black uppercase text-slate-400">
+                                  {g}
+                                  <input 
+                                    type="number" 
+                                    className="w-24 p-2 bg-white border border-slate-200 rounded-xl text-xs text-right font-black outline-none focus:border-blue-500" 
+                                    placeholder="0" 
+                                    value={gizi[tipe.toLowerCase() as 'besar'|'kecil'][g.toLowerCase() as keyof typeof gizi.besar] || ''} 
+                                    onChange={e => setGizi(prev => ({...prev, [tipe.toLowerCase()]: {...prev[tipe.toLowerCase() as 'besar'|'kecil'], [g.toLowerCase()]: e.target.value}}))} 
+                                  />
+                                </div>
                              ))}
                           </div>
                        </div>
@@ -291,7 +348,6 @@ export default function DashboardSPPGPage() {
                             </div>
                             
                             <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-                              {/* SHORTCUT ANGKA TARGET */}
                               <button 
                                 onClick={() => setRealisasi(prev => ({...prev, [s.id]: s.target_porsi.toString()}))}
                                 className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-all"
@@ -299,7 +355,6 @@ export default function DashboardSPPGPage() {
                                 {s.target_porsi}
                               </button>
 
-                              {/* RESTART / RESET KE 0 */}
                               <button 
                                 onClick={() => setRealisasi(prev => ({...prev, [s.id]: '0'}))}
                                 className="p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
@@ -329,14 +384,22 @@ export default function DashboardSPPGPage() {
                     <h4 className="text-[10px] font-black text-[#0F2650] uppercase tracking-widest italic ml-1">Dokumentasi Distribusi</h4>
                     <div className="border-4 border-dashed border-slate-100 rounded-[2.5rem] p-12 flex flex-col items-center justify-center text-slate-400 hover:border-blue-500 hover:bg-blue-50/30 transition-all cursor-pointer relative group">
                         <Utensils size={32} className="mb-3 opacity-20 group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Upload Foto Laporan</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">{isEditMode ? 'Ganti Foto (Opsional)' : 'Upload Foto Laporan'}</span>
                         <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFoto(e.target.files?.[0])} />
-                        {foto && <div className="mt-4 px-4 py-2 bg-emerald-500 text-white rounded-full text-[9px] font-black uppercase flex items-center gap-2 animate-bounce"><CheckCircle2 size={12}/> {foto.name}</div>}
+                        {foto ? (
+                          <div className="mt-4 px-4 py-2 bg-emerald-500 text-white rounded-full text-[9px] font-black flex items-center gap-2 animate-bounce uppercase tracking-tighter">
+                            <CheckCircle2 size={12}/> {foto.name}
+                          </div>
+                        ) : isEditMode && existingFotoUrl && (
+                          <div className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-full text-[9px] font-black flex items-center gap-2 uppercase tracking-tighter shadow-lg">
+                            <CheckCircle2 size={12}/> Foto Tersimpan
+                          </div>
+                        )}
                     </div>
                   </div>
 
                   <button onClick={handleSimpanLaporan} disabled={loading} className="w-full py-6 bg-[#0F2650] text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl hover:bg-slate-800 transition-all flex items-center justify-center gap-3">
-                     {loading ? 'MEMPROSES...' : <>Kirim Laporan Final <ArrowRight size={18} /></>}
+                     {loading ? 'MEMPROSES...' : <>{isEditMode ? 'Simpan Perubahan' : 'Kirim Laporan Final'} <ArrowRight size={18} /></>}
                   </button>
                </div>
             </div>
