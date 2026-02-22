@@ -13,7 +13,9 @@ import {
   GraduationCap,
   School,
   Box,
-  Baby
+  Baby,
+  Users,
+  Activity
 } from 'lucide-react'
 
 export default function SuperKorwilPage() {
@@ -25,59 +27,50 @@ export default function SuperKorwilPage() {
   const [laporan, setLaporan] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<'monitor' | 'control'>('monitor')
 
-  // --- STATISTIK PORSI LENGKAP ---
-  const [stats, setStats] = useState({
-    totalPorsi: 0,
-    porsiSD: 0,
-    porsiMenengah: 0,
-    porsiBalitaBumil: 0 // Kategori Baru
-  })
+  // --- KATEGORI LENGKAP (Item Penerima Manfaat) ---
+  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
+  const [statsPorsi, setStatsPorsi] = useState<Record<string, number>>({})
+  const [totalPorsiHarian, setTotalPorsiHarian] = useState(0)
 
   const fetchData = async () => {
-    // 1. Ambil Data Unit & Laporan
+    // 1. Ambil Data Unit, Laporan, dan Master Sekolah
     const { data: u } = await supabase.from('daftar_sppg').select('*').order('nama_unit')
     const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', tanggal)
-    
-    // 2. Ambil Detail Sekolah untuk hitung porsi per jenjang
-    const { data: s } = await supabase.from('daftar_sekolah').select('jenjang, target_porsi, sppg_id')
+    const { data: s } = await supabase.from('daftar_sekolah').select('id, jenjang')
 
     if(u) setUnits(u)
     if(l && s) {
       setLaporan(l)
       
+      let mapping: Record<string, number> = {}
+      KATEGORI_PM.forEach(k => mapping[k] = 0)
       let total = 0
-      let sd = 0
-      let menengah = 0
-      let balitaBumil = 0
 
       l.forEach(lap => {
-        const sekolahUnit = s.filter(sekolah => sekolah.sppg_id === lap.unit_id)
-        sekolahUnit.forEach(sekolah => {
-          const porsi = Number(sekolah.target_porsi) || 0
-          total += porsi
-          
-          const jenjang = sekolah.jenjang?.toUpperCase() || ''
-          
-          if(jenjang.includes('SD') || jenjang.includes('MI')) {
-            sd += porsi
-          } else if(jenjang.includes('SMP') || jenjang.includes('SMA') || jenjang.includes('SMK')) {
-            menengah += porsi
-          } else if(jenjang.includes('BALITA') || jenjang.includes('BUMIL') || jenjang.includes('BUSUI')) {
-            // Hitung Kategori Balita & Bumil
-            balitaBumil += porsi
-          } else {
-            // Sisa kategori lain (seperti Santri/PAUD) masuk ke porsi menengah atau lainnya
-            menengah += porsi 
+        // Ambil data realisasi dari JSON laporan
+        const realisasi = lap.realisasi_sekolah || {}
+        
+        Object.entries(realisasi).forEach(([sekolahId, porsi]) => {
+          const porsiNum = Number(porsi) || 0
+          total += porsiNum
+
+          // Cocokkan ID sekolah dengan jenjangnya
+          const sekolahInfo = s.find(item => item.id === sekolahId)
+          if(sekolahInfo) {
+            const jenjang = sekolahInfo.jenjang?.toUpperCase() || ''
+            // Cari kategori yang sesuai
+            const targetKat = KATEGORI_PM.find(k => jenjang.includes(k.split('/')[0]))
+            if(targetKat) {
+              mapping[targetKat] += porsiNum
+            } else {
+              mapping["SD/MI"] += porsiNum // Default fallback
+            }
           }
         })
       })
 
-      setStats({ 
-        totalPorsi: total, 
-        porsiSD: sd, 
-        porsiMenengah: menengah,
-        porsiBalitaBumil: balitaBumil 
-      })
+      setStatsPorsi(mapping)
+      setTotalPorsiHarian(total)
     }
   }
 
@@ -88,31 +81,23 @@ export default function SuperKorwilPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-slate-800">
       
-      {/* SIDEBAR */}
+      {/* SIDEBAR (TETAP SAMA) */}
       <aside className="w-64 bg-[#0F2650] text-white flex flex-col shrink-0 fixed h-full z-50">
         <div className="p-6 border-b border-white/10 flex items-center gap-3">
-          <div className="p-2 bg-yellow-400 rounded-lg text-[#0F2650] shadow-lg">
-            <Settings size={20} />
-          </div>
+          <div className="p-2 bg-yellow-400 rounded-lg text-[#0F2650] shadow-lg"><Settings size={20} /></div>
           <span className="font-black tracking-tighter text-lg uppercase italic">SUPER KORWIL</span>
         </div>
-        
         <nav className="flex-1 p-4 space-y-2">
-          <button onClick={() => setActiveTab('monitor')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'monitor' ? 'bg-white/10 text-white shadow-inner' : 'text-slate-400 hover:bg-white/5'}`}>
-            <BarChart3 size={18} /> Monitoring
-          </button>
+          <button onClick={() => setActiveTab('monitor')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'monitor' ? 'bg-white/10 text-white shadow-inner' : 'text-slate-400 hover:bg-white/5'}`}><BarChart3 size={18} /> Monitoring</button>
         </nav>
-
         <div className="p-4 border-t border-white/10">
-          <button onClick={() => router.push('/')} className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-xl transition-all uppercase tracking-widest">
-            <LogOut size={16} /> Keluar Sistem
-          </button>
+          <button onClick={() => router.push('/')} className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-xl transition-all uppercase tracking-widest"><LogOut size={16} /> Keluar Sistem</button>
         </div>
       </aside>
 
       {/* MAIN CONTENT */}
       <main className="flex-1 ml-64 p-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
           
           <header className="flex justify-between items-center">
             <div>
@@ -125,7 +110,7 @@ export default function SuperKorwilPage() {
             </div>
           </header>
 
-          {/* ROW 1: PROGRES & TOTAL PORSI */}
+          {/* ROW 1: PROGRES & TOTAL PORSI (TETAP SAMA) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col justify-center">
                 <div className="flex justify-between items-end mb-4">
@@ -136,49 +121,33 @@ export default function SuperKorwilPage() {
                   <div style={{ width: `${progres}%` }} className="h-full bg-blue-600 rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(37,99,235,0.3)]"></div>
                 </div>
             </div>
-
             <div className="bg-[#0F2650] p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden group">
                 <Box className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-110 transition-transform" size={120} />
                 <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1 relative z-10">Total Distribusi Hari Ini</p>
-                <h4 className="text-5xl font-black italic relative z-10">{stats.totalPorsi.toLocaleString()}</h4>
+                <h4 className="text-5xl font-black italic relative z-10">{totalPorsiHarian.toLocaleString()}</h4>
                 <p className="text-[10px] font-bold opacity-60 mt-2 relative z-10 uppercase">Paket Porsi Terkirim</p>
             </div>
           </div>
 
-          {/* ROW 2: DETAIL JENJANG (TERMASUK BALITA) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
-                <div className="p-4 bg-orange-50 text-orange-500 rounded-2xl">
-                   <School size={32} />
+          {/* ROW 2: ITEM PENERIMA MANFAAT LENGKAP (DIPERBARUI) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {KATEGORI_PM.map((kat) => (
+              <div key={kat} className={`p-6 rounded-[2rem] border transition-all ${statsPorsi[kat] > 0 ? 'bg-white border-blue-200 shadow-sm' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${statsPorsi[kat] > 0 ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-200 text-slate-400'}`}>
+                   {kat.includes('TK') || kat.includes('PAUD') ? <School size={22} /> : 
+                    kat.includes('BALITA') || kat.includes('BUMIL') ? <Baby size={22} /> : 
+                    kat.includes('SMP') || kat.includes('SMA') ? <GraduationCap size={22} /> : 
+                    kat.includes('SANTRI') ? <Users size={22} /> : <Activity size={22} />}
                 </div>
                 <div>
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SD / MI</p>
-                   <h3 className="text-2xl font-black text-slate-800">{stats.porsiSD.toLocaleString()}</h3>
+                   <p className="text-2xl font-black text-[#0F2650] leading-none">{statsPorsi[kat]?.toLocaleString() || 0}</p>
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">{kat}</p>
                 </div>
-             </div>
-
-             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
-                <div className="p-4 bg-indigo-50 text-indigo-500 rounded-2xl">
-                   <GraduationCap size={32} />
-                </div>
-                <div>
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SMP / SMA / SMK</p>
-                   <h3 className="text-2xl font-black text-slate-800">{stats.porsiMenengah.toLocaleString()}</h3>
-                </div>
-             </div>
-
-             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
-                <div className="p-4 bg-rose-50 text-rose-500 rounded-2xl">
-                   <Baby size={32} />
-                </div>
-                <div>
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Balita & Bumil</p>
-                   <h3 className="text-2xl font-black text-slate-800">{stats.porsiBalitaBumil.toLocaleString()}</h3>
-                </div>
-             </div>
+              </div>
+            ))}
           </div>
 
-          {/* ROW 3: LIST STATUS UNIT (NAVIGASI DIPERBAIKI) */}
+          {/* ROW 3: LIST STATUS UNIT (TETAP SAMA) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-4">
               <h3 className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-2 italic"><XCircle size={16}/> Belum Mengirim Laporan</h3>
