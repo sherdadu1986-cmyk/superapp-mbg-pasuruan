@@ -24,6 +24,7 @@ export default function SuperKorwilPage() {
   const [monitoringDate, setMonitoringDate] = useState(getLocalToday())
   const [units, setUnits] = useState<any[]>([])
   const [laporan, setLaporan] = useState<any[]>([])
+  const [dataLoading, setDataLoading] = useState(true)
   const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
   const [statsPorsi, setStatsPorsi] = useState<Record<string, number>>({})
   const [totalPorsiHarian, setTotalPorsiHarian] = useState(0)
@@ -41,6 +42,7 @@ export default function SuperKorwilPage() {
 
   // --- FETCH MONITORING ---
   const fetchData = useCallback(async () => {
+    setDataLoading(true)
     const { data: u } = await supabase.from('daftar_sppg').select('*').order('nama_unit')
     const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', monitoringDate)
     const { data: s } = await supabase.from('daftar_sekolah').select('id, jenjang')
@@ -75,6 +77,7 @@ export default function SuperKorwilPage() {
       setStatsPorsi(mapping)
       setTotalPorsiHarian(total)
     }
+    setDataLoading(false)
   }, [monitoringDate])
 
   // --- FETCH GALERI ---
@@ -400,6 +403,37 @@ export default function SuperKorwilPage() {
                     </p>
                   </div>
                   <Box className="absolute -right-4 -bottom-4 text-slate-100" size={120} />
+                </div>
+              </div>
+
+              {/* ROW 1.5: STATS CARDS */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0">
+                    <Users size={22} className="text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Total Unit SPPG</p>
+                    <p className="text-3xl font-bold text-slate-800">{units.length}</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl border border-emerald-200 shadow-sm p-5 flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={22} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide">Sudah Lapor</p>
+                    <p className="text-3xl font-bold text-emerald-700">{laporan.length}</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl border border-red-200 shadow-sm p-5 flex items-center gap-4">
+                  <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center shrink-0">
+                    <AlertTriangle size={22} className="text-red-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wide">Belum Lapor</p>
+                    <p className="text-3xl font-bold text-red-600">{units.length - laporan.length}</p>
+                  </div>
                 </div>
               </div>
 
