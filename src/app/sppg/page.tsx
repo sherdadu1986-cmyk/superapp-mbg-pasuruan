@@ -43,7 +43,7 @@ export default function DashboardSPPGPage() {
     setLoading(true)
     try {
       const { data: unit } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
-      const { data: sekolah } = await supabase.from('daftar_sekolah').select('*').eq('sppg_id', id).order('nama_sekolah', { ascending: true })
+      const { data: sekolah } = await supabase.from('daftar_sekolah').select('*').eq('sppg_id', id).order('id', { ascending: true })
       const { data: laporan } = await supabase.from('laporan_harian_final').select('*').eq('unit_id', id).order('tanggal_ops', { ascending: false })
 
       // Cek Laporan Hari Ini
@@ -134,29 +134,29 @@ export default function DashboardSPPGPage() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 lg:p-10 space-y-8">
-          <div className="max-w-7xl mx-auto space-y-8">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
+          <div className="max-w-7xl mx-auto space-y-5">
 
             {/* ROW 1: BANNER & TOTAL */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 bg-[#0F2650] rounded-[3.5rem] p-12 text-white flex flex-col md:flex-row justify-between items-center gap-10 shadow-2xl relative overflow-hidden group">
-                <div className="relative z-10 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 bg-[#0F2650] rounded-2xl p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6 shadow-lg relative overflow-hidden group">
+                <div className="relative z-10 space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-3 text-yellow-400 mb-2">
                       <CalendarIcon size={18} />
                       <p className="text-[11px] font-black uppercase tracking-[0.3em]">{todayFormatted}</p>
                     </div>
-                    <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter leading-none">{selectedUnit?.nama_unit}</h2>
+                    <h2 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter leading-none">{selectedUnit?.nama_unit}</h2>
                   </div>
 
                   {/* STATUS BADGE */}
                   {laporanHariIni ? (
-                    <div className="flex items-center gap-4 bg-emerald-500 text-white px-6 py-3 rounded-2xl w-fit shadow-lg shadow-emerald-500/20 animate-in fade-in zoom-in">
+                    <div className="flex items-center gap-3 bg-emerald-500 text-white px-4 py-2 rounded-xl w-fit shadow-md shadow-emerald-500/20 animate-in fade-in zoom-in">
                       <CheckCircle2 size={20} />
                       <p className="text-[11px] font-black uppercase tracking-widest">Status: Sudah Laporan Harian</p>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-4 bg-rose-500 text-white px-6 py-3 rounded-2xl w-fit shadow-lg shadow-rose-500/20">
+                    <div className="flex items-center gap-3 bg-rose-500 text-white px-4 py-2 rounded-xl w-fit shadow-md shadow-rose-500/20">
                       <AlertCircle size={20} />
                       <p className="text-[11px] font-black uppercase tracking-widest">Status: Belum Laporan Hari Ini</p>
                     </div>
@@ -166,7 +166,7 @@ export default function DashboardSPPGPage() {
                 {/* BUTTON ACTION */}
                 <button
                   onClick={() => router.push(`/sppg/dashboard/${id}/input${laporanHariIni ? `?edit=${laporanHariIni.id}` : ''}`)}
-                  className={`relative z-10 px-10 py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl transition-all hover:scale-105 active:scale-95 flex items-center gap-4 ${laporanHariIni ? 'bg-white text-[#0F2650]' : 'bg-yellow-400 text-[#0F2650]'}`}
+                  className={`relative z-10 px-6 py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center gap-3 ${laporanHariIni ? 'bg-white text-[#0F2650]' : 'bg-yellow-400 text-[#0F2650]'}`}
                 >
                   <ClipboardList size={22} />
                   {laporanHariIni ? 'Edit Laporan Hari Ini' : 'Input Laporan Sekarang'}
@@ -175,60 +175,60 @@ export default function DashboardSPPGPage() {
               </div>
 
               {/* CARD TOTAL */}
-              <div className="bg-white rounded-[3.5rem] p-12 border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center relative group overflow-hidden">
-                <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-[2.5rem] flex items-center justify-center shadow-inner group-hover:bg-[#0F2650] group-hover:text-white transition-all duration-500 mb-6">
-                  <Users size={48} />
+              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center relative group overflow-hidden">
+                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-[#0F2650] group-hover:text-white transition-all duration-500 mb-4">
+                  <Users size={36} />
                 </div>
-                <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] mb-2 leading-none">Total Penerima Manfaat</p>
-                <h3 className="text-6xl font-black text-[#0F2650] italic tracking-tighter leading-none">{totalPM.toLocaleString()}</h3>
-                <p className="text-[10px] font-bold text-slate-300 uppercase mt-4 tracking-widest italic">Paket Porsi Terdaftar</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1 leading-none">Total Penerima Manfaat</p>
+                <h3 className="text-5xl font-black text-[#0F2650] italic tracking-tighter leading-none">{totalPM.toLocaleString()}</h3>
+                <p className="text-[10px] font-bold text-slate-300 uppercase mt-3 tracking-widest italic">Paket Porsi Terdaftar</p>
               </div>
             </div>
 
             {/* ROW 2: CONTENT TABS */}
-            <div className="bg-white rounded-[3.5rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="flex bg-slate-50 border-b">
-                <button onClick={() => setActiveTab('sekolah')} className={`flex-1 py-6 text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${activeTab === 'sekolah' ? 'text-[#0F2650] bg-white border-b-4 border-[#0F2650]' : 'text-slate-400'}`}>
-                  <School size={18} /> Titik Layanan
+                <button onClick={() => setActiveTab('sekolah')} className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${activeTab === 'sekolah' ? 'text-[#0F2650] bg-white border-b-4 border-[#0F2650]' : 'text-slate-400'}`}>
+                  <School size={16} /> Titik Layanan
                 </button>
-                <button onClick={() => setActiveTab('riwayat')} className={`flex-1 py-6 text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${activeTab === 'riwayat' ? 'text-[#0F2650] bg-white border-b-4 border-[#0F2650]' : 'text-slate-400'}`}>
-                  <FileText size={18} /> Riwayat Distribusi
+                <button onClick={() => setActiveTab('riwayat')} className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${activeTab === 'riwayat' ? 'text-[#0F2650] bg-white border-b-4 border-[#0F2650]' : 'text-slate-400'}`}>
+                  <FileText size={16} /> Riwayat Distribusi
                 </button>
               </div>
 
-              <div className="p-10">
+              <div className="p-5">
                 {activeTab === 'sekolah' ? (
-                  <div className="space-y-10 animate-in fade-in duration-700">
+                  <div className="space-y-5 animate-in fade-in duration-700">
                     {/* FORM ADD */}
-                    <div className="bg-slate-50 p-10 rounded-[3rem] border-2 border-dashed border-slate-200 space-y-8">
+                    <div className="bg-slate-50 p-5 rounded-xl border-2 border-dashed border-slate-200 space-y-4">
                       {/* Row 1: Jenjang & Nama */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-3">
                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Pilih Jenjang</label>
-                          <select className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" value={newSekolah.jenjang} onChange={e => setNewSekolah({ ...newSekolah, jenjang: e.target.value })}>{KATEGORI_PM.map(k => <option key={k} value={k}>{k}</option>)}</select>
+                          <select className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" value={newSekolah.jenjang} onChange={e => setNewSekolah({ ...newSekolah, jenjang: e.target.value })}>{KATEGORI_PM.map(k => <option key={k} value={k}>{k}</option>)}</select>
                         </div>
                         <div className="space-y-3">
                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Nama Sekolah / Titik</label>
-                          <input className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="MISAL: SDN KOTA..." value={newSekolah.nama} onChange={e => setNewSekolah({ ...newSekolah, nama: e.target.value })} />
+                          <input className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="MISAL: SDN KOTA..." value={newSekolah.nama} onChange={e => setNewSekolah({ ...newSekolah, nama: e.target.value })} />
                         </div>
                       </div>
                       {/* Row 2: Porsi Inputs (conditional on jenjang) */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         {isSD ? (
                           <>
                             <div className="space-y-3">
                               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Siswa Kls 1-3</label>
-                              <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah.porsi_siswa_1_3 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_1_3: parseInt(e.target.value) || 0 })} />
+                              <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah.porsi_siswa_1_3 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_1_3: parseInt(e.target.value) || 0 })} />
                             </div>
                             <div className="space-y-3">
                               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Siswa Kls 4-6</label>
-                              <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah.porsi_siswa_4_6 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_4_6: parseInt(e.target.value) || 0 })} />
+                              <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah.porsi_siswa_4_6 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_4_6: parseInt(e.target.value) || 0 })} />
                             </div>
                           </>
                         ) : (
                           <div className="space-y-3">
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Porsi Siswa</label>
-                            <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah.porsi_siswa || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa: parseInt(e.target.value) || 0 })} />
+                            <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah.porsi_siswa || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa: parseInt(e.target.value) || 0 })} />
                           </div>
                         )}
                         {[
@@ -238,30 +238,30 @@ export default function DashboardSPPGPage() {
                         ].map(item => (
                           <div key={item.key} className="space-y-3">
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">{item.label}</label>
-                            <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah[item.key] || ''} onChange={e => setNewSekolah({ ...newSekolah, [item.key]: parseInt(e.target.value) || 0 })} />
+                            <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah[item.key] || ''} onChange={e => setNewSekolah({ ...newSekolah, [item.key]: parseInt(e.target.value) || 0 })} />
                           </div>
                         ))}
                       </div>
                       {/* Row 3: Total + Simpan */}
-                      <div className="flex flex-col md:flex-row items-center gap-6">
-                        <div className="flex-1 w-full bg-indigo-50 border-2 border-indigo-200 rounded-3xl p-5 flex items-center justify-between">
-                          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-3">Total Porsi</span>
-                          <span className="text-2xl font-black text-indigo-700 italic tracking-tighter mr-3">{totalPorsiNew.toLocaleString()}</span>
+                      <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex-1 w-full bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 flex items-center justify-between">
+                          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-2">Total Porsi</span>
+                          <span className="text-xl font-black text-indigo-700 italic tracking-tighter mr-2">{totalPorsiNew.toLocaleString()}</span>
                         </div>
-                        <button onClick={handleAddSekolah} className="w-full md:w-auto bg-[#0F2650] text-white px-10 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-2xl flex items-center justify-center gap-3 whitespace-nowrap"><Plus size={20} /> Simpan Data</button>
+                        <button onClick={handleAddSekolah} className="w-full md:w-auto bg-[#0F2650] text-white px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg flex items-center justify-center gap-2 whitespace-nowrap"><Plus size={18} /> Simpan Data</button>
                       </div>
                     </div>
 
                     {/* LIST GRID */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {listSekolah.map(s => (
-                        <div key={s.id} className="p-6 border border-slate-100 rounded-[2rem] flex justify-between items-center bg-white group hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {listSekolah.map((s, index) => (
+                        <div key={s.id} className="p-4 border border-slate-200 rounded-xl flex justify-between items-center bg-white shadow-sm group hover:border-slate-300 hover:shadow-md transition-all duration-300">
                           <div>
-                            <p className="text-[13px] font-black text-slate-800 uppercase italic leading-none mb-2 group-hover:text-indigo-600 transition-colors">{s.nama_sekolah}</p>
+                            <p className="text-[13px] font-black text-slate-800 uppercase italic leading-none mb-2 group-hover:text-indigo-600 transition-colors">{index + 1}. {s.nama_sekolah}</p>
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.jenjang} • <span className="text-indigo-500">{s.target_porsi}</span> Porsi</p>
                             <p className="text-[9px] text-slate-400 font-bold mt-2 tracking-wide">{s.jenjang === 'SD/MI' ? (<>Siswa (1-3): {s.porsi_siswa_1_3 ?? 0} <span className="text-slate-300 mx-0.5">|</span> Siswa (4-6): {s.porsi_siswa_4_6 ?? 0}</>) : (<>Siswa: {s.porsi_siswa ?? 0}</>)} <span className="text-slate-300 mx-0.5">|</span> Guru: {s.porsi_guru ?? 0} <span className="text-slate-300 mx-0.5">|</span> Tendik: {s.porsi_tendik ?? 0} <span className="text-slate-300 mx-0.5">|</span> Kader: {s.porsi_kader ?? 0}</p>
                           </div>
-                          <button onClick={() => handleDeleteSekolah(s.id)} className="p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={20} /></button>
+                          <button onClick={() => handleDeleteSekolah(s.id)} className="p-2 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={18} /></button>
                         </div>
                       ))}
                     </div>
@@ -269,9 +269,9 @@ export default function DashboardSPPGPage() {
                 ) : (
                   <div className="space-y-4 animate-in fade-in duration-700">
                     {riwayat.map(l => (
-                      <div key={l.id} className="p-8 border border-slate-100 rounded-[2.5rem] flex justify-between items-center bg-white hover:bg-slate-50 transition-all shadow-sm group">
-                        <div className="flex items-center gap-8">
-                          <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center group-hover:bg-[#0F2650] group-hover:text-white transition-all"><Utensils size={24} /></div>
+                      <div key={l.id} className="p-4 border border-slate-200 rounded-xl flex justify-between items-center bg-white hover:bg-slate-50 transition-all shadow-sm group">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center group-hover:bg-[#0F2650] group-hover:text-white transition-all"><Utensils size={20} /></div>
                           <div>
                             <p className="text-[14px] font-black text-slate-700 uppercase italic leading-none mb-2 group-hover:text-[#0F2650] transition-colors">"{l.menu_makanan}"</p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{l.tanggal_ops}</p>
@@ -279,11 +279,11 @@ export default function DashboardSPPGPage() {
                         </div>
                         <div className="flex items-center gap-4">
                           {l.tanggal_ops === todayISO && (
-                            <button onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${l.id}`)} className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 rounded-2xl text-[11px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                              <Edit3 size={16} /> Edit Data
+                            <button onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${l.id}`)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                              <Edit3 size={14} /> Edit
                             </button>
                           )}
-                          <div className="px-6 py-3 bg-emerald-50 text-emerald-600 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-emerald-100 shadow-sm">Terkirim ✓</div>
+                          <div className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-[11px] font-black uppercase tracking-widest border border-emerald-100 shadow-sm">Terkirim ✓</div>
                         </div>
                       </div>
                     ))}

@@ -1,13 +1,14 @@
 "use client"
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getLocalToday } from '@/lib/date'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import {
-  BarChart3, LogOut, CheckCircle2, ChevronRight, Settings,
+  BarChart3, LogOut, CheckCircle2, ChevronRight, ChevronLeft, Settings,
   Utensils, School, Box, Activity, Users, Baby, GraduationCap,
-  Clock, MapPin, AlertTriangle, Camera, X, ImageIcon, FileSpreadsheet, Loader2
+  Clock, MapPin, AlertTriangle, Camera, X, ImageIcon, FileSpreadsheet, Loader2, Calendar
 } from 'lucide-react'
 
 export default function SuperKorwilPage() {
@@ -16,10 +17,9 @@ export default function SuperKorwilPage() {
   // --- VIEW STATE ---
   const [activeView, setActiveView] = useState<'monitoring' | 'galeri'>('monitoring')
 
-  // --- MONITORING STATE ---
-  const today = new Date().toISOString().split('T')[0]
-  const [startDate, setStartDate] = useState(today)
-  const [endDate, setEndDate] = useState(today)
+  // --- MONITORING STATE (single day) ---
+  const [today, setToday] = useState(getLocalToday())
+  const [monitoringDate, setMonitoringDate] = useState(getLocalToday())
   const [units, setUnits] = useState<any[]>([])
   const [laporan, setLaporan] = useState<any[]>([])
   const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
@@ -32,10 +32,15 @@ export default function SuperKorwilPage() {
   const [selectedFoto, setSelectedFoto] = useState<any>(null)
   const [exporting, setExporting] = useState(false)
 
+  // --- EXPORT MODAL STATE ---
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportStart, setExportStart] = useState(today)
+  const [exportEnd, setExportEnd] = useState(today)
+
   // --- FETCH MONITORING ---
   const fetchData = useCallback(async () => {
     const { data: u } = await supabase.from('daftar_sppg').select('*').order('nama_unit')
-    const { data: l } = await supabase.from('laporan_harian_final').select('*').gte('tanggal_ops', startDate).lte('tanggal_ops', endDate)
+    const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', monitoringDate)
     const { data: s } = await supabase.from('daftar_sekolah').select('id, jenjang')
 
     if (u) setUnits(u)
@@ -68,7 +73,7 @@ export default function SuperKorwilPage() {
       setStatsPorsi(mapping)
       setTotalPorsiHarian(total)
     }
-  }, [startDate, endDate])
+  }, [monitoringDate])
 
   // --- FETCH GALERI ---
   const fetchGaleri = useCallback(async () => {
@@ -76,49 +81,75 @@ export default function SuperKorwilPage() {
     const { data } = await supabase
       .from('laporan_harian_final')
       .select('id, foto_url, nama_unit, menu_makanan, tanggal_ops')
-      .gte('tanggal_ops', startDate)
-      .lte('tanggal_ops', endDate)
+      .eq('tanggal_ops', monitoringDate)
       .not('foto_url', 'is', null)
       .neq('foto_url', '')
       .order('tanggal_ops', { ascending: false })
 
     setGaleriData(data || [])
     setGaleriLoading(false)
-  }, [startDate, endDate])
+  }, [monitoringDate])
 
   // --- EFFECTS (fixed: removed laporan.length to prevent infinite loop) ---
-  useEffect(() => { fetchData() }, [startDate, endDate, fetchData])
-  useEffect(() => { if (activeView === 'galeri') fetchGaleri() }, [activeView, startDate, endDate, fetchGaleri])
+  useEffect(() => { fetchData() }, [monitoringDate, fetchData])
+  useEffect(() => { if (activeView === 'galeri') fetchGaleri() }, [activeView, monitoringDate, fetchGaleri])
 
   // --- ESC key to close modal ---
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedFoto(null) }
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelectedFoto(null); setShowExportModal(false) } }
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [])
 
+  // --- MIDNIGHT AUTO-SYNC: update 'today' when clock passes midnight ---
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const realToday = getLocalToday()
+      if (realToday !== today) {
+        setToday(realToday)
+        setMonitoringDate(realToday)
+      }
+    }, 60000) // check every 60s
+    return () => clearInterval(interval)
+  }, [today])
+
   const progres = units.length > 0 ? Math.round((laporan.length / units.length) * 100) : 0
 
-  // --- EXPORT EXCEL ---
+  // Date stepper helpers
+  const shiftDate = (days: number) => {
+    const d = new Date(monitoringDate)
+    d.setDate(d.getDate() + days)
+    setMonitoringDate(d.toISOString().split('T')[0])
+  }
+  const formatDisplayDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  // --- EXPORT EXCEL (uses its own fetch from modal dates) ---
   const handleExportExcel = async () => {
     setExporting(true)
     try {
-      // Fetch school details for enrichment only (names, jenjang, porsi breakdown)
+      // Fetch laporan for export date range (separate from monitoring)
+      const { data: exportLaporan } = await supabase
+        .from('laporan_harian_final')
+        .select('*')
+        .gte('tanggal_ops', exportStart)
+        .lte('tanggal_ops', exportEnd)
+
       const { data: allSekolah } = await supabase
         .from('daftar_sekolah')
         .select('*')
 
       const sekolahMap = new Map((allSekolah || []).map(s => [s.id, s]))
+      const laporanData = exportLaporan || []
 
-      // Use `laporan` state — the SAME data rendered on screen
-      // Expand each laporan's realisasi_sekolah into flat rows
       type FlatRow = {
         tanggal: string; unitName: string; namaSekolah: string; jenjang: string;
         s13: number; s46: number; siswa: number; guru: number; tendik: number; kader: number; total: number;
       }
       const flatRows: FlatRow[] = []
 
-      laporan.forEach((lap: any) => {
+      laporanData.forEach((lap: any) => {
         const realisasi = lap.realisasi_sekolah || {}
         Object.entries(realisasi).forEach(([sekolahId, porsi]) => {
           const porsiNum = Number(porsi) || 0
@@ -139,7 +170,6 @@ export default function SuperKorwilPage() {
         })
       })
 
-      // Sort: Tanggal (asc) → Unit SPPG (A-Z) → Jenjang (A-Z) → Nama Titik (A-Z)
       flatRows.sort((a, b) => {
         const cmpDate = a.tanggal.localeCompare(b.tanggal)
         if (cmpDate !== 0) return cmpDate
@@ -150,7 +180,6 @@ export default function SuperKorwilPage() {
         return a.namaSekolah.localeCompare(b.namaSekolah, 'id')
       })
 
-      // Map to Excel-ready objects
       const rows = flatRows.map((r, i) => ({
         'No': i + 1,
         'Tanggal Laporan': r.tanggal,
@@ -166,7 +195,6 @@ export default function SuperKorwilPage() {
         'Total Porsi': r.total,
       }))
 
-      // GRAND TOTAL row — sums match totalPorsiHarian on screen
       const gt = rows.reduce((acc, r) => ({
         s13: acc.s13 + r['Porsi Siswa (Kls 1-3)'],
         s46: acc.s46 + r['Porsi Siswa (Kls 4-6)'],
@@ -194,15 +222,12 @@ export default function SuperKorwilPage() {
 
       const ws = XLSX.utils.json_to_sheet(rows)
 
-      // --- Hierarchical Merge Cells: Tanggal (col 1), Unit SPPG (col 2), Jenjang (col 4) ---
-      // Column indices: No=0, Tanggal=1, Unit=2, NamaTitik=3, Jenjang=4
       const COL_TGL = 1, COL_UNIT = 2, COL_JENJANG = 4
       const merges: XLSX.Range[] = []
       let startTgl = 0, startUnit = 0, startJenjang = 0
 
       const pushMerge = (startIdx: number, endIdx: number, col: number) => {
         if (endIdx > startIdx) {
-          // +1 offset because row 0 in sheet = header
           merges.push({ s: { r: startIdx + 1, c: col }, e: { r: endIdx + 1, c: col } })
         }
       }
@@ -217,8 +242,7 @@ export default function SuperKorwilPage() {
         if (unitChanged) { pushMerge(startUnit, i - 1, COL_UNIT); startUnit = i }
         if (jenjangChanged) { pushMerge(startJenjang, i - 1, COL_JENJANG); startJenjang = i }
       }
-      // Flush remaining ranges (exclude GRAND TOTAL row from merges)
-      const lastData = rows.length - 2 // last data row index (before GRAND TOTAL)
+      const lastData = rows.length - 2
       if (lastData >= 0) {
         pushMerge(startTgl, lastData, COL_TGL)
         pushMerge(startUnit, lastData, COL_UNIT)
@@ -226,7 +250,6 @@ export default function SuperKorwilPage() {
       }
       ws['!merges'] = merges
 
-      // Auto-size columns
       const colWidths = Object.keys(rows[0] || {}).map(key => ({
         wch: Math.max(key.length + 2, ...rows.map(r => String((r as any)[key]).length + 2))
       }))
@@ -234,8 +257,9 @@ export default function SuperKorwilPage() {
 
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Laporan Korwil')
-      const fileSuffix = startDate === endDate ? startDate : `${startDate}_sampai_${endDate}`
+      const fileSuffix = exportStart === exportEnd ? exportStart : `${exportStart}_sampai_${exportEnd}`
       XLSX.writeFile(wb, `Laporan_Korwil_SPPG_${fileSuffix}.xlsx`)
+      setShowExportModal(false)
     } catch (err: any) {
       console.error('Export failed:', err)
       alert('⚠️ Gagal mengekspor data. Coba lagi.')
@@ -276,6 +300,13 @@ export default function SuperKorwilPage() {
             <Camera size={20} />
             <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Galeri</span>
           </button>
+          <button
+            onClick={() => router.push('/korwil/akun')}
+            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          >
+            <Users size={20} />
+            <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Akun Pengguna</span>
+          </button>
         </nav>
 
         <div className="absolute bottom-8 w-full px-6">
@@ -289,72 +320,80 @@ export default function SuperKorwilPage() {
       {/* ============================================ */}
       {/* MAIN CONTENT                                */}
       {/* ============================================ */}
-      <main className="pl-24 lg:pl-72 p-8 transition-all">
-        <div className="max-w-7xl mx-auto space-y-10">
+      <main className="pl-24 lg:pl-72 p-6 transition-all">
+        <div className="max-w-7xl mx-auto space-y-5">
 
           {activeView === 'monitoring' ? (
             <>
               {/* ======== MONITORING VIEW ======== */}
-              {/* TOP HEADER */}
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              {/* TOP HEADER — DATE STEPPER */}
+              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h2 className="text-4xl font-black text-slate-900 italic tracking-tighter uppercase leading-none">Infografis Wilayah</h2>
-                  <div className="flex items-center gap-4 mt-4 text-slate-500">
+                  <h2 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase leading-none">Infografis Wilayah</h2>
+                  <div className="flex items-center gap-3 mt-3 text-slate-500">
                     <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
                       <MapPin size={14} className="text-indigo-500" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Kab. Pasuruan</span>
                     </div>
-                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
-                      <Clock size={14} className="text-emerald-500" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">{startDate === endDate ? startDate : `${startDate} — ${endDate}`}</span>
-                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  {/* EXPORT EXCEL — opens modal */}
                   <button
-                    onClick={handleExportExcel}
-                    disabled={exporting}
-                    className="flex items-center gap-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:opacity-60 text-white px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 disabled:hover:scale-100"
+                    onClick={() => setShowExportModal(true)}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95"
                   >
-                    {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-                    {exporting ? 'Mengekspor...' : 'Ekspor Excel'}
+                    <FileSpreadsheet size={15} /> Ekspor Excel
                   </button>
-                  <div className="bg-white p-2 rounded-2xl border border-slate-200 flex items-center gap-2 shadow-sm">
-                    <span className="text-[9px] font-black text-slate-400 px-3 uppercase tracking-widest">Dari</span>
-                    <input type="date" className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                    <span className="text-[9px] font-black text-slate-400 px-2 uppercase tracking-widest">s/d</span>
-                    <input type="date" className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer" value={endDate} onChange={e => setEndDate(e.target.value)} />
+
+                  {/* DATE STEPPER */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex items-center overflow-hidden">
+                    <button onClick={() => shiftDate(-1)} className="px-3 py-2.5 hover:bg-slate-100 transition-colors border-r border-slate-200">
+                      <ChevronLeft size={16} className="text-slate-500" />
+                    </button>
+                    <div className="px-4 py-2 flex items-center gap-2">
+                      <Calendar size={14} className="text-indigo-500" />
+                      <span className="text-xs font-bold text-slate-700 min-w-[130px] text-center">{formatDisplayDate(monitoringDate)}</span>
+                    </div>
+                    <button onClick={() => shiftDate(1)} className="px-3 py-2.5 hover:bg-slate-100 transition-colors border-l border-slate-200">
+                      <ChevronRight size={16} className="text-slate-500" />
+                    </button>
                   </div>
+                  {monitoringDate !== today && (
+                    <button onClick={() => setMonitoringDate(today)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-200">
+                      Hari Ini
+                    </button>
+                  )}
                 </div>
               </header>
 
               {/* ROW 1: PROGRES & TOTAL PORSI */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-gradient-to-br from-indigo-600 to-indigo-800 p-10 rounded-[3rem] shadow-2xl shadow-indigo-500/20 relative overflow-hidden group">
-                  <div className="relative z-10 space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-2xl shadow-lg shadow-indigo-500/20 relative overflow-hidden group">
+                  <div className="relative z-10 space-y-4">
                     <div className="flex justify-between items-end">
                       <div>
-                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.4em] mb-2">Progres Pengiriman SPPG</p>
-                        <h3 className="text-6xl font-black italic tracking-tighter text-white">{progres}%</h3>
+                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.3em] mb-1">Progres Pengiriman SPPG</p>
+                        <h3 className="text-5xl font-black italic tracking-tighter text-white">{progres}%</h3>
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-1">Status Laporan</p>
-                        <p className="text-xl font-black text-white">{laporan.length} / {units.length} UNIT</p>
+                        <p className="text-lg font-black text-white">{laporan.length} / {units.length} UNIT</p>
                       </div>
                     </div>
-                    <div className="w-full h-4 bg-white/20 rounded-full overflow-hidden">
+                    <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden">
                       <div style={{ width: `${progres}%` }} className="h-full bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.5)] transition-all duration-1000"></div>
                     </div>
                   </div>
                   <BarChart3 className="absolute -right-8 -bottom-8 text-white/10 rotate-12 transition-transform group-hover:scale-110" size={250} />
                 </div>
 
-                <div className="bg-white border border-slate-200 p-10 rounded-[3rem] shadow-md flex flex-col justify-center relative overflow-hidden group">
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col justify-center relative overflow-hidden group">
                   <div className="relative z-10">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-2">Total Distribusi Hari Ini</p>
-                    <h4 className="text-6xl font-black italic tracking-tighter text-slate-900 group-hover:text-indigo-600 transition-colors">{totalPorsiHarian.toLocaleString()}</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-4 flex items-center gap-2 tracking-widest leading-none">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Distribusi Hari Ini</p>
+                    <h4 className="text-5xl font-black italic tracking-tighter text-slate-900 group-hover:text-indigo-600 transition-colors">{totalPorsiHarian.toLocaleString()}</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-3 flex items-center gap-2 tracking-widest leading-none">
                       <Box size={14} className="text-indigo-500" /> Paket Porsi Terkirim
                     </p>
                   </div>
@@ -363,34 +402,34 @@ export default function SuperKorwilPage() {
               </div>
 
               {/* ROW 2: GRID KATEGORI DINAMIS */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {KATEGORI_PM.map((kat) => (
-                  <div key={kat} className={`p-8 rounded-[2.5rem] border transition-all duration-500 group ${statsPorsi[kat] > 0 ? 'bg-white border-slate-200 hover:border-indigo-400 shadow-sm hover:shadow-md' : 'bg-slate-100 border-slate-200 opacity-50'}`}>
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-all duration-500 ${statsPorsi[kat] > 0 ? 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white' : 'bg-slate-200 text-slate-400'}`}>
-                      {kat.includes('TK') || kat.includes('PAUD') ? <School size={24} /> :
-                        kat.includes('BALITA') || kat.includes('BUMIL') ? <Baby size={24} /> :
-                          kat.includes('SMP') || kat.includes('SMA') ? <GraduationCap size={24} /> :
-                            kat.includes('SANTRI') ? <Users size={24} /> : <Activity size={24} />}
+                  <div key={kat} className={`p-5 rounded-xl border transition-all duration-500 group ${statsPorsi[kat] > 0 ? 'bg-white border-slate-200 hover:border-indigo-400 shadow-sm hover:shadow-md' : 'bg-slate-100 border-slate-200 opacity-50'}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-all duration-500 ${statsPorsi[kat] > 0 ? 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white' : 'bg-slate-200 text-slate-400'}`}>
+                      {kat.includes('TK') || kat.includes('PAUD') ? <School size={20} /> :
+                        kat.includes('BALITA') || kat.includes('BUMIL') ? <Baby size={20} /> :
+                          kat.includes('SMP') || kat.includes('SMA') ? <GraduationCap size={20} /> :
+                            kat.includes('SANTRI') ? <Users size={20} /> : <Activity size={20} />}
                     </div>
-                    <h5 className="text-3xl font-black text-slate-900 leading-none tracking-tighter italic">{statsPorsi[kat]?.toLocaleString() || 0}</h5>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-3">{kat}</p>
+                    <h5 className="text-2xl font-black text-slate-900 leading-none tracking-tighter italic">{statsPorsi[kat]?.toLocaleString() || 0}</h5>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">{kat}</p>
                   </div>
                 ))}
               </div>
 
               {/* ROW 3: LIST STATUS UNIT */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 pt-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
                 {/* UNIT BELUM LAPOR */}
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between px-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between px-2">
                     <h3 className="text-[11px] font-black text-rose-500 uppercase tracking-[0.3em] flex items-center gap-3 italic">
                       <AlertTriangle size={18} className="animate-pulse" /> Urgent: Belum Lapor
                     </h3>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{units.length - laporan.length} Unit</span>
                   </div>
-                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
                     {units.filter(u => !laporan.find(l => l.unit_id === u.id)).map(u => (
-                      <div key={u.id} onClick={() => router.push(`/korwil/detail/${u.id}`)} className="bg-white border border-slate-200 p-6 rounded-2xl flex justify-between items-center group cursor-pointer hover:bg-rose-50 hover:border-rose-300 transition-all shadow-sm">
+                      <div key={u.id} onClick={() => router.push(`/korwil/detail/${u.id}`)} className="bg-white border border-slate-200 p-4 rounded-xl flex justify-between items-center group cursor-pointer hover:bg-rose-50 hover:border-rose-300 transition-all shadow-sm">
                         <span className="text-xs font-black text-slate-600 group-hover:text-rose-700 uppercase italic transition-colors tracking-tighter">{u.nama_unit}</span>
                         <ChevronRight className="text-slate-300 group-hover:text-rose-500 transition-transform group-hover:translate-x-2" size={20} />
                       </div>
@@ -406,9 +445,9 @@ export default function SuperKorwilPage() {
                     </h3>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{laporan.length} Unit</span>
                   </div>
-                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
                     {laporan.map(l => (
-                      <div key={l.id} onClick={() => router.push(`/korwil/detail/${l.unit_id}`)} className="bg-white border border-slate-200 p-6 rounded-2xl flex justify-between items-center group cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 transition-all shadow-sm">
+                      <div key={l.id} onClick={() => router.push(`/korwil/detail/${l.unit_id}`)} className="bg-white border border-slate-200 p-4 rounded-xl flex justify-between items-center group cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 transition-all shadow-sm">
                         <div className="flex items-center gap-5">
                           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
                             <Utensils size={18} />
@@ -425,26 +464,40 @@ export default function SuperKorwilPage() {
           ) : (
             <>
               {/* ======== GALERI VIEW ======== */}
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h2 className="text-4xl font-black text-slate-900 italic tracking-tighter uppercase leading-none">Galeri Dokumentasi</h2>
-                  <div className="flex items-center gap-4 mt-4 text-slate-500">
+                  <h2 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase leading-none">Galeri Dokumentasi</h2>
+                  <div className="flex items-center gap-3 mt-3 text-slate-500">
                     <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
                       <Camera size={14} className="text-indigo-500" />
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Bukti Operasional Harian</span>
                     </div>
                     <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
                       <Clock size={14} className="text-emerald-500" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">{startDate === endDate ? startDate : `${startDate} — ${endDate}`}</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">{formatDisplayDate(monitoringDate)}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white p-2 rounded-2xl border border-slate-200 flex items-center gap-2 shadow-sm">
-                  <span className="text-[9px] font-black text-slate-400 px-3 uppercase tracking-widest">Dari</span>
-                  <input type="date" className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                  <span className="text-[9px] font-black text-slate-400 px-2 uppercase tracking-widest">s/d</span>
-                  <input type="date" className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                {/* DATE STEPPER for galeri */}
+                <div className="flex items-center gap-3">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex items-center overflow-hidden">
+                    <button onClick={() => shiftDate(-1)} className="px-3 py-2.5 hover:bg-slate-100 transition-colors border-r border-slate-200">
+                      <ChevronLeft size={16} className="text-slate-500" />
+                    </button>
+                    <div className="px-4 py-2 flex items-center gap-2">
+                      <Calendar size={14} className="text-indigo-500" />
+                      <span className="text-xs font-bold text-slate-700 min-w-[130px] text-center">{formatDisplayDate(monitoringDate)}</span>
+                    </div>
+                    <button onClick={() => shiftDate(1)} className="px-3 py-2.5 hover:bg-slate-100 transition-colors border-l border-slate-200">
+                      <ChevronRight size={16} className="text-slate-500" />
+                    </button>
+                  </div>
+                  {monitoringDate !== today && (
+                    <button onClick={() => setMonitoringDate(today)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-200">
+                      Hari Ini
+                    </button>
+                  )}
                 </div>
               </header>
 
@@ -470,7 +523,7 @@ export default function SuperKorwilPage() {
                     <Camera size={48} className="text-slate-300" />
                   </div>
                   <h3 className="text-xl font-black text-slate-400 uppercase italic tracking-tighter">Belum Ada Dokumentasi</h3>
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-3">Tidak ada foto operasional untuk {startDate === endDate ? `tanggal ${startDate}` : `${startDate} s/d ${endDate}`}</p>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-3">Tidak ada foto operasional untuk tanggal {formatDisplayDate(monitoringDate)}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -567,6 +620,37 @@ export default function SuperKorwilPage() {
                 <p className="text-sm font-black text-indigo-600 italic tracking-tighter mt-1">{selectedFoto.tanggal_ops}</p>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* EXPORT MODAL */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setShowExportModal(false)}>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-md p-6 space-y-5" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800">Ekspor Laporan SPPG</h3>
+              <button onClick={() => setShowExportModal(false)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-500">Pilih rentang tanggal untuk data yang akan diekspor ke file Excel.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dari Tanggal</label>
+                <input type="date" className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all" value={exportStart} onChange={e => setExportStart(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sampai Tanggal</label>
+                <input type="date" className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
+              </div>
+            </div>
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting}
+              className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-3 disabled:opacity-60"
+            >
+              {exporting ? <><Loader2 size={16} className="animate-spin" /> Mengekspor...</> : <><FileSpreadsheet size={16} /> Download Excel</>}
+            </button>
           </div>
         </div>
       )}

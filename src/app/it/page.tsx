@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getLocalToday } from '@/lib/date'
 import { useRouter } from 'next/navigation'
 import {
   Users, Plus, Trash2, LogOut, Search, ShieldCheck,
@@ -21,7 +22,7 @@ export default function SuperAdminITPage() {
   const [dataMaster, setDataMaster] = useState<any[]>([])
   const [units, setUnits] = useState<any[]>([])
   const [laporanHarian, setLaporanHarian] = useState<any[]>([])
-  const [tanggal] = useState(new Date().toISOString().split('T')[0])
+  const [tanggal] = useState(getLocalToday())
 
   // Form State
   const [isEdit, setIsEdit] = useState(false)
