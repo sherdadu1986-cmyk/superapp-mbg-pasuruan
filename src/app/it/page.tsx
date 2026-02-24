@@ -2,10 +2,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { 
-  Users, Plus, Trash2, LogOut, Search, ShieldCheck, 
-  Building2, Mail, Lock, UserCircle, BarChart3, Edit3, 
-  X, Key, CheckCircle2, ChevronLeft, ChevronRight, Menu
+import {
+  Users, Plus, Trash2, LogOut, Search, ShieldCheck,
+  Building2, Mail, Lock, UserCircle, BarChart3, Edit3,
+  X, Key, CheckCircle2, ChevronLeft, Menu
 } from 'lucide-react'
 
 export default function SuperAdminITPage() {
@@ -13,7 +13,7 @@ export default function SuperAdminITPage() {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'members' | 'monitor'>('members')
   const [searchTerm, setSearchTerm] = useState('')
-  
+
   // FITUR SIDEBAR TOGGLE
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
@@ -34,7 +34,7 @@ export default function SuperAdminITPage() {
     const { data: usr } = await supabase.from('users_app').select(`*, daftar_sppg(nama_unit, kepala_unit)`).order('created_at', { ascending: false })
     const { data: unt } = await supabase.from('daftar_sppg').select('*')
     const { data: lap } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', tanggal)
-    
+
     if (usr) setDataMaster(usr)
     if (unt) setUnits(unt)
     if (lap) setLaporanHarian(lap)
@@ -98,7 +98,7 @@ export default function SuperAdminITPage() {
 
   return (
     <div className="min-h-screen bg-[#F3F4F9] flex font-sans transition-all duration-300">
-      
+
       {/* SIDEBAR DENGAN FITUR TOGGLE */}
       <aside className={`bg-[#4F46E5] text-white flex flex-col fixed h-full z-50 shadow-2xl transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-6 border-b border-white/10 flex items-center justify-between">
@@ -113,18 +113,18 @@ export default function SuperAdminITPage() {
 
         <nav className="flex-1 p-4 mt-4 space-y-2 overflow-hidden">
           <button onClick={() => setActiveTab('members')} className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${activeTab === 'members' ? 'bg-white/20 shadow-lg' : 'hover:bg-white/10'}`}>
-            <Users size={20} className="shrink-0" /> 
+            <Users size={20} className="shrink-0" />
             <span className={`transition-all duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 invisible'}`}>Members</span>
           </button>
           <button onClick={() => setActiveTab('monitor')} className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${activeTab === 'monitor' ? 'bg-white/20 shadow-lg' : 'hover:bg-white/10'}`}>
-            <BarChart3 size={20} className="shrink-0" /> 
+            <BarChart3 size={20} className="shrink-0" />
             <span className={`transition-all duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 invisible'}`}>Monitoring</span>
           </button>
         </nav>
 
         <div className="p-4 border-t border-white/10">
           <button onClick={() => router.push('/')} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-semibold text-red-200 hover:bg-red-500/10 rounded-xl transition-all overflow-hidden">
-            <LogOut size={20} className="shrink-0" /> 
+            <LogOut size={20} className="shrink-0" />
             <span className={`transition-all duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 invisible'}`}>Logout</span>
           </button>
         </div>
@@ -133,7 +133,7 @@ export default function SuperAdminITPage() {
       {/* MAIN CONTENT - MARGIN MENYESUAIKAN SIDEBAR */}
       <main className={`flex-1 transition-all duration-300 p-8 lg:p-12 ${sidebarOpen ? 'pl-72' : 'pl-28'}`}>
         <div className="max-w-7xl mx-auto space-y-8">
-          
+
           {activeTab === 'members' ? (
             <div className="space-y-8 animate-in fade-in">
               <header className="flex justify-between items-center">
@@ -150,28 +150,28 @@ export default function SuperAdminITPage() {
               {/* FORM UNIFIED */}
               <div className={`rounded-[2.5rem] p-8 border transition-all duration-500 ${isEdit ? 'bg-amber-50 border-amber-200 shadow-xl' : 'bg-white border-slate-100 shadow-sm'}`}>
                 <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-6 flex justify-between items-center px-2 italic">
-                   <div className="flex items-center gap-3">
-                     {isEdit ? <Edit3 size={18} className="text-amber-600" /> : <Plus size={18} className="text-[#4F46E5]" />}
-                     {isEdit ? 'Edit Akun SPPG' : 'Registrasi SPPG & Akun Baru'}
-                   </div>
-                   {isEdit && <button onClick={() => { setIsEdit(false); setForm({nama_unit:'', kepala_unit:'', email:'', password:'', role:'sppg'}) }} className="text-red-500 hover:scale-110 transition-all"><X size={18}/></button>}
+                  <div className="flex items-center gap-3">
+                    {isEdit ? <Edit3 size={18} className="text-amber-600" /> : <Plus size={18} className="text-[#4F46E5]" />}
+                    {isEdit ? 'Edit Akun SPPG' : 'Registrasi SPPG & Akun Baru'}
+                  </div>
+                  {isEdit && <button onClick={() => { setIsEdit(false); setForm({ nama_unit: '', kepala_unit: '', email: '', password: '', role: 'sppg' }) }} className="text-red-500 hover:scale-110 transition-all"><X size={18} /></button>}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Nama SPPG</label>
                     <div className="relative"><Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                    <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="SPPG..." value={form.nama_unit} onChange={e => setForm({...form, nama_unit: e.target.value})} /></div>
+                      <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="SPPG..." value={form.nama_unit} onChange={e => setForm({ ...form, nama_unit: e.target.value })} /></div>
                   </div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Kepala SPPG</label>
                     <div className="relative"><UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                    <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Nama..." value={form.kepala_unit} onChange={e => setForm({...form, kepala_unit: e.target.value})} /></div>
+                      <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Nama..." value={form.kepala_unit} onChange={e => setForm({ ...form, kepala_unit: e.target.value })} /></div>
                   </div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Email</label>
                     <div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                    <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Email..." value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
+                      <input className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Email..." value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
                   </div>
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Password</label>
                     <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                    <input type="text" className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Pass..." value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>
+                      <input type="text" className="w-full pl-10 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-900 outline-none focus:border-[#4F46E5] shadow-sm" placeholder="Pass..." value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
                   </div>
                   <button onClick={handleSimpan} disabled={loading} className={`py-4 px-6 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-xl transition-all flex items-center justify-center gap-2 ${isEdit ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#4F46E5] hover:bg-[#4338CA]'}`}>
                     {loading ? '...' : isEdit ? 'Update Data' : 'Add Member'}
@@ -206,21 +206,21 @@ export default function SuperAdminITPage() {
                         </td>
                         <td className="p-6 text-xs font-bold text-slate-600 italic">{u.email}</td>
                         <td className="p-6 text-center">
-                           <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg w-fit mx-auto">
-                              <Key size={12} className="text-amber-500" />
-                              <span className="text-xs font-mono font-black text-slate-700 tracking-widest">{u.password}</span>
-                           </div>
+                          <div className="flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg w-fit mx-auto">
+                            <Key size={12} className="text-amber-500" />
+                            <span className="text-xs font-mono font-black text-slate-700 tracking-widest">{u.password}</span>
+                          </div>
                         </td>
                         <td className="p-6 text-right">
                           <div className="flex justify-end gap-2">
                             {u.role === 'pending' ? (
                               <button onClick={() => handleApprove(u.id)} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white text-[9px] font-black rounded-xl uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all">
-                                <CheckCircle2 size={14}/> Aktifkan SPPG
+                                <CheckCircle2 size={14} /> Aktifkan SPPG
                               </button>
                             ) : (
                               <div className="flex items-center gap-2">
-                                <button onClick={() => handleEditClick(u)} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit3 size={16}/></button>
-                                <button onClick={() => handleDelete(u.id, u.sppg_unit_id)} className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={16}/></button>
+                                <button onClick={() => handleEditClick(u)} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit3 size={16} /></button>
+                                <button onClick={() => handleDelete(u.id, u.sppg_unit_id)} className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
                               </div>
                             )}
                           </div>

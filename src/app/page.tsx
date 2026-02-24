@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Lock, Mail, ArrowRight, UserPlus, User } from 'lucide-react'
+import { Lock, ArrowRight, UserPlus, User } from 'lucide-react'
 import Image from 'next/image'
 
 export default function LoginPage() {
@@ -43,7 +43,7 @@ export default function LoginPage() {
 
         // LOGIKA NAVIGASI (ROLE "it" SESUAI DATABASE)
         if (user.role === 'it') {
-          router.push('/it') 
+          router.push('/it')
         } else if (user.role === 'korwil') {
           router.push('/korwil')
         } else if (user.role === 'sppg') {
@@ -59,10 +59,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row font-sans overflow-hidden">
-      
+
       {/* SISI KIRI: BRANDING (DARK BLUE) */}
       <div className="md:w-1/2 bg-[#0F2650] flex flex-col items-center justify-center p-12 text-center text-white relative">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8 }}
@@ -73,7 +73,7 @@ export default function LoginPage() {
           </div>
           <div className="space-y-4">
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter leading-tight uppercase italic">
-              Operasional <span className="text-yellow-400">SPPG</span> <br/>
+              Operasional <span className="text-yellow-400">SPPG</span> <br />
               Kab. Pasuruan
             </h1>
             <p className="text-sm text-indigo-200 font-medium leading-relaxed opacity-80">
@@ -88,15 +88,15 @@ export default function LoginPage() {
 
       {/* SISI KANAN: LOGIN FORM */}
       <div className="md:w-1/2 flex flex-col items-center justify-center p-8 md:p-24 bg-white relative">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
           className="w-full max-w-md space-y-10"
         >
           <div className="text-center md:text-left">
-             <h2 className="text-4xl font-black text-[#0F2650] tracking-tight mb-2 uppercase italic">Silakan Login</h2>
-             <p className="text-sm text-slate-400 font-medium tracking-wide">Masuk untuk mengakses dashboard operasional</p>
+            <h2 className="text-4xl font-black text-[#0F2650] tracking-tight mb-2 uppercase italic">Silakan Login</h2>
+            <p className="text-sm text-slate-400 font-medium tracking-wide">Masuk untuk mengakses dashboard operasional</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -122,10 +122,10 @@ export default function LoginPage() {
           </form>
 
           <div className="pt-8 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Belum Terdaftar?</p>
-             <button onClick={() => router.push('/register')} className="flex items-center gap-2 text-xs font-black text-indigo-600 hover:text-indigo-800 transition-all uppercase tracking-widest">
-                <UserPlus size={18} /> Daftar Akun SPPG Sekarang
-             </button>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Belum Terdaftar?</p>
+            <button onClick={() => router.push('/register')} className="flex items-center gap-2 text-xs font-black text-indigo-600 hover:text-indigo-800 transition-all uppercase tracking-widest">
+              <UserPlus size={18} /> Daftar Akun SPPG Sekarang
+            </button>
           </div>
         </motion.div>
       </div>
