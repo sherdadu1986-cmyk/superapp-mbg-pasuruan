@@ -32,7 +32,8 @@ export default function DashboardSPPGPage() {
   })
 
   // Form Tambah Sekolah
-  const [newSekolah, setNewSekolah] = useState({ nama: '', target: '', jenjang: 'SD/MI' })
+  const [newSekolah, setNewSekolah] = useState({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 })
+  const totalPorsiNew = newSekolah.porsi_siswa + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
   const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
 
   const loadData = async () => {
@@ -63,9 +64,14 @@ export default function DashboardSPPGPage() {
   useEffect(() => { if (id) loadData() }, [id])
 
   const handleAddSekolah = async () => {
-    if (!newSekolah.nama || !newSekolah.target) return alert("Lengkapi data!")
-    await supabase.from('daftar_sekolah').insert([{ sppg_id: id, nama_sekolah: newSekolah.nama, target_porsi: parseInt(newSekolah.target), jenjang: newSekolah.jenjang }])
-    setNewSekolah({ nama: '', target: '', jenjang: 'SD/MI' });
+    if (!newSekolah.nama || totalPorsiNew <= 0) return alert("Lengkapi data! Nama & minimal 1 porsi harus diisi.")
+    await supabase.from('daftar_sekolah').insert([{
+      sppg_id: id, nama_sekolah: newSekolah.nama, jenjang: newSekolah.jenjang,
+      porsi_siswa: newSekolah.porsi_siswa, porsi_guru: newSekolah.porsi_guru,
+      porsi_tendik: newSekolah.porsi_tendik, porsi_kader: newSekolah.porsi_kader,
+      target_porsi: totalPorsiNew
+    }])
+    setNewSekolah({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 });
     loadData();
   }
 
@@ -187,20 +193,40 @@ export default function DashboardSPPGPage() {
                 {activeTab === 'sekolah' ? (
                   <div className="space-y-10 animate-in fade-in duration-700">
                     {/* FORM ADD */}
-                    <div className="bg-slate-50 p-10 rounded-[3rem] border-2 border-dashed border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-8 items-end">
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Pilih Jenjang</label>
-                        <select className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" value={newSekolah.jenjang} onChange={e => setNewSekolah({ ...newSekolah, jenjang: e.target.value })}>{KATEGORI_PM.map(k => <option key={k} value={k}>{k}</option>)}</select>
+                    <div className="bg-slate-50 p-10 rounded-[3rem] border-2 border-dashed border-slate-200 space-y-8">
+                      {/* Row 1: Jenjang & Nama */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Pilih Jenjang</label>
+                          <select className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" value={newSekolah.jenjang} onChange={e => setNewSekolah({ ...newSekolah, jenjang: e.target.value })}>{KATEGORI_PM.map(k => <option key={k} value={k}>{k}</option>)}</select>
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Nama Sekolah / Titik</label>
+                          <input className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="MISAL: SDN KOTA..." value={newSekolah.nama} onChange={e => setNewSekolah({ ...newSekolah, nama: e.target.value })} />
+                        </div>
                       </div>
-                      <div className="md:col-span-1 space-y-3">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Nama Sekolah / Titik</label>
-                        <input className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="MISAL: SDN KOTA..." value={newSekolah.nama} onChange={e => setNewSekolah({ ...newSekolah, nama: e.target.value })} />
+                      {/* Row 2: 4 Porsi Inputs */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        {[
+                          { label: 'Porsi Siswa', key: 'porsi_siswa' as const },
+                          { label: 'Porsi Guru', key: 'porsi_guru' as const },
+                          { label: 'Porsi Tendik', key: 'porsi_tendik' as const },
+                          { label: 'Porsi Kader', key: 'porsi_kader' as const },
+                        ].map(item => (
+                          <div key={item.key} className="space-y-3">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">{item.label}</label>
+                            <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah[item.key] || ''} onChange={e => setNewSekolah({ ...newSekolah, [item.key]: parseInt(e.target.value) || 0 })} />
+                          </div>
+                        ))}
                       </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Target Porsi</label>
-                        <input type="number" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah.target} onChange={e => setNewSekolah({ ...newSekolah, target: e.target.value })} />
+                      {/* Row 3: Total + Simpan */}
+                      <div className="flex flex-col md:flex-row items-center gap-6">
+                        <div className="flex-1 w-full bg-indigo-50 border-2 border-indigo-200 rounded-3xl p-5 flex items-center justify-between">
+                          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-3">Total Porsi</span>
+                          <span className="text-2xl font-black text-indigo-700 italic tracking-tighter mr-3">{totalPorsiNew.toLocaleString()}</span>
+                        </div>
+                        <button onClick={handleAddSekolah} className="w-full md:w-auto bg-[#0F2650] text-white px-10 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-2xl flex items-center justify-center gap-3 whitespace-nowrap"><Plus size={20} /> Simpan Data</button>
                       </div>
-                      <button onClick={handleAddSekolah} className="bg-[#0F2650] text-white py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-2xl flex items-center justify-center gap-3"><Plus size={20} /> Simpan Data</button>
                     </div>
 
                     {/* LIST GRID */}
