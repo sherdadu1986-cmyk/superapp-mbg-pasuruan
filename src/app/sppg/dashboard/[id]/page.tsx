@@ -32,8 +32,11 @@ export default function DashboardSPPGPage() {
   })
 
   // Form Tambah Sekolah
-  const [newSekolah, setNewSekolah] = useState({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 })
-  const totalPorsiNew = newSekolah.porsi_siswa + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
+  const [newSekolah, setNewSekolah] = useState({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_siswa_1_3: 0, porsi_siswa_4_6: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 })
+  const isSD = newSekolah.jenjang === 'SD/MI'
+  const totalPorsiNew = isSD
+    ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
+    : newSekolah.porsi_siswa + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
   const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
 
   const loadData = async () => {
@@ -65,13 +68,17 @@ export default function DashboardSPPGPage() {
 
   const handleAddSekolah = async () => {
     if (!newSekolah.nama || totalPorsiNew <= 0) return alert("Lengkapi data! Nama & minimal 1 porsi harus diisi.")
+    const computedPorsiSiswa = isSD ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 : newSekolah.porsi_siswa
     await supabase.from('daftar_sekolah').insert([{
       sppg_id: id, nama_sekolah: newSekolah.nama, jenjang: newSekolah.jenjang,
-      porsi_siswa: newSekolah.porsi_siswa, porsi_guru: newSekolah.porsi_guru,
+      porsi_siswa: computedPorsiSiswa,
+      porsi_siswa_1_3: isSD ? newSekolah.porsi_siswa_1_3 : 0,
+      porsi_siswa_4_6: isSD ? newSekolah.porsi_siswa_4_6 : 0,
+      porsi_guru: newSekolah.porsi_guru,
       porsi_tendik: newSekolah.porsi_tendik, porsi_kader: newSekolah.porsi_kader,
       target_porsi: totalPorsiNew
     }])
-    setNewSekolah({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 });
+    setNewSekolah({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_siswa_1_3: 0, porsi_siswa_4_6: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 });
     loadData();
   }
 
@@ -205,10 +212,26 @@ export default function DashboardSPPGPage() {
                           <input className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="MISAL: SDN KOTA..." value={newSekolah.nama} onChange={e => setNewSekolah({ ...newSekolah, nama: e.target.value })} />
                         </div>
                       </div>
-                      {/* Row 2: 4 Porsi Inputs */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                      {/* Row 2: Porsi Inputs (conditional on jenjang) */}
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                        {isSD ? (
+                          <>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Siswa Kls 1-3</label>
+                              <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah.porsi_siswa_1_3 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_1_3: parseInt(e.target.value) || 0 })} />
+                            </div>
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Siswa Kls 4-6</label>
+                              <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah.porsi_siswa_4_6 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_4_6: parseInt(e.target.value) || 0 })} />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Porsi Siswa</label>
+                            <input type="number" min="0" className="w-full p-5 bg-white border border-slate-200 rounded-3xl text-sm font-black outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all" placeholder="0" value={newSekolah.porsi_siswa || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa: parseInt(e.target.value) || 0 })} />
+                          </div>
+                        )}
                         {[
-                          { label: 'Porsi Siswa', key: 'porsi_siswa' as const },
                           { label: 'Porsi Guru', key: 'porsi_guru' as const },
                           { label: 'Porsi Tendik', key: 'porsi_tendik' as const },
                           { label: 'Porsi Kader', key: 'porsi_kader' as const },
@@ -236,6 +259,7 @@ export default function DashboardSPPGPage() {
                           <div>
                             <p className="text-[13px] font-black text-slate-800 uppercase italic leading-none mb-2 group-hover:text-indigo-600 transition-colors">{s.nama_sekolah}</p>
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.jenjang} • <span className="text-indigo-500">{s.target_porsi}</span> Porsi</p>
+                            <p className="text-[9px] text-slate-400 font-bold mt-2 tracking-wide">{s.jenjang === 'SD/MI' ? (<>Siswa (1-3): {s.porsi_siswa_1_3 ?? 0} <span className="text-slate-300 mx-0.5">|</span> Siswa (4-6): {s.porsi_siswa_4_6 ?? 0}</>) : (<>Siswa: {s.porsi_siswa ?? 0}</>)} <span className="text-slate-300 mx-0.5">|</span> Guru: {s.porsi_guru ?? 0} <span className="text-slate-300 mx-0.5">|</span> Tendik: {s.porsi_tendik ?? 0} <span className="text-slate-300 mx-0.5">|</span> Kader: {s.porsi_kader ?? 0}</p>
                           </div>
                           <button onClick={() => handleDeleteSekolah(s.id)} className="p-3 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={20} /></button>
                         </div>
