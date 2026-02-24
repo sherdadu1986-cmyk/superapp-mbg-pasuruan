@@ -7,10 +7,12 @@ import {
   CheckCircle2, School, Trash2, Plus, Edit3, ClipboardList, Users,
   ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText
 } from 'lucide-react'
+import { useToast } from '@/components/toast'
 
 export default function DashboardSPPGPage() {
   const { id } = useParams()
   const router = useRouter()
+  const { toast } = useToast()
 
   // UI State
   const [loading, setLoading] = useState(true)
@@ -67,7 +69,7 @@ export default function DashboardSPPGPage() {
   useEffect(() => { if (id) loadData() }, [id])
 
   const handleAddSekolah = async () => {
-    if (!newSekolah.nama || totalPorsiNew <= 0) return alert("Lengkapi data! Nama & minimal 1 porsi harus diisi.")
+    if (!newSekolah.nama || totalPorsiNew <= 0) return toast('warning', 'Lengkapi Data', 'Nama & minimal 1 porsi harus diisi.')
     const computedPorsiSiswa = isSD ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 : newSekolah.porsi_siswa
     await supabase.from('daftar_sekolah').insert([{
       sppg_id: id, nama_sekolah: newSekolah.nama, jenjang: newSekolah.jenjang,

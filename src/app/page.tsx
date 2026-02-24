@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Lock, ArrowRight, UserPlus, User } from 'lucide-react'
+import { useToast } from '@/components/toast'
 import Image from 'next/image'
 
 export default function LoginPage() {
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
+  const { toast } = useToast()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,10 +29,10 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (error || !user) {
-        alert("❌ Email atau Password salah!")
+        toast('error', 'Email atau Password salah!', 'Periksa kembali kredensial Anda.')
       } else {
         if (user.role === 'pending') {
-          alert("⚠️ Akun Anda sedang dalam verifikasi Admin.")
+          toast('warning', 'Akun dalam verifikasi', 'Akun Anda sedang menunggu aktivasi oleh Admin.')
           setLoading(false)
           return
         }
@@ -48,7 +50,7 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      alert("Terjadi kesalahan sistem")
+      toast('error', 'Kesalahan Sistem', 'Silakan coba beberapa saat lagi.')
     } finally {
       setLoading(false)
     }

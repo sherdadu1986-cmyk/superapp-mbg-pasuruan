@@ -1,7 +1,9 @@
 "use client"
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getLocalToday } from '@/lib/date'
 import { useParams, useRouter } from 'next/navigation'
+import { useToast } from '@/components/toast'
 import {
   LayoutDashboard, LogOut, Menu, Utensils,
   CheckCircle2, School, Trash2, Plus, Edit3, ClipboardList, Users,
@@ -11,6 +13,7 @@ import {
 export default function DashboardSPPGPage() {
   const { id } = useParams()
   const router = useRouter()
+  const { toast } = useToast()
 
   // UI State
   const [loading, setLoading] = useState(true)
@@ -24,11 +27,10 @@ export default function DashboardSPPGPage() {
   const [totalPM, setTotalPM] = useState(0)
   const [laporanHariIni, setLaporanHariIni] = useState<any>(null)
 
-  // Tanggal Hari Ini Formatted
-  const todayRaw = new Date()
-  const todayISO = todayRaw.toISOString().split('T')[0]
-  const todayFormatted = todayRaw.toLocaleDateString('id-ID', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  // Tanggal Hari Ini (WIB)
+  const todayISO = getLocalToday()
+  const todayFormatted = new Date(todayISO + 'T12:00:00').toLocaleDateString('id-ID', {
+    timeZone: 'Asia/Jakarta', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   })
 
   // Form Tambah Sekolah
@@ -67,7 +69,7 @@ export default function DashboardSPPGPage() {
   useEffect(() => { if (id) loadData() }, [id])
 
   const handleAddSekolah = async () => {
-    if (!newSekolah.nama || totalPorsiNew <= 0) return alert("Lengkapi data! Nama & minimal 1 porsi harus diisi.")
+    if (!newSekolah.nama || totalPorsiNew <= 0) return toast('warning', 'Lengkapi Data', 'Nama & minimal 1 porsi harus diisi.')
     const computedPorsiSiswa = isSD ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 : newSekolah.porsi_siswa
     await supabase.from('daftar_sekolah').insert([{
       sppg_id: id, nama_sekolah: newSekolah.nama, jenjang: newSekolah.jenjang,
@@ -89,210 +91,245 @@ export default function DashboardSPPGPage() {
   if (loading && !selectedUnit) return <div className="min-h-screen flex items-center justify-center font-black text-slate-400 animate-pulse uppercase tracking-widest text-xs">Syncing Data SPPG...</div>
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] flex font-sans text-slate-800 transition-all duration-300">
+    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-800 transition-all duration-300">
 
-      {/* SIDEBAR BUKA TUTUP */}
-      <aside className={`bg-[#0F2650] text-white flex flex-col fixed h-full z-50 transition-all duration-300 shadow-2xl ${sidebarOpen ? 'w-72' : 'w-24'}`}>
-        <div className="p-6 border-b border-white/10 flex items-center justify-between">
-          <div className={`flex items-center gap-3 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
-            <img src="/logo.png" className="w-8 h-8 shrink-0" />
-            <h1 className="font-black italic text-sm leading-none whitespace-nowrap uppercase tracking-tighter">SPPG PASURUAN <span className="text-[9px] bg-yellow-400 text-[#0F2650] px-2 py-0.5 rounded-md not-italic tracking-widest font-black ml-1">V2</span></h1>
+      {/* SIDEBAR — SLIM & CLEAN */}
+      <aside className={`bg-white border-r border-slate-200 flex flex-col fixed h-full z-50 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[70px]'}`}>
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className={`flex items-center gap-2.5 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
+            <img src="/logo.png" className="w-7 h-7 shrink-0" />
+            <span className="text-sm font-bold text-slate-800 whitespace-nowrap tracking-tight">SPPG Pasuruan</span>
           </div>
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/10 rounded-xl text-yellow-400">
-            {sidebarOpen ? <ChevronLeft size={24} /> : <Menu size={24} />}
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+            {sidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}
           </button>
         </div>
-        <nav className="flex-1 p-4 space-y-2 mt-4">
-          <button className={`w-full flex items-center gap-4 px-4 py-4 text-xs font-black uppercase rounded-2xl transition-all bg-white/10 text-white shadow-lg`}>
-            <LayoutDashboard size={24} className="shrink-0" />
+        <nav className="flex-1 p-3 space-y-1 mt-2">
+          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 transition-all">
+            <LayoutDashboard size={18} className="shrink-0" />
             <span className={sidebarOpen ? 'block' : 'hidden'}>Dashboard</span>
           </button>
         </nav>
-        <div className="p-4 border-t border-white/10">
-          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-4 px-4 py-4 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-2xl transition-all uppercase tracking-widest overflow-hidden">
-            <LogOut size={24} className="shrink-0" />
+        <div className="p-3 border-t border-slate-100">
+          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-red-500 hover:bg-red-50 rounded-lg transition-all">
+            <LogOut size={18} className="shrink-0" />
             <span className={sidebarOpen ? 'block' : 'hidden'}>Logout</span>
           </button>
         </div>
       </aside>
 
-      <main className={`flex-1 h-screen overflow-hidden flex flex-col transition-all duration-300 ${sidebarOpen ? 'pl-72' : 'pl-24'}`}>
-        <header className="bg-white border-b h-20 flex items-center justify-between px-10 shrink-0">
-          <div className="flex flex-col">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] leading-none mb-2">Sistem Manajemen Operasional</p>
-            <div className="text-xs font-black text-[#0F2650] uppercase tracking-tighter italic">{selectedUnit?.nama_unit}</div>
-          </div>
+      {/* MAIN CONTENT */}
+      <main className={`flex-1 min-h-screen transition-all duration-300 ${sidebarOpen ? 'pl-60' : 'pl-[70px]'}`}>
 
-          <div className="flex items-center gap-5">
+        {/* GREETING HEADER */}
+        <header className="bg-white border-b border-slate-200 px-6 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-40">
+          <div>
+            <h1 className="text-lg font-bold text-slate-800">Halo, {selectedUnit?.nama_unit} 👋</h1>
+            <p className="text-xs text-slate-400 font-medium mt-0.5">Dashboard Operasional SPPG</p>
+          </div>
+          <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1 tracking-widest">Penanggung Jawab:</p>
-              <p className="text-xs font-black text-[#0F2650] uppercase italic">{selectedUnit?.kepala_unit}</p>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{todayFormatted}</p>
+              <p className="text-xs font-bold text-slate-600 mt-0.5">PJ: {selectedUnit?.kepala_unit}</p>
             </div>
-            <div className="w-12 h-12 bg-[#0F2650] rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-xl shadow-indigo-900/20 border-2 border-white">
+            <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-md shadow-indigo-500/20">
               {selectedUnit?.kepala_unit?.charAt(0)}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
-          <div className="max-w-7xl mx-auto space-y-5">
+        <div className="p-5 lg:p-8 space-y-5 max-w-6xl mx-auto">
 
-            {/* ROW 1: BANNER & TOTAL */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 bg-[#0F2650] rounded-2xl p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6 shadow-lg relative overflow-hidden group">
-                <div className="relative z-10 space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 text-yellow-400 mb-2">
-                      <CalendarIcon size={18} />
-                      <p className="text-[11px] font-black uppercase tracking-[0.3em]">{todayFormatted}</p>
-                    </div>
-                    <h2 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter leading-none">{selectedUnit?.nama_unit}</h2>
-                  </div>
-
-                  {/* STATUS BADGE */}
-                  {laporanHariIni ? (
-                    <div className="flex items-center gap-3 bg-emerald-500 text-white px-4 py-2 rounded-xl w-fit shadow-md shadow-emerald-500/20 animate-in fade-in zoom-in">
-                      <CheckCircle2 size={20} />
-                      <p className="text-[11px] font-black uppercase tracking-widest">Status: Sudah Laporan Harian</p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3 bg-rose-500 text-white px-4 py-2 rounded-xl w-fit shadow-md shadow-rose-500/20">
-                      <AlertCircle size={20} />
-                      <p className="text-[11px] font-black uppercase tracking-widest">Status: Belum Laporan Hari Ini</p>
-                    </div>
-                  )}
+          {/* HERO STATUS CARD */}
+          {laporanHariIni ? (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={24} className="text-emerald-500" />
                 </div>
-
-                {/* BUTTON ACTION */}
-                <button
-                  onClick={() => router.push(`/sppg/dashboard/${id}/input${laporanHariIni ? `?edit=${laporanHariIni.id}` : ''}`)}
-                  className={`relative z-10 px-6 py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center gap-3 ${laporanHariIni ? 'bg-white text-[#0F2650]' : 'bg-yellow-400 text-[#0F2650]'}`}
-                >
-                  <ClipboardList size={22} />
-                  {laporanHariIni ? 'Edit Laporan Hari Ini' : 'Input Laporan Sekarang'}
-                </button>
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
-              </div>
-
-              {/* CARD TOTAL */}
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center relative group overflow-hidden">
-                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-[#0F2650] group-hover:text-white transition-all duration-500 mb-4">
-                  <Users size={36} />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Laporan hari ini sudah terkirim ✅</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Menu: <span className="font-semibold text-slate-600">{laporanHariIni.menu_makanan}</span></p>
                 </div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1 leading-none">Total Penerima Manfaat</p>
-                <h3 className="text-5xl font-black text-[#0F2650] italic tracking-tighter leading-none">{totalPM.toLocaleString()}</h3>
-                <p className="text-[10px] font-bold text-slate-300 uppercase mt-3 tracking-widest italic">Paket Porsi Terdaftar</p>
               </div>
+              <button
+                onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${laporanHariIni.id}`)}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-all flex items-center gap-2"
+              >
+                <Edit3 size={14} /> Edit Laporan
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-8 flex flex-col md:flex-row justify-between items-center gap-6 text-center md:text-left">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
+                  <AlertCircle size={24} className="text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Belum ada laporan untuk hari ini</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Silakan isi laporan distribusi untuk {todayFormatted}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push(`/sppg/dashboard/${id}/input`)}
+                className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:-translate-y-0.5 transition-all flex items-center gap-2"
+              >
+                <ClipboardList size={18} /> Isi Laporan Sekarang
+              </button>
+            </div>
+          )}
+
+          {/* SUMMARY STATS GRID */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Total Penerima</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{totalPM.toLocaleString()}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">porsi terdaftar</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Titik Layanan</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{listSekolah.length}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">sekolah aktif</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Menu Hari Ini</p>
+              <p className="text-sm font-bold text-slate-800 mt-1 truncate">{laporanHariIni?.menu_makanan || '—'}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{laporanHariIni ? 'terkirim' : 'belum input'}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Laporan Masuk</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{riwayat.length}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">total riwayat</p>
+            </div>
+          </div>
+
+          {/* TABS */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex border-b border-slate-100">
+              <button onClick={() => setActiveTab('sekolah')} className={`flex-1 py-3 text-xs font-semibold transition-all flex items-center justify-center gap-2 ${activeTab === 'sekolah' ? 'text-indigo-700 bg-indigo-50/50 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                <School size={15} /> Titik Layanan
+              </button>
+              <button onClick={() => setActiveTab('riwayat')} className={`flex-1 py-3 text-xs font-semibold transition-all flex items-center justify-center gap-2 ${activeTab === 'riwayat' ? 'text-indigo-700 bg-indigo-50/50 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                <FileText size={15} /> Riwayat Laporan
+              </button>
             </div>
 
-            {/* ROW 2: CONTENT TABS */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="flex bg-slate-50 border-b">
-                <button onClick={() => setActiveTab('sekolah')} className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${activeTab === 'sekolah' ? 'text-[#0F2650] bg-white border-b-4 border-[#0F2650]' : 'text-slate-400'}`}>
-                  <School size={16} /> Titik Layanan
-                </button>
-                <button onClick={() => setActiveTab('riwayat')} className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${activeTab === 'riwayat' ? 'text-[#0F2650] bg-white border-b-4 border-[#0F2650]' : 'text-slate-400'}`}>
-                  <FileText size={16} /> Riwayat Distribusi
-                </button>
-              </div>
-
-              <div className="p-5">
-                {activeTab === 'sekolah' ? (
-                  <div className="space-y-5 animate-in fade-in duration-700">
-                    {/* FORM ADD */}
-                    <div className="bg-slate-50 p-5 rounded-xl border-2 border-dashed border-slate-200 space-y-4">
-                      {/* Row 1: Jenjang & Nama */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Pilih Jenjang</label>
-                          <select className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" value={newSekolah.jenjang} onChange={e => setNewSekolah({ ...newSekolah, jenjang: e.target.value })}>{KATEGORI_PM.map(k => <option key={k} value={k}>{k}</option>)}</select>
-                        </div>
-                        <div className="space-y-3">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Nama Sekolah / Titik</label>
-                          <input className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="MISAL: SDN KOTA..." value={newSekolah.nama} onChange={e => setNewSekolah({ ...newSekolah, nama: e.target.value })} />
-                        </div>
+            <div className="p-4">
+              {activeTab === 'sekolah' ? (
+                <div className="space-y-4">
+                  {/* COMPACT ADD FORM */}
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Jenjang</label>
+                        <select className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" value={newSekolah.jenjang} onChange={e => setNewSekolah({ ...newSekolah, jenjang: e.target.value })}>{KATEGORI_PM.map(k => <option key={k} value={k}>{k}</option>)}</select>
                       </div>
-                      {/* Row 2: Porsi Inputs (conditional on jenjang) */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        {isSD ? (
-                          <>
-                            <div className="space-y-3">
-                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Siswa Kls 1-3</label>
-                              <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah.porsi_siswa_1_3 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_1_3: parseInt(e.target.value) || 0 })} />
-                            </div>
-                            <div className="space-y-3">
-                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Siswa Kls 4-6</label>
-                              <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah.porsi_siswa_4_6 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_4_6: parseInt(e.target.value) || 0 })} />
-                            </div>
-                          </>
-                        ) : (
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">Porsi Siswa</label>
-                            <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah.porsi_siswa || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa: parseInt(e.target.value) || 0 })} />
-                          </div>
-                        )}
-                        {[
-                          { label: 'Porsi Guru', key: 'porsi_guru' as const },
-                          { label: 'Porsi Tendik', key: 'porsi_tendik' as const },
-                          { label: 'Porsi Kader', key: 'porsi_kader' as const },
-                        ].map(item => (
-                          <div key={item.key} className="space-y-3">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-3">{item.label}</label>
-                            <input type="number" min="0" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="0" value={newSekolah[item.key] || ''} onChange={e => setNewSekolah({ ...newSekolah, [item.key]: parseInt(e.target.value) || 0 })} />
-                          </div>
-                        ))}
-                      </div>
-                      {/* Row 3: Total + Simpan */}
-                      <div className="flex flex-col md:flex-row items-center gap-4">
-                        <div className="flex-1 w-full bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 flex items-center justify-between">
-                          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-2">Total Porsi</span>
-                          <span className="text-xl font-black text-indigo-700 italic tracking-tighter mr-2">{totalPorsiNew.toLocaleString()}</span>
-                        </div>
-                        <button onClick={handleAddSekolah} className="w-full md:w-auto bg-[#0F2650] text-white px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg flex items-center justify-center gap-2 whitespace-nowrap"><Plus size={18} /> Simpan Data</button>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Nama Sekolah</label>
+                        <input className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" placeholder="SDN Kota..." value={newSekolah.nama} onChange={e => setNewSekolah({ ...newSekolah, nama: e.target.value })} />
                       </div>
                     </div>
-
-                    {/* LIST GRID */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {listSekolah.map((s, index) => (
-                        <div key={s.id} className="p-4 border border-slate-200 rounded-xl flex justify-between items-center bg-white shadow-sm group hover:border-slate-300 hover:shadow-md transition-all duration-300">
-                          <div>
-                            <p className="text-[13px] font-black text-slate-800 uppercase italic leading-none mb-2 group-hover:text-indigo-600 transition-colors">{index + 1}. {s.nama_sekolah}</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.jenjang} • <span className="text-indigo-500">{s.target_porsi}</span> Porsi</p>
-                            <p className="text-[9px] text-slate-400 font-bold mt-2 tracking-wide">{s.jenjang === 'SD/MI' ? (<>Siswa (1-3): {s.porsi_siswa_1_3 ?? 0} <span className="text-slate-300 mx-0.5">|</span> Siswa (4-6): {s.porsi_siswa_4_6 ?? 0}</>) : (<>Siswa: {s.porsi_siswa ?? 0}</>)} <span className="text-slate-300 mx-0.5">|</span> Guru: {s.porsi_guru ?? 0} <span className="text-slate-300 mx-0.5">|</span> Tendik: {s.porsi_tendik ?? 0} <span className="text-slate-300 mx-0.5">|</span> Kader: {s.porsi_kader ?? 0}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      {isSD ? (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Siswa 1-3</label>
+                            <input type="number" min="0" className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" placeholder="0" value={newSekolah.porsi_siswa_1_3 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_1_3: parseInt(e.target.value) || 0 })} />
                           </div>
-                          <button onClick={() => handleDeleteSekolah(s.id)} className="p-2 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={18} /></button>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Siswa 4-6</label>
+                            <input type="number" min="0" className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" placeholder="0" value={newSekolah.porsi_siswa_4_6 || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa_4_6: parseInt(e.target.value) || 0 })} />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Porsi Siswa</label>
+                          <input type="number" min="0" className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" placeholder="0" value={newSekolah.porsi_siswa || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa: parseInt(e.target.value) || 0 })} />
+                        </div>
+                      )}
+                      {[
+                        { label: 'Guru', key: 'porsi_guru' as const },
+                        { label: 'Tendik', key: 'porsi_tendik' as const },
+                        { label: 'Kader', key: 'porsi_kader' as const },
+                      ].map(item => (
+                        <div key={item.key} className="space-y-1">
+                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{item.label}</label>
+                          <input type="number" min="0" className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" placeholder="0" value={newSekolah[item.key] || ''} onChange={e => setNewSekolah({ ...newSekolah, [item.key]: parseInt(e.target.value) || 0 })} />
                         </div>
                       ))}
                     </div>
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="flex-1 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-indigo-600 uppercase">Total</span>
+                        <span className="text-lg font-bold text-indigo-700">{totalPorsiNew.toLocaleString()}</span>
+                      </div>
+                      <button onClick={handleAddSekolah} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center gap-2 whitespace-nowrap">
+                        <Plus size={15} /> Simpan
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-4 animate-in fade-in duration-700">
-                    {riwayat.map(l => (
-                      <div key={l.id} className="p-4 border border-slate-200 rounded-xl flex justify-between items-center bg-white hover:bg-slate-50 transition-all shadow-sm group">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center group-hover:bg-[#0F2650] group-hover:text-white transition-all"><Utensils size={20} /></div>
-                          <div>
-                            <p className="text-[14px] font-black text-slate-700 uppercase italic leading-none mb-2 group-hover:text-[#0F2650] transition-colors">"{l.menu_makanan}"</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{l.tanggal_ops}</p>
-                          </div>
+
+                  {/* COMPACT TABLE */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-100">
+                          <th className="text-left py-2 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">No</th>
+                          <th className="text-left py-2 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Nama Sekolah</th>
+                          <th className="text-left py-2 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Jenjang</th>
+                          <th className="text-right py-2 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Target</th>
+                          <th className="text-right py-2 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Detail</th>
+                          <th className="py-2 px-3 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {listSekolah.map((s, index) => (
+                          <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
+                            <td className="py-2 px-3 text-sm text-slate-400 font-medium">{index + 1}</td>
+                            <td className="py-2 px-3 text-sm font-semibold text-slate-700">{s.nama_sekolah}</td>
+                            <td className="py-2 px-3"><span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{s.jenjang}</span></td>
+                            <td className="py-2 px-3 text-sm font-bold text-slate-800 text-right">{s.target_porsi}</td>
+                            <td className="py-2 px-3 text-[10px] text-slate-400 text-right">{s.jenjang === 'SD/MI' ? `1-3: ${s.porsi_siswa_1_3 ?? 0} | 4-6: ${s.porsi_siswa_4_6 ?? 0}` : `Siswa: ${s.porsi_siswa ?? 0}`} | G:{s.porsi_guru ?? 0} T:{s.porsi_tendik ?? 0} K:{s.porsi_kader ?? 0}</td>
+                            <td className="py-2 px-3">
+                              <button onClick={() => handleDeleteSekolah(s.id)} className="p-1 text-slate-200 hover:text-red-500 rounded transition-all opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {listSekolah.length === 0 && <div className="py-12 text-center text-xs text-slate-300 font-medium">Belum ada titik layanan terdaftar</div>}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {riwayat.map(l => (
+                    <div key={l.id} className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors group">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-indigo-50 text-indigo-500 rounded-lg flex items-center justify-center shrink-0">
+                          <Utensils size={14} />
                         </div>
-                        <div className="flex items-center gap-4">
-                          {l.tanggal_ops === todayISO && (
-                            <button onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${l.id}`)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                              <Edit3 size={14} /> Edit
-                            </button>
-                          )}
-                          <div className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-[11px] font-black uppercase tracking-widest border border-emerald-100 shadow-sm">Terkirim ✓</div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-700">{l.menu_makanan}</p>
+                          <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                            {new Date(l.tanggal_ops + 'T12:00:00').toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', year: 'numeric' })}
+                          </p>
                         </div>
                       </div>
-                    ))}
-                    {riwayat.length === 0 && (
-                      <div className="p-20 text-center text-slate-300 font-black uppercase tracking-widest text-xs">Belum ada riwayat laporan</div>
-                    )}
-                  </div>
-                )}
-              </div>
+                      <div className="flex items-center gap-2">
+                        {l.tanggal_ops === todayISO && (
+                          <button onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${l.id}`)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 rounded-md text-[10px] font-semibold transition-all opacity-0 group-hover:opacity-100">
+                            <Edit3 size={12} /> Edit
+                          </button>
+                        )}
+                        <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md">Terkirim</span>
+                      </div>
+                    </div>
+                  ))}
+                  {riwayat.length === 0 && (
+                    <div className="py-16 text-center text-xs text-slate-300 font-medium">Belum ada riwayat laporan</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

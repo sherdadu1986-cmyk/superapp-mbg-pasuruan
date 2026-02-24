@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLocalToday } from '@/lib/date'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/toast'
 import {
   Users, Plus, Trash2, LogOut, Search, ShieldCheck,
   Building2, Mail, Lock, UserCircle, BarChart3, Edit3,
@@ -12,6 +13,7 @@ import {
 export default function SuperAdminITPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<'members' | 'monitor'>('members')
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -46,13 +48,13 @@ export default function SuperAdminITPage() {
   const handleApprove = async (id: string) => {
     const { error } = await supabase.from('users_app').update({ role: 'sppg' }).eq('id', id)
     if (!error) {
-      alert("✅ Akun SPPG Telah Diaktifkan!")
+      toast('success', 'Akun SPPG Diaktifkan!', 'Akun telah berhasil disetujui.')
       fetchData()
     }
   }
 
   const handleSimpan = async () => {
-    if (!form.nama_unit || !form.email) return alert("Lengkapi data!")
+    if (!form.nama_unit || !form.email) return toast('warning', 'Lengkapi Data', 'Nama dan Email wajib diisi.')
     setLoading(true)
     try {
       if (isEdit) {
@@ -61,18 +63,18 @@ export default function SuperAdminITPage() {
         if (user?.sppg_unit_id) {
           await supabase.from('daftar_sppg').update({ nama_unit: form.nama_unit, kepala_unit: form.kepala_unit }).eq('id', user.sppg_unit_id)
         }
-        alert("✅ Data Berhasil Diperbarui!")
+        toast('success', 'Data Berhasil Diperbarui!')
       } else {
         const { data: unit } = await supabase.from('daftar_sppg').insert([{ nama_unit: form.nama_unit, kepala_unit: form.kepala_unit }]).select().single()
         if (unit) {
           await supabase.from('users_app').insert([{ email: form.email, password: form.password, role: form.role, sppg_unit_id: unit.id }])
         }
-        alert("✅ SPPG & Akun Berhasil Dibuat!")
+        toast('success', 'SPPG & Akun Berhasil Dibuat!')
       }
       setForm({ nama_unit: '', kepala_unit: '', email: '', password: '', role: 'sppg' })
       setIsEdit(false)
       fetchData()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast('error', 'Gagal Menyimpan', err.message) }
     setLoading(false)
   }
 

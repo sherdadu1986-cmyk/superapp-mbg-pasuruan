@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLocalToday } from '@/lib/date'
 import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/toast'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import {
@@ -13,6 +14,7 @@ import {
 
 export default function SuperKorwilPage() {
   const router = useRouter()
+  const { toast } = useToast()
 
   // --- VIEW STATE ---
   const [activeView, setActiveView] = useState<'monitoring' | 'galeri'>('monitoring')
@@ -117,12 +119,12 @@ export default function SuperKorwilPage() {
 
   // Date stepper helpers
   const shiftDate = (days: number) => {
-    const d = new Date(monitoringDate)
+    const d = new Date(monitoringDate + 'T12:00:00') // noon to avoid DST edge cases
     d.setDate(d.getDate() + days)
-    setMonitoringDate(d.toISOString().split('T')[0])
+    setMonitoringDate(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }))
   }
   const formatDisplayDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   // --- EXPORT EXCEL (uses its own fetch from modal dates) ---
@@ -262,7 +264,7 @@ export default function SuperKorwilPage() {
       setShowExportModal(false)
     } catch (err: any) {
       console.error('Export failed:', err)
-      alert('⚠️ Gagal mengekspor data. Coba lagi.')
+      toast('error', 'Gagal Ekspor', 'Coba lagi beberapa saat.')
     } finally {
       setExporting(false)
     }

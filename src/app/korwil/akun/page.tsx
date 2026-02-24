@@ -6,12 +6,14 @@ import {
     Settings, LogOut, BarChart3, Camera, Users, ChevronLeft,
     CheckCircle2, Clock, Loader2, ShieldCheck, Pencil, X, Save
 } from 'lucide-react'
+import { useToast } from '@/components/toast'
 
 export default function ManajemenAkunPage() {
     const router = useRouter()
     const [users, setUsers] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [approving, setApproving] = useState<string | null>(null)
+    const { toast } = useToast()
 
     // Edit Modal State
     const [editUser, setEditUser] = useState<any>(null)
@@ -34,8 +36,8 @@ export default function ManajemenAkunPage() {
     const handleApproveUser = async (userId: string) => {
         setApproving(userId)
         const { error } = await supabase.from('users_app').update({ status: 'aktif' }).eq('id', userId)
-        if (error) { alert('⚠️ Gagal mengaktifkan akun.') }
-        else { alert('✅ Akun berhasil diaktifkan!'); fetchUsers() }
+        if (error) { toast('error', 'Gagal mengaktifkan akun.') }
+        else { toast('success', 'Akun berhasil diaktifkan!'); fetchUsers() }
         setApproving(null)
     }
 
@@ -67,8 +69,8 @@ export default function ManajemenAkunPage() {
                 nama_unit: editForm.nama_unit,
             })
             .eq('id', editUser.id)
-        if (error) { alert('⚠️ Gagal menyimpan perubahan.') }
-        else { alert('✅ Data berhasil diperbarui!'); setEditUser(null); fetchUsers() }
+        if (error) { toast('error', 'Gagal menyimpan perubahan.') }
+        else { toast('success', 'Data berhasil diperbarui!'); setEditUser(null); fetchUsers() }
         setSaving(false)
     }
 
