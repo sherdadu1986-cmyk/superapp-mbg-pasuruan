@@ -96,9 +96,12 @@ export default function DashboardSPPGPage() {
       {/* SIDEBAR — SLIM & CLEAN */}
       <aside className={`bg-white border-r border-slate-200 flex flex-col fixed h-full z-50 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[70px]'}`}>
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div className={`flex items-center gap-2.5 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
-            <img src="/logo.png" className="w-7 h-7 shrink-0" />
-            <span className="text-sm font-bold text-slate-800 whitespace-nowrap tracking-tight">SPPG Pasuruan</span>
+          <div className={`animate-slide-in-left flex items-center gap-4 hover:scale-105 transition-transform duration-300 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
+            <img src="/logo.png" style={{ width: '48px', height: '48px', objectFit: 'contain' }} className="shrink-0" />
+            <div className="flex flex-col">
+              <span className="font-bold text-lg leading-none text-slate-800 whitespace-nowrap">SPPG PASURUAN</span>
+              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap mt-1">Sistem Manajemen Operasional Gizi</span>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
             {sidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}

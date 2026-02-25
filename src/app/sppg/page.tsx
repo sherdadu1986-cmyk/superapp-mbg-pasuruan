@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getLocalToday } from '@/lib/date'
 import { useParams, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, LogOut, Menu, Utensils,
@@ -26,11 +27,10 @@ export default function DashboardSPPGPage() {
   const [totalPM, setTotalPM] = useState(0)
   const [laporanHariIni, setLaporanHariIni] = useState<any>(null)
 
-  // Tanggal Hari Ini Formatted
-  const todayRaw = new Date()
-  const todayISO = todayRaw.toISOString().split('T')[0]
-  const todayFormatted = todayRaw.toLocaleDateString('id-ID', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  // Tanggal Hari Ini (WIB)
+  const todayISO = getLocalToday()
+  const todayFormatted = new Date(todayISO + 'T12:00:00').toLocaleDateString('id-ID', {
+    timeZone: 'Asia/Jakarta', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   })
 
   // Form Tambah Sekolah
@@ -95,10 +95,13 @@ export default function DashboardSPPGPage() {
 
       {/* SIDEBAR BUKA TUTUP */}
       <aside className={`bg-[#0F2650] text-white flex flex-col fixed h-full z-50 transition-all duration-300 shadow-2xl ${sidebarOpen ? 'w-72' : 'w-24'}`}>
-        <div className="p-6 border-b border-white/10 flex items-center justify-between">
-          <div className={`flex items-center gap-3 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
-            <img src="/logo.png" className="w-8 h-8 shrink-0" />
-            <h1 className="font-black italic text-sm leading-none whitespace-nowrap uppercase tracking-tighter">SPPG PASURUAN <span className="text-[9px] bg-yellow-400 text-[#0F2650] px-2 py-0.5 rounded-md not-italic tracking-widest font-black ml-1">V2</span></h1>
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <div className={`animate-slide-in-left flex items-center gap-3 hover:scale-105 transition-transform duration-300 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
+            <img src="/logo.png" style={{ width: '48px', height: '48px', objectFit: 'contain' }} className="shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-sm leading-none text-white whitespace-nowrap">SPPG PASURUAN <span className="text-[9px] bg-yellow-400 text-[#0F2650] px-2 py-0.5 rounded-md tracking-widest font-black ml-1">V2</span></span>
+              <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap mt-1">Sistem Manajemen Operasional Gizi</span>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/10 rounded-xl text-yellow-400">
             {sidebarOpen ? <ChevronLeft size={24} /> : <Menu size={24} />}
