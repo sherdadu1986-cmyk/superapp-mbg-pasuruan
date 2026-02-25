@@ -7,7 +7,7 @@ import { useToast } from '@/components/toast'
 import {
   LayoutDashboard, LogOut, Menu, Utensils,
   CheckCircle2, School, Trash2, Plus, Edit3, ClipboardList, Users,
-  ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText
+  ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText, Hourglass, Sparkles
 } from 'lucide-react'
 
 export default function DashboardSPPGPage() {
@@ -31,6 +31,15 @@ export default function DashboardSPPGPage() {
   const todayISO = getLocalToday()
   const todayFormatted = new Date(todayISO + 'T12:00:00').toLocaleDateString('id-ID', {
     timeZone: 'Asia/Jakarta', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  })
+
+  // Sapaan Dinamis berdasarkan jam WIB
+  const jamWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })).getHours()
+  const sapaan = jamWIB >= 4 && jamWIB < 11 ? 'Selamat Pagi' : jamWIB >= 11 && jamWIB < 15 ? 'Selamat Siang' : jamWIB >= 15 && jamWIB < 18 ? 'Selamat Sore' : 'Selamat Malam'
+
+  // Tanggal singkat untuk pesan status
+  const todayShort = new Date(todayISO + 'T12:00:00').toLocaleDateString('id-ID', {
+    timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short'
   })
 
   // Form Tambah Sekolah
@@ -127,7 +136,7 @@ export default function DashboardSPPGPage() {
         {/* GREETING HEADER */}
         <header className="bg-white border-b border-slate-200 px-6 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-40">
           <div>
-            <h1 className="text-lg font-bold text-slate-800">Halo, {selectedUnit?.nama_unit} 👋</h1>
+            <h1 className="text-lg font-bold text-slate-800">{sapaan}, SPPG {selectedUnit?.nama_unit}! 🍛</h1>
             <p className="text-xs text-slate-400 font-medium mt-0.5">Dashboard Operasional SPPG</p>
           </div>
           <div className="flex items-center gap-4">
@@ -143,44 +152,72 @@ export default function DashboardSPPGPage() {
 
         <div className="p-5 lg:p-8 space-y-5 max-w-6xl mx-auto">
 
-          {/* HERO STATUS CARD */}
-          {laporanHariIni ? (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
-                  <CheckCircle2 size={24} className="text-emerald-500" />
+          {/* DAILY MENU HIGHLIGHT + SMART STATUS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* MENU HARI INI — with shimmer */}
+            <div className="shimmer-card bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-200/60 shadow-sm relative overflow-hidden group">
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-300">
+                    <Utensils size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest leading-none">Menu Hari Ini</p>
+                    <p className="text-[9px] font-medium text-amber-400/70 uppercase tracking-wider mt-0.5">{todayFormatted}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Laporan hari ini sudah terkirim ✅</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Menu: <span className="font-semibold text-slate-600">{laporanHariIni.menu_makanan}</span></p>
+                {laporanHariIni?.menu_makanan ? (
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-amber-400" />
+                    <p className="text-base font-bold text-slate-800 italic leading-tight">"{laporanHariIni.menu_makanan}"</p>
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium text-amber-600/60 italic">Menu sedang disiapkan oleh Korwil...</p>
+                )}
+              </div>
+            </div>
+
+            {/* SMART STATUS CARD */}
+            {laporanHariIni ? (
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-5 border border-emerald-200/60 shadow-sm relative overflow-hidden group">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0 group-hover:scale-110 transition-transform duration-300">
+                    <CheckCircle2 size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-1.5">Status Laporan</p>
+                    <p className="text-sm font-semibold text-slate-700 leading-snug">Mantap! Laporan hari ini sudah tersimpan rapi. ✅</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${laporanHariIni.id}`)}
+                        className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-1.5"
+                      >
+                        <Edit3 size={12} /> Edit Laporan
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${laporanHariIni.id}`)}
-                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-all flex items-center gap-2"
-              >
-                <Edit3 size={14} /> Edit Laporan
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-8 flex flex-col md:flex-row justify-between items-center gap-6 text-center md:text-left">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-                  <AlertCircle size={24} className="text-amber-500" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Belum ada laporan untuk hari ini</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Silakan isi laporan distribusi untuk {todayFormatted}</p>
+            ) : (
+              <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-5 border border-amber-200/60 shadow-sm relative overflow-hidden group">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0 animate-pulse">
+                    <Hourglass size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1.5">Status Laporan</p>
+                    <p className="text-sm font-semibold text-slate-700 leading-snug">Laporan hari ini ({todayShort}) belum masuk. Jangan lupa lapor ya! ⏳</p>
+                    <button
+                      onClick={() => router.push(`/sppg/dashboard/${id}/input`)}
+                      className="mt-2.5 px-5 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-md shadow-indigo-500/20 flex items-center gap-2"
+                    >
+                      <ClipboardList size={14} /> Input Sekarang
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={() => router.push(`/sppg/dashboard/${id}/input`)}
-                className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:-translate-y-0.5 transition-all flex items-center gap-2"
-              >
-                <ClipboardList size={18} /> Isi Laporan Sekarang
-              </button>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* SUMMARY STATS GRID */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

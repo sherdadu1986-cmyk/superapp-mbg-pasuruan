@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, LogOut, Menu, Utensils,
   CheckCircle2, School, Trash2, Plus, Edit3, ClipboardList, Users,
-  ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText
+  ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText, Hourglass, Sparkles
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 
@@ -31,6 +31,15 @@ export default function DashboardSPPGPage() {
   const todayISO = getLocalToday()
   const todayFormatted = new Date(todayISO + 'T12:00:00').toLocaleDateString('id-ID', {
     timeZone: 'Asia/Jakarta', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  })
+
+  // Sapaan Dinamis berdasarkan jam WIB
+  const jamWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })).getHours()
+  const sapaan = jamWIB >= 4 && jamWIB < 11 ? 'Selamat Pagi' : jamWIB >= 11 && jamWIB < 15 ? 'Selamat Siang' : jamWIB >= 15 && jamWIB < 18 ? 'Selamat Sore' : 'Selamat Malam'
+
+  // Tanggal singkat untuk pesan status
+  const todayShort = new Date(todayISO + 'T12:00:00').toLocaleDateString('id-ID', {
+    timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short'
   })
 
   // Form Tambah Sekolah
@@ -125,7 +134,7 @@ export default function DashboardSPPGPage() {
         <header className="bg-white border-b h-20 flex items-center justify-between px-10 shrink-0">
           <div className="flex flex-col">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] leading-none mb-2">Sistem Manajemen Operasional</p>
-            <div className="text-xs font-black text-[#0F2650] uppercase tracking-tighter italic">{selectedUnit?.nama_unit}</div>
+            <div className="text-sm font-black text-[#0F2650] uppercase tracking-tight">{sapaan}, SPPG {selectedUnit?.nama_unit}! 🍛</div>
           </div>
 
           <div className="flex items-center gap-5">
@@ -142,6 +151,66 @@ export default function DashboardSPPGPage() {
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
           <div className="max-w-7xl mx-auto space-y-5">
 
+            {/* ROW 0: DAILY MENU HIGHLIGHT + SMART STATUS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* MENU HARI INI — with shimmer */}
+              <div className="shimmer-card bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-200/60 shadow-sm relative overflow-hidden group">
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-300">
+                      <Utensils size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] leading-none">Menu Hari Ini</p>
+                      <p className="text-[9px] font-bold text-amber-400/70 uppercase tracking-widest mt-0.5">{todayFormatted}</p>
+                    </div>
+                  </div>
+                  {laporanHariIni?.menu_makanan ? (
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={14} className="text-amber-400" />
+                      <p className="text-lg font-black text-[#0F2650] italic leading-tight">"{laporanHariIni.menu_makanan}"</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-bold text-amber-600/60 italic">Menu sedang disiapkan oleh Korwil...</p>
+                  )}
+                </div>
+              </div>
+
+              {/* SMART STATUS CARD */}
+              {laporanHariIni ? (
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200/60 shadow-sm relative overflow-hidden group">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0 group-hover:scale-110 transition-transform duration-300">
+                      <CheckCircle2 size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] mb-2">Status Laporan</p>
+                      <p className="text-sm font-bold text-slate-700 leading-snug">Mantap! Laporan hari ini sudah tersimpan rapi. ✅</p>
+                      <p className="text-[10px] text-emerald-500 font-bold mt-2 uppercase tracking-widest">Menu: {laporanHariIni.menu_makanan}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl p-6 border border-amber-200/60 shadow-sm relative overflow-hidden group">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0 animate-pulse">
+                      <Hourglass size={24} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-2">Status Laporan</p>
+                      <p className="text-sm font-bold text-slate-700 leading-snug">Laporan hari ini ({todayShort}) belum masuk. Jangan lupa lapor ya! ⏳</p>
+                      <button
+                        onClick={() => router.push(`/sppg/dashboard/${id}/input`)}
+                        className="mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-md shadow-amber-500/20"
+                      >
+                        Input Sekarang
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* ROW 1: BANNER & TOTAL */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2 bg-[#0F2650] rounded-2xl p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6 shadow-lg relative overflow-hidden group">
@@ -154,16 +223,16 @@ export default function DashboardSPPGPage() {
                     <h2 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter leading-none">{selectedUnit?.nama_unit}</h2>
                   </div>
 
-                  {/* STATUS BADGE */}
+                  {/* STATUS BADGE (compact) */}
                   {laporanHariIni ? (
-                    <div className="flex items-center gap-3 bg-emerald-500 text-white px-4 py-2 rounded-xl w-fit shadow-md shadow-emerald-500/20 animate-in fade-in zoom-in">
+                    <div className="flex items-center gap-3 bg-emerald-500 text-white px-4 py-2 rounded-xl w-fit shadow-md shadow-emerald-500/20">
                       <CheckCircle2 size={20} />
-                      <p className="text-[11px] font-black uppercase tracking-widest">Status: Sudah Laporan Harian</p>
+                      <p className="text-[11px] font-black uppercase tracking-widest">Sudah Laporan ✓</p>
                     </div>
                   ) : (
                     <div className="flex items-center gap-3 bg-rose-500 text-white px-4 py-2 rounded-xl w-fit shadow-md shadow-rose-500/20">
                       <AlertCircle size={20} />
-                      <p className="text-[11px] font-black uppercase tracking-widest">Status: Belum Laporan Hari Ini</p>
+                      <p className="text-[11px] font-black uppercase tracking-widest">Belum Laporan</p>
                     </div>
                   )}
                 </div>
