@@ -44,6 +44,7 @@ export default function InputLaporanPage() {
   const { toast } = useToast()
   const [showSuccess, setShowSuccess] = useState(false)
   const [successMsg, setSuccessMsg] = useState({ title: '', sub: '' })
+  const [submitSuccess, setSubmitSuccess] = useState(false)
   const [unit, setUnit] = useState<any>(null)
 
   // --- FORM STATES ---
@@ -205,6 +206,11 @@ export default function InputLaporanPage() {
         : await supabase.from('laporan_harian_final').insert([payload])
 
       if (error) throw error
+
+      // Flash green success on button for 2 seconds
+      setSubmitSuccess(true)
+      setTimeout(() => setSubmitSuccess(false), 2000)
+
       setSuccessMsg({
         title: activeEditId ? 'Data Berhasil Diperbarui!' : 'Laporan Berhasil Terkirim!',
         sub: 'Terima kasih telah memperbarui data gizi hari ini.'
@@ -394,17 +400,34 @@ export default function InputLaporanPage() {
               </div>
             )}
 
-            {/* ACTION BUTTON — switches between Kirim / Ubah */}
+            {/* ACTION BUTTON — Interactive with loading/success states */}
             {existingLaporanId && !editId ? (
               <button
                 onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${existingLaporanId}`)}
-                className="w-full py-3 bg-amber-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-amber-600 active:scale-[0.99] transition-all flex items-center justify-center gap-3"
+                className="w-full py-3 bg-amber-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-amber-600 active:scale-[0.97] transition-all duration-300 flex items-center justify-center gap-3"
               >
                 <Edit3 size={18} /> Ubah Laporan Hari Ini
               </button>
             ) : (
-              <button onClick={handleSimpan} disabled={loading || isCompressing} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-indigo-700 active:scale-[0.99] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
-                {loading ? 'MENGIRIM...' : isCompressing ? 'MENUNGGU KOMPRESI...' : <>{editId ? 'Simpan Perubahan' : 'Kirim Laporan'} <ArrowRight size={18} /></>}
+              <button
+                onClick={handleSimpan}
+                disabled={loading || isCompressing}
+                className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 transition-all duration-300 disabled:cursor-not-allowed ${submitSuccess
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-emerald-500/30 scale-100'
+                    : loading
+                      ? 'bg-indigo-500 text-white/90 scale-[0.97] shadow-indigo-500/20'
+                      : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.97] shadow-indigo-500/20'
+                  } ${(loading || isCompressing) && !submitSuccess ? 'opacity-80' : ''}`}
+              >
+                {submitSuccess ? (
+                  <><CheckCircle2 size={18} className="animate-bounce" /> Berhasil Terkirim!</>
+                ) : loading ? (
+                  <><Loader2 size={18} className="animate-spin" /> Mengirim...</>
+                ) : isCompressing ? (
+                  <><Loader2 size={18} className="animate-spin" /> Menunggu Kompresi...</>
+                ) : (
+                  <>{editId ? 'Simpan Perubahan' : 'Kirim Laporan'} <ArrowRight size={18} /></>
+                )}
               </button>
             )}
 

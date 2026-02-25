@@ -1,0 +1,108 @@
+{
+    "type": "FeatureCollection",
+    "name": "pasuruan_dummy",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "KECAMATAN": "Gempol",
+                "unit": 5
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            112.60,
+                            -7.55
+                        ],
+                        [
+                            112.68,
+                            -7.55
+                        ],
+                        [
+                            112.68,
+                            -7.60
+                        ],
+                        [
+                            112.60,
+                            -7.60
+                        ],
+                        [
+                            112.60,
+                            -7.55
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "KECAMATAN": "Pandaan",
+                "unit": 0
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            112.68,
+                            -7.60
+                        ],
+                        [
+                            112.75,
+                            -7.60
+                        ],
+                        [
+                            112.75,
+                            -7.65
+                        ],
+                        [
+                            112.68,
+                            -7.65
+                        ],
+                        [
+                            112.68,
+                            -7.60
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "KECAMATAN": "Bangil",
+                "unit": 3
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            112.75,
+                            -7.55
+                        ],
+                        [
+                            112.85,
+                            -7.55
+                        ],
+                        [
+                            112.85,
+                            -7.60
+                        ],
+                        [
+                            112.75,
+                            -7.60
+                        ],
+                        [
+                            112.75,
+                            -7.55
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

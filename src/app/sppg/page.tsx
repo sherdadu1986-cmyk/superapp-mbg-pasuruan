@@ -100,10 +100,16 @@ export default function DashboardSPPGPage() {
   if (loading && !selectedUnit) return <div className="min-h-screen flex items-center justify-center font-black text-slate-400 animate-pulse uppercase tracking-widest text-xs">Syncing Data SPPG...</div>
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] flex font-sans text-slate-800 transition-all duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-[#F1F5F9] to-blue-50/40 flex font-sans text-slate-800 transition-all duration-300 relative overflow-hidden">
 
-      {/* SIDEBAR BUKA TUTUP */}
-      <aside className={`bg-[#0F2650] text-white flex flex-col fixed h-full z-50 transition-all duration-300 shadow-2xl ${sidebarOpen ? 'w-72' : 'w-24'}`}>
+      {/* DECORATIVE BLOBS — behind sidebar for glassmorphism visibility */}
+      <div className="fixed top-[-100px] left-[-100px] w-[500px] h-[500px] bg-indigo-400/20 rounded-full blur-3xl pointer-events-none z-0" />
+      <div className="fixed bottom-[-80px] left-[-60px] w-[400px] h-[400px] bg-emerald-400/20 rounded-full blur-3xl pointer-events-none z-0" />
+      <div className="fixed top-[-120px] right-[-120px] w-[400px] h-[400px] bg-blue-300/10 rounded-full blur-[100px] pointer-events-none z-0" />
+      <div className="fixed top-[40%] right-[10%] w-[250px] h-[250px] bg-indigo-200/10 rounded-full blur-[80px] pointer-events-none z-0" />
+
+      {/* SIDEBAR BUKA TUTUP — GLASSMORPHISM */}
+      <aside className={`bg-[#0F2650]/75 backdrop-blur-xl text-white flex flex-col fixed h-full z-50 transition-all duration-300 border-r border-white/30 ${sidebarOpen ? 'w-72' : 'w-24'}`} style={{ boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.15), inset 0 -1px 1px rgba(255,255,255,0.05), 0 25px 50px -12px rgba(0,0,0,0.2)' }}>
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
           <div className={`animate-slide-in-left flex items-center gap-3 hover:scale-105 transition-transform duration-300 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
             <img src="/logo.png" style={{ width: '48px', height: '48px', objectFit: 'contain' }} className="shrink-0" />
@@ -117,13 +123,13 @@ export default function DashboardSPPGPage() {
           </button>
         </div>
         <nav className="flex-1 p-4 space-y-2 mt-4">
-          <button className={`w-full flex items-center gap-4 px-4 py-4 text-xs font-black uppercase rounded-2xl transition-all bg-white/10 text-white shadow-lg`}>
+          <button className={`w-full flex items-center gap-4 px-4 py-4 text-xs font-black uppercase rounded-2xl transition-all duration-300 bg-white/10 backdrop-blur-sm text-white shadow-lg hover:bg-white/20`}>
             <LayoutDashboard size={24} className="shrink-0" />
             <span className={sidebarOpen ? 'block' : 'hidden'}>Dashboard</span>
           </button>
         </nav>
         <div className="p-4 border-t border-white/10">
-          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-4 px-4 py-4 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-2xl transition-all uppercase tracking-widest overflow-hidden">
+          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-4 px-4 py-4 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-2xl transition-all duration-300 uppercase tracking-widest overflow-hidden">
             <LogOut size={24} className="shrink-0" />
             <span className={sidebarOpen ? 'block' : 'hidden'}>Logout</span>
           </button>
