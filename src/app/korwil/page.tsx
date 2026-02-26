@@ -170,7 +170,7 @@ export default function SuperKorwilPage() {
         .from('daftar_sekolah')
         .select('*')
 
-      const sekolahMap = new Map((allSekolah || []).map(s => [s.id, s]))
+      const sekolahMap = new window.Map<any, any>((allSekolah || []).map((s: any) => [s.id, s]))
       const laporanData = exportLaporan || []
 
       type FlatRow = {

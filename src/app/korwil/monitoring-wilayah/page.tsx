@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation'
 import {
     Settings, BarChart3, Camera, Users, LogOut, Map, MapPin, ArrowLeft
 } from 'lucide-react'
-import BentoPasuruanMap from '@/components/BentoPasuruanMap'
+import InteractivePinMap from '@/components/InteractivePinMap'
 
 export default function MonitoringWilayahPage() {
     const router = useRouter()
@@ -110,7 +110,7 @@ export default function MonitoringWilayahPage() {
                             </div>
                         </div>
 
-                        <BentoPasuruanMap />
+                        <InteractivePinMap />
                     </div>
 
                     {/* BOTTOM INFO */}
