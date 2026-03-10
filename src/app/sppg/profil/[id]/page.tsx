@@ -2,17 +2,19 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useParams, useRouter, usePathname } from 'next/navigation'
+import { useToast } from '@/components/toast'
 import {
   LayoutDashboard, LogOut, Menu, ChevronLeft, Store,
   Building2, Users, ChefHat, MapPin, Calendar, Award, Hash,
   Pencil, X, Save, Loader2, Phone, Handshake, FileCheck, Shield,
-  ArrowLeft, BadgeCheck, XCircle, ClipboardList, MapPinned
+  ArrowLeft, BadgeCheck, XCircle, ClipboardList, MapPinned, KeyRound
 } from 'lucide-react'
 
 export default function ProfilSPPGPage() {
   const { id } = useParams()
   const router = useRouter()
   const pathname = usePathname()
+  const { toast } = useToast()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -21,6 +23,7 @@ export default function ProfilSPPGPage() {
 
   // Form Data
   const [formData, setFormData] = useState({
+    idDapur: '',
     no: '',
     sppiBatch: '',
     namaKaSppg: '',
@@ -59,6 +62,7 @@ export default function ProfilSPPGPage() {
         const { data: unit } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
         if (unit) {
           const loaded = {
+            idDapur: unit.id_dapur || String(unit.id) || '',
             no: unit.no || '',
             sppiBatch: unit.sppi_batch || '',
             namaKaSppg: unit.kepala_unit || '',
@@ -116,7 +120,8 @@ export default function ProfilSPPGPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await supabase.from('daftar_sppg').update({
+      const { error } = await supabase.from('daftar_sppg').update({
+        id_dapur: formData.idDapur,
         no: formData.no,
         sppi_batch: formData.sppiBatch,
         kepala_unit: formData.namaKaSppg,
@@ -140,11 +145,17 @@ export default function ProfilSPPGPage() {
         bpjs: legalitas.bpjs,
       }).eq('id', id)
 
-      setBackupForm(formData)
-      setBackupLegalitas(legalitas)
-      setIsEditing(false)
+      if (error) {
+        toast('error', 'Gagal Menyimpan', 'Periksa koneksi internet dan coba lagi.')
+      } else {
+        toast('success', 'Profil Tersimpan!', 'Data profil SPPG berhasil diperbarui.')
+        setBackupForm(formData)
+        setBackupLegalitas(legalitas)
+        setIsEditing(false)
+      }
     } catch (err) {
       console.error(err)
+      toast('error', 'Kesalahan Sistem', 'Terjadi kesalahan, silakan coba lagi.')
     } finally {
       setSaving(false)
     }
@@ -319,6 +330,20 @@ export default function ProfilSPPGPage() {
               <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Informasi Unit SPPG</h2>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+              {/* ID Dapur — always read-only */}
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                  <KeyRound size={13} className="text-slate-300" />
+                  ID Dapur
+                </label>
+                <input
+                  disabled
+                  type="text"
+                  value={formData.idDapur}
+                  className={`${inputBase} bg-slate-50 text-slate-500 cursor-not-allowed border border-dashed border-slate-200`}
+                  placeholder="—"
+                />
+              </div>
               {renderField('ID SPPG', 'idSppg', Hash)}
               {renderField('Nama SPPG (sesuai Dialur)', 'namaSppg', Building2)}
               {renderField('No', 'no', Hash)}
