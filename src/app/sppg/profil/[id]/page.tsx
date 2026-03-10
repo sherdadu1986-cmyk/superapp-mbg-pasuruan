@@ -62,14 +62,14 @@ export default function ProfilSPPGPage() {
         const { data: unit } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
         if (unit) {
           const loaded = {
-            idDapur: unit.id_dapur || String(unit.id) || '',
+            idDapur: unit.id_dapur || '',
             no: unit.no || '',
             sppiBatch: unit.sppi_batch || '',
             namaKaSppg: unit.kepala_unit || '',
             gelarKaSppg: unit.gelar_ka_sppg || '',
             noHpKaSppg: unit.no_hp_ka_sppg || '',
             skepNomor: unit.skep_nomor || '',
-            idSppg: unit.id_sppg || String(unit.id) || '',
+            idSppg: String(unit.id) || '',
             tanggalOperasional: unit.tanggal_operasional || '',
             namaSppg: unit.nama_unit || '',
             alamatLengkap: unit.alamat || '',
@@ -330,21 +330,22 @@ export default function ProfilSPPGPage() {
               <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Informasi Unit SPPG</h2>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-              {/* ID Dapur — always read-only */}
+              {/* ID SPPG — system UUID, always read-only */}
               <div className="space-y-1.5">
                 <label className="flex items-center gap-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                  <KeyRound size={13} className="text-slate-300" />
-                  ID Dapur
+                  <Hash size={13} className="text-slate-300" />
+                  ID SPPG <span className="text-[9px] text-slate-300 normal-case tracking-normal">(System ID)</span>
                 </label>
                 <input
                   disabled
                   type="text"
-                  value={formData.idDapur}
-                  className={`${inputBase} bg-slate-50 text-slate-500 cursor-not-allowed border border-dashed border-slate-200`}
+                  value={formData.idSppg}
+                  className={`${inputBase} bg-slate-50 text-slate-400 cursor-not-allowed border border-dashed border-slate-200 font-mono text-xs`}
                   placeholder="—"
                 />
               </div>
-              {renderField('ID SPPG', 'idSppg', Hash)}
+              {/* ID Dapur — editable custom ID */}
+              {renderField('ID Dapur', 'idDapur', KeyRound)}
               {renderField('Nama SPPG (sesuai Dialur)', 'namaSppg', Building2)}
               {renderField('No', 'no', Hash)}
               {renderField('SPPI Batch', 'sppiBatch', ClipboardList)}
