@@ -10,7 +10,7 @@ import {
   BarChart3, LogOut, CheckCircle2, ChevronRight, ChevronLeft, Settings,
   Utensils, School, Box, Activity, Users, Baby, GraduationCap,
   Clock, MapPin, Map, AlertTriangle, Camera, X, ImageIcon, FileSpreadsheet, Loader2, Calendar,
-  Search, Filter, Megaphone, Copy, ClipboardCheck
+  Search, Filter, Megaphone, Copy, ClipboardCheck, Database
 } from 'lucide-react'
 
 export default function SuperKorwilPage() {
@@ -341,6 +341,13 @@ export default function SuperKorwilPage() {
           >
             <Camera size={20} />
             <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Galeri</span>
+          </button>
+          <button
+            onClick={() => router.push('/korwil/sppg')}
+            className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 text-slate-500 hover:bg-white/50 hover:text-slate-800"
+          >
+            <Database size={20} />
+            <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Data SPPG</span>
           </button>
           <button
             onClick={() => router.push('/korwil/akun')}

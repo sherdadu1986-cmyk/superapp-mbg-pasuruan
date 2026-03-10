@@ -2,10 +2,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLocalToday } from '@/lib/date'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, usePathname } from 'next/navigation'
 import { useToast } from '@/components/toast'
 import {
-  LayoutDashboard, LogOut, Menu, Utensils,
+  LayoutDashboard, LogOut, Menu, Utensils, Store,
   CheckCircle2, School, Trash2, Plus, Edit3, ClipboardList, Users,
   ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText, Hourglass, Sparkles
 } from 'lucide-react'
@@ -13,6 +13,7 @@ import {
 export default function DashboardSPPGPage() {
   const { id } = useParams()
   const router = useRouter()
+  const pathname = usePathname()
   const { toast } = useToast()
 
   // UI State
@@ -123,10 +124,26 @@ export default function DashboardSPPGPage() {
           </button>
         </div>
         <nav className="flex-1 p-3 space-y-1 mt-2">
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-semibold rounded-lg bg-indigo-500/10 text-indigo-700 backdrop-blur-sm transition-all duration-300 hover:bg-indigo-500/20">
-            <LayoutDashboard size={18} className="shrink-0" />
-            <span className={sidebarOpen ? 'block' : 'hidden'}>Dashboard</span>
-          </button>
+          {[
+            { label: 'Dashboard', icon: LayoutDashboard, href: `/sppg/dashboard/${id}` },
+            { label: 'Profil SPPG', icon: Store, href: `/sppg/profil/${id}` },
+          ].map((item) => {
+            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+            return (
+              <button
+                key={item.label}
+                onClick={() => router.push(item.href)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-semibold rounded-lg backdrop-blur-sm transition-all duration-300 ${
+                  isActive
+                    ? 'bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20'
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                }`}
+              >
+                <item.icon size={18} className="shrink-0" />
+                <span className={sidebarOpen ? 'block' : 'hidden'}>{item.label}</span>
+              </button>
+            )
+          })}
         </nav>
         <div className="p-3 border-t border-white/20">
           <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-red-500 hover:bg-red-500/10 rounded-lg transition-all duration-300">
