@@ -146,16 +146,17 @@ export default function ProfilSPPGPage() {
       }).eq('id', id)
 
       if (error) {
-        toast('error', 'Gagal Menyimpan', 'Periksa koneksi internet dan coba lagi.')
+        console.error('Supabase update error:', error)
+        toast('error', 'Gagal Menyimpan', error.message || error.details || 'Error tidak diketahui dari Supabase.')
       } else {
         toast('success', 'Profil Tersimpan!', 'Data profil SPPG berhasil diperbarui.')
         setBackupForm(formData)
         setBackupLegalitas(legalitas)
         setIsEditing(false)
       }
-    } catch (err) {
-      console.error(err)
-      toast('error', 'Kesalahan Sistem', 'Terjadi kesalahan, silakan coba lagi.')
+    } catch (err: any) {
+      console.error('Save error:', err)
+      toast('error', 'Kesalahan Sistem', err?.message || 'Terjadi kesalahan tak terduga.')
     } finally {
       setSaving(false)
     }
