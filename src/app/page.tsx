@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Lock, ArrowRight, UserPlus, User } from 'lucide-react'
+import { Lock, ArrowRight, UserPlus, User, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 import Image from 'next/image'
 
@@ -136,8 +136,21 @@ export default function LoginPage() {
             </div>
 
             {/* WOW Button */}
-            <button disabled={loading} className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-3 disabled:opacity-60 disabled:transform-none disabled:hover:shadow-lg mt-2">
-              {loading ? 'MEMPROSES...' : <>Melbu Sistem <ArrowRight size={18} /></>}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white uppercase tracking-widest bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-lg transition-all duration-200 mt-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Memproses...
+                </>
+              ) : (
+                <>
+                  Melbu Sistem <ArrowRight size={18} className="ml-2" />
+                </>
+              )}
             </button>
           </form>
 
