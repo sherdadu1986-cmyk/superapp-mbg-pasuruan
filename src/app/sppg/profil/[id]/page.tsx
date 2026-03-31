@@ -43,12 +43,14 @@ export default function ProfilSPPGPage() {
     noHpPerwakilanYayasan: '',
   })
 
-  // Legalitas
+  // Sertifikasi Standar Kompetensi
   const [legalitas, setLegalitas] = useState({
-    ikl: false,
     slhs: false,
-    smo: false,
-    bpjs: false,
+    sertifikat_halal: false,
+    sertifikat_haccp: false,
+    sertifikat_chef: false,
+    sertifikat_iso22000: false,
+    sertifikat_iso45001: false,
   })
 
   // Backup for cancel
@@ -82,10 +84,12 @@ export default function ProfilSPPGPage() {
             noHpPerwakilanYayasan: unit.no_hp_perwakilan_yayasan || '',
           }
           const loadedLegalitas = {
-            ikl: unit.ikl ?? false,
             slhs: unit.slhs ?? false,
-            smo: unit.smo ?? false,
-            bpjs: unit.bpjs ?? false,
+            sertifikat_halal: unit.sertifikat_halal ?? false,
+            sertifikat_haccp: unit.sertifikat_haccp ?? false,
+            sertifikat_chef: unit.sertifikat_chef ?? false,
+            sertifikat_iso22000: unit.sertifikat_iso22000 ?? false,
+            sertifikat_iso45001: unit.sertifikat_iso45001 ?? false,
           }
           setFormData(loaded)
           setBackupForm(loaded)
@@ -139,10 +143,12 @@ export default function ProfilSPPGPage() {
         yayasan: formData.yayasan,
         nama_perwakilan_yayasan: formData.namaPerwakilanYayasan,
         no_hp_perwakilan_yayasan: formData.noHpPerwakilanYayasan,
-        ikl: legalitas.ikl,
         slhs: legalitas.slhs,
-        smo: legalitas.smo,
-        bpjs: legalitas.bpjs,
+        sertifikat_halal: legalitas.sertifikat_halal,
+        sertifikat_haccp: legalitas.sertifikat_haccp,
+        sertifikat_chef: legalitas.sertifikat_chef,
+        sertifikat_iso22000: legalitas.sertifikat_iso22000,
+        sertifikat_iso45001: legalitas.sertifikat_iso45001,
       }).eq('id', id)
 
       if (error) {
@@ -206,7 +212,7 @@ export default function ProfilSPPGPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/30 gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9FAFB] gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
         <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest animate-pulse">Memuat Profil...</p>
       </div>
@@ -214,24 +220,19 @@ export default function ProfilSPPGPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 flex font-sans text-slate-800 transition-all duration-300 relative overflow-hidden">
+    <div className="min-h-screen bg-[#F9FAFB] flex font-sans text-slate-800 transition-all duration-300 relative">
 
-      {/* DECORATIVE BLOBS */}
-      <div className="fixed top-[-100px] left-[-100px] w-[500px] h-[500px] bg-indigo-400/20 rounded-full blur-3xl pointer-events-none z-0" />
-      <div className="fixed bottom-[-80px] left-[-60px] w-[400px] h-[400px] bg-emerald-400/20 rounded-full blur-3xl pointer-events-none z-0" />
-      <div className="fixed top-[-120px] right-[-120px] w-[400px] h-[400px] bg-blue-200/10 rounded-full blur-[100px] pointer-events-none z-0" />
-
-      {/* SIDEBAR — GLASSMORPHISM */}
-      <aside className={`bg-white/40 backdrop-blur-xl border-r border-white/50 flex flex-col fixed h-full z-50 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[70px]'}`} style={{ boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.6), inset 0 -1px 1px rgba(255,255,255,0.3), 0 10px 40px -10px rgba(0,0,0,0.08)' }}>
-        <div className="p-4 border-b border-white/20 flex items-center justify-between">
-          <div className={`flex items-center gap-4 hover:scale-105 transition-transform duration-300 overflow-hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
-            <img src="/logo.png" style={{ width: '48px', height: '48px', objectFit: 'contain' }} className="shrink-0" />
-            <div className="flex flex-col">
-              <span className="font-bold text-lg leading-none text-slate-800 whitespace-nowrap">SPPG PASURUAN</span>
-              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap mt-1">Sistem Manajemen Operasional Gizi</span>
+      {/* SIDEBAR — SOLID DARK NAVY */}
+      <aside className={`bg-[#111827] flex flex-col fixed h-full z-50 transition-all duration-300 ${sidebarOpen ? 'w-60' : 'w-[70px]'}`}>
+        <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+          <div className={`flex items-center gap-3 overflow-hidden transition-all duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
+            <img src="/logo.png" style={{ width: '40px', height: '40px', objectFit: 'contain' }} className="shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-sm leading-none text-white whitespace-nowrap">SPPG PASURUAN</span>
+              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap mt-0.5">Manajemen Operasional</span>
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 hover:bg-white/[0.06] rounded-lg text-slate-500 transition-colors shrink-0">
             {sidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}
           </button>
         </div>
@@ -242,22 +243,25 @@ export default function ProfilSPPGPage() {
               <button
                 key={item.label}
                 onClick={() => router.push(item.href)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-semibold rounded-lg backdrop-blur-sm transition-all duration-300 ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${
                   isActive
-                    ? 'bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                    ? 'bg-emerald-500/10 text-emerald-400'
+                    : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
                 }`}
               >
+                {isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-emerald-400 rounded-r-full" />
+                )}
                 <item.icon size={18} className="shrink-0" />
-                <span className={sidebarOpen ? 'block' : 'hidden'}>{item.label}</span>
+                <span className={`text-[13px] font-semibold ${sidebarOpen ? 'block' : 'hidden'}`}>{item.label}</span>
               </button>
             )
           })}
         </nav>
-        <div className="p-3 border-t border-white/20">
-          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-red-500 hover:bg-red-500/10 rounded-lg transition-all duration-300">
+        <div className="p-3 border-t border-white/[0.06]">
+          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200">
             <LogOut size={18} className="shrink-0" />
-            <span className={sidebarOpen ? 'block' : 'hidden'}>Logout</span>
+            <span className={`text-[13px] font-semibold ${sidebarOpen ? 'block' : 'hidden'}`}>Logout</span>
           </button>
         </div>
       </aside>
@@ -266,7 +270,7 @@ export default function ProfilSPPGPage() {
       <main className={`flex-1 min-h-screen transition-all duration-300 ${sidebarOpen ? 'pl-60' : 'pl-[70px]'}`}>
 
         {/* HEADER */}
-        <header className="bg-white border-b border-slate-200 px-6 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-40">
+        <header className="bg-white border-b border-[#E5E7EB] px-6 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-40">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push(`/sppg/dashboard/${id}`)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition-colors">
               <ArrowLeft size={18} />
@@ -323,9 +327,9 @@ export default function ProfilSPPGPage() {
           {/* ========================================== */}
           {/* CARD 1: INFORMASI UNIT SPPG               */}
           {/* ========================================== */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-              <div className="w-8 h-8 bg-indigo-50 text-indigo-500 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center">
                 <Building2 size={18} />
               </div>
               <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Informasi Unit SPPG</h2>
@@ -363,9 +367,9 @@ export default function ProfilSPPGPage() {
           {/* ========================================== */}
           {/* CARD 2: DATA PERSONEL & KEMITRAAN          */}
           {/* ========================================== */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-              <div className="w-8 h-8 bg-amber-50 text-amber-500 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center">
                 <Users size={18} />
               </div>
               <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Data Personel & Kemitraan</h2>
@@ -409,42 +413,46 @@ export default function ProfilSPPGPage() {
           </div>
 
           {/* ========================================== */}
-          {/* CARD 3: STATUS LEGALITAS & KEPATUHAN       */}
+          {/* CARD 3: SERTIFIKASI STANDAR KOMPETENSI     */}
           {/* ========================================== */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
               <div className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-lg flex items-center justify-center">
                 <Shield size={18} />
               </div>
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Status Legalitas & Kepatuhan</h2>
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Sertifikasi Standar Kompetensi</h2>
+                <p className="text-[10px] text-slate-400 font-medium mt-0.5">Status kelengkapan sertifikasi unit SPPG</p>
+              </div>
             </div>
-            <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               {([
-                { key: 'ikl' as const, label: 'IKL', desc: 'Izin Komitmen Lingkungan' },
-                { key: 'slhs' as const, label: 'SLHS', desc: 'Sertifikat Laik Hygiene Sanitasi' },
-                { key: 'smo' as const, label: 'SMO', desc: 'Surat Memulai Operasional' },
-                { key: 'bpjs' as const, label: 'BPJS', desc: 'Jaminan Sosial Tenaga Kerja' },
+                { key: 'slhs' as const, label: 'Sertifikat SLHS', desc: 'Sertifikat Laik Higiene Sanitasi' },
+                { key: 'sertifikat_halal' as const, label: 'Sertifikat Halal', desc: 'Sertifikasi Halal dari BPJPH/MUI' },
+                { key: 'sertifikat_haccp' as const, label: 'Sertifikat HACCP', desc: 'Hazard Analysis and Critical Control Points' },
+                { key: 'sertifikat_chef' as const, label: 'Sertifikat Chef', desc: 'Sertifikasi Kompetensi Koki' },
+                { key: 'sertifikat_iso22000' as const, label: 'Sertifikat ISO 22000', desc: 'Food Safety Management System' },
+                { key: 'sertifikat_iso45001' as const, label: 'Sertifikat ISO 45001 K3', desc: 'Keselamatan dan Kesehatan Kerja' },
               ]).map((item) => {
                 const isActive = legalitas[item.key]
 
                 if (isEditing) {
-                  // Toggle mode
                   return (
                     <button
                       key={item.key}
                       type="button"
                       onClick={() => setLegalitas(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                      className={`p-4 rounded-xl border-2 transition-all duration-300 text-left group ${
+                      className={`p-4 rounded-xl border transition-all duration-200 text-left ${
                         isActive
-                          ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
-                          : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                          ? 'border-emerald-300 bg-emerald-50/60 hover:bg-emerald-50'
+                          : 'border-[#E5E7EB] bg-white hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-bold text-slate-700">{item.label}</span>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-[13px] font-bold text-slate-700">{item.label}</span>
                         {/* Toggle Switch */}
-                        <div className={`w-10 h-5 rounded-full p-0.5 transition-all duration-300 ${isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                          <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                        <div className={`w-10 h-[22px] rounded-full p-0.5 transition-all duration-300 ${isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                          <div className={`w-[18px] h-[18px] bg-white rounded-full shadow-sm transition-transform duration-300 ${isActive ? 'translate-x-[18px]' : 'translate-x-0'}`} />
                         </div>
                       </div>
                       <p className="text-[10px] text-slate-400 font-medium leading-snug">{item.desc}</p>
@@ -452,32 +460,33 @@ export default function ProfilSPPGPage() {
                   )
                 }
 
-                // Badge/status mode
                 return (
                   <div
                     key={item.key}
-                    className={`p-4 rounded-xl border transition-all duration-300 ${
+                    className={`p-4 rounded-xl border transition-all duration-200 ${
                       isActive
-                        ? 'border-emerald-200 bg-emerald-50/50'
-                        : 'border-red-200 bg-red-50/50'
+                        ? 'border-emerald-200 bg-emerald-50/40'
+                        : 'border-[#E5E7EB] bg-white'
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      {isActive ? (
-                        <BadgeCheck size={18} className="text-emerald-500" />
-                      ) : (
-                        <XCircle size={18} className="text-red-400" />
-                      )}
-                      <span className="text-sm font-bold text-slate-700">{item.label}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {isActive ? (
+                          <BadgeCheck size={17} className="text-emerald-500" />
+                        ) : (
+                          <XCircle size={17} className="text-slate-300" />
+                        )}
+                        <span className="text-[13px] font-bold text-slate-700">{item.label}</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
+                        isActive
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        {isActive ? '✓ Ada' : '—'}
+                      </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium leading-snug mb-2">{item.desc}</p>
-                    <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                      isActive
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-red-100 text-red-600'
-                    }`}>
-                      {isActive ? '✓ Terpenuhi' : '✗ Belum'}
-                    </span>
+                    <p className="text-[10px] text-slate-400 font-medium leading-snug">{item.desc}</p>
                   </div>
                 )
               })}
