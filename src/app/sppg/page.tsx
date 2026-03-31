@@ -5,8 +5,8 @@ import { getLocalToday } from '@/lib/date'
 import { useParams, useRouter, usePathname } from 'next/navigation'
 import {
   LayoutDashboard, LogOut, Menu, Utensils, Store,
-  CheckCircle2, School, Trash2, Plus, Edit3, ClipboardList, Users,
-  ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText, Hourglass, Sparkles
+  CheckCircle2, School, Trash2, Plus, Edit3, Pencil, ClipboardList, Users,
+  ChevronLeft, Calendar as CalendarIcon, AlertCircle, FileText, Hourglass, Sparkles, X
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 
@@ -43,13 +43,27 @@ export default function DashboardSPPGPage() {
     timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short'
   })
 
-  // Form Tambah Sekolah
+  // Form Tambah / Edit Sekolah
   const [newSekolah, setNewSekolah] = useState({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_siswa_1_3: 0, porsi_siswa_4_6: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 })
+  const [editingId, setEditingId] = useState<string | null>(null)
   const isSD = newSekolah.jenjang === 'SD/MI'
   const totalPorsiNew = isSD
     ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
     : newSekolah.porsi_siswa + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
   const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
+
+  // Jenjang Pill Badge Color Map
+  const jenjangColor: Record<string, string> = {
+    'PAUD/KB': 'bg-violet-50 text-violet-700 border-violet-200',
+    'TK/RA': 'bg-purple-50 text-purple-700 border-purple-200',
+    'SD/MI': 'bg-blue-50 text-blue-700 border-blue-200',
+    'SMP/MTS': 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    'SMA/SMK': 'bg-teal-50 text-teal-700 border-teal-200',
+    'SANTRI': 'bg-amber-50 text-amber-700 border-amber-200',
+    'BALITA': 'bg-pink-50 text-pink-700 border-pink-200',
+    'BUMIL': 'bg-rose-50 text-rose-700 border-rose-200',
+    'BUSUI': 'bg-orange-50 text-orange-700 border-orange-200',
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -78,6 +92,11 @@ export default function DashboardSPPGPage() {
 
   useEffect(() => { if (id) loadData() }, [id])
 
+  const resetForm = () => {
+    setNewSekolah({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_siswa_1_3: 0, porsi_siswa_4_6: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 })
+    setEditingId(null)
+  }
+
   const handleAddSekolah = async () => {
     if (!newSekolah.nama || totalPorsiNew <= 0) return toast('warning', 'Lengkapi Data', 'Nama & minimal 1 porsi harus diisi.')
     const computedPorsiSiswa = isSD ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 : newSekolah.porsi_siswa
@@ -90,12 +109,50 @@ export default function DashboardSPPGPage() {
       porsi_tendik: newSekolah.porsi_tendik, porsi_kader: newSekolah.porsi_kader,
       target_porsi: totalPorsiNew
     }])
-    setNewSekolah({ nama: '', jenjang: 'SD/MI', porsi_siswa: 0, porsi_siswa_1_3: 0, porsi_siswa_4_6: 0, porsi_guru: 0, porsi_tendik: 0, porsi_kader: 0 });
-    loadData();
+    resetForm()
+    loadData()
+  }
+
+  const handleEditSekolah = (s: any) => {
+    setEditingId(s.id)
+    setNewSekolah({
+      nama: s.nama_sekolah,
+      jenjang: s.jenjang,
+      porsi_siswa: s.porsi_siswa || 0,
+      porsi_siswa_1_3: s.porsi_siswa_1_3 || 0,
+      porsi_siswa_4_6: s.porsi_siswa_4_6 || 0,
+      porsi_guru: s.porsi_guru || 0,
+      porsi_tendik: s.porsi_tendik || 0,
+      porsi_kader: s.porsi_kader || 0,
+    })
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleUpdateSekolah = async () => {
+    if (!editingId) return
+    if (!newSekolah.nama || totalPorsiNew <= 0) return toast('warning', 'Lengkapi Data', 'Nama & minimal 1 porsi harus diisi.')
+    const computedPorsiSiswa = isSD ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 : newSekolah.porsi_siswa
+    await supabase.from('daftar_sekolah').update({
+      nama_sekolah: newSekolah.nama, jenjang: newSekolah.jenjang,
+      porsi_siswa: computedPorsiSiswa,
+      porsi_siswa_1_3: isSD ? newSekolah.porsi_siswa_1_3 : 0,
+      porsi_siswa_4_6: isSD ? newSekolah.porsi_siswa_4_6 : 0,
+      porsi_guru: newSekolah.porsi_guru,
+      porsi_tendik: newSekolah.porsi_tendik, porsi_kader: newSekolah.porsi_kader,
+      target_porsi: totalPorsiNew
+    }).eq('id', editingId)
+    toast('success', 'Data Diperbarui', 'Titik layanan berhasil diupdate.')
+    resetForm()
+    loadData()
   }
 
   const handleDeleteSekolah = async (sid: string) => {
-    if (confirm("Hapus sekolah?")) { await supabase.from('daftar_sekolah').delete().eq('id', sid); loadData(); }
+    if (confirm("Hapus titik layanan ini?")) {
+      await supabase.from('daftar_sekolah').delete().eq('id', sid)
+      if (editingId === sid) resetForm()
+      loadData()
+    }
   }
 
   if (loading && !selectedUnit) return <div className="min-h-screen flex items-center justify-center font-black text-slate-400 animate-pulse uppercase tracking-widest text-xs">Syncing Data SPPG...</div>
@@ -339,28 +396,86 @@ export default function DashboardSPPGPage() {
                           </div>
                         ))}
                       </div>
-                      {/* Row 3: Total + Simpan */}
+                      {/* Row 3: Total + Simpan/Update */}
                       <div className="flex flex-col md:flex-row items-center gap-4">
                         <div className="flex-1 w-full bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 flex items-center justify-between">
                           <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-2">Total Porsi</span>
                           <span className="text-xl font-black text-indigo-700 italic tracking-tighter mr-2">{totalPorsiNew.toLocaleString()}</span>
                         </div>
-                        <button onClick={handleAddSekolah} className="w-full md:w-auto bg-[#0F2650] text-white px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg flex items-center justify-center gap-2 whitespace-nowrap"><Plus size={18} /> Simpan Data</button>
+                        {editingId ? (
+                          <div className="flex items-center gap-2 w-full md:w-auto">
+                            <button onClick={handleUpdateSekolah} className="flex-1 md:flex-none bg-emerald-600 text-white px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg flex items-center justify-center gap-2 whitespace-nowrap"><Edit3 size={16} /> Update Data</button>
+                            <button onClick={resetForm} className="flex-none bg-white text-slate-500 px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-200 flex items-center justify-center gap-1.5 whitespace-nowrap"><X size={16} /> Batal</button>
+                          </div>
+                        ) : (
+                          <button onClick={handleAddSekolah} className="w-full md:w-auto bg-[#0F2650] text-white px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg flex items-center justify-center gap-2 whitespace-nowrap"><Plus size={18} /> Simpan Data</button>
+                        )}
                       </div>
+                      {/* Edit Mode Indicator */}
+                      {editingId && (
+                        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
+                          <Pencil size={14} className="text-amber-600" />
+                          <span className="text-[11px] font-bold text-amber-700">Mode Edit — Mengubah data <span className="font-black italic">{newSekolah.nama}</span></span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* LIST GRID */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {listSekolah.map((s, index) => (
-                        <div key={s.id} className="p-4 border border-slate-200 rounded-xl flex justify-between items-center bg-white shadow-sm group hover:border-slate-300 hover:shadow-md transition-all duration-300">
-                          <div>
-                            <p className="text-[13px] font-black text-slate-800 uppercase italic leading-none mb-2 group-hover:text-indigo-600 transition-colors">{index + 1}. {s.nama_sekolah}</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{s.jenjang} • <span className="text-indigo-500">{s.target_porsi}</span> Porsi</p>
-                            <p className="text-[9px] text-slate-400 font-bold mt-2 tracking-wide">{s.jenjang === 'SD/MI' ? (<>Siswa (1-3): {s.porsi_siswa_1_3 ?? 0} <span className="text-slate-300 mx-0.5">|</span> Siswa (4-6): {s.porsi_siswa_4_6 ?? 0}</>) : (<>Siswa: {s.porsi_siswa ?? 0}</>)} <span className="text-slate-300 mx-0.5">|</span> Guru: {s.porsi_guru ?? 0} <span className="text-slate-300 mx-0.5">|</span> Tendik: {s.porsi_tendik ?? 0} <span className="text-slate-300 mx-0.5">|</span> Kader: {s.porsi_kader ?? 0}</p>
-                          </div>
-                          <button onClick={() => handleDeleteSekolah(s.id)} className="p-2 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={18} /></button>
+                    {/* DATA TABLE — LUXURY MINIMALIST */}
+                    <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                      {/* Table Header */}
+                      <div className="bg-slate-50/80 border-b border-slate-100">
+                        <div className="grid grid-cols-12 gap-2 px-5 py-3">
+                          <div className="col-span-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">#</div>
+                          <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nama Titik Layanan</div>
+                          <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jenjang</div>
+                          <div className="col-span-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Detail Porsi</div>
+                          <div className="col-span-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Total</div>
+                          <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Aksi</div>
                         </div>
-                      ))}
+                      </div>
+                      {/* Table Body */}
+                      <div className="divide-y divide-slate-100">
+                        {listSekolah.map((s, index) => (
+                          <div key={s.id} className={`grid grid-cols-12 gap-2 px-5 py-4 items-center transition-colors duration-200 hover:bg-slate-50/60 ${editingId === s.id ? 'bg-amber-50/40 border-l-2 border-l-amber-400' : ''}`}>
+                            {/* # */}
+                            <div className="col-span-1 text-[12px] font-bold text-slate-400">{index + 1}</div>
+                            {/* Nama */}
+                            <div className="col-span-3">
+                              <p className="text-[13px] font-bold text-slate-800 leading-tight">{s.nama_sekolah}</p>
+                            </div>
+                            {/* Jenjang Badge */}
+                            <div className="col-span-2">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${jenjangColor[s.jenjang] || 'bg-slate-50 text-slate-500 border-slate-200'}`}>{s.jenjang}</span>
+                            </div>
+                            {/* Detail Porsi */}
+                            <div className="col-span-3">
+                              <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                                {s.jenjang === 'SD/MI' ? (<>Kls 1-3: <span className="font-bold text-slate-700">{s.porsi_siswa_1_3 ?? 0}</span> · Kls 4-6: <span className="font-bold text-slate-700">{s.porsi_siswa_4_6 ?? 0}</span></>) : (<>Siswa: <span className="font-bold text-slate-700">{s.porsi_siswa ?? 0}</span></>)}<br />Guru: <span className="font-bold text-slate-700">{s.porsi_guru ?? 0}</span> · Tendik: <span className="font-bold text-slate-700">{s.porsi_tendik ?? 0}</span> · Kader: <span className="font-bold text-slate-700">{s.porsi_kader ?? 0}</span>
+                              </p>
+                            </div>
+                            {/* Total */}
+                            <div className="col-span-1 text-center">
+                              <span className="text-[14px] font-extrabold text-[#0F2650]">{s.target_porsi}</span>
+                            </div>
+                            {/* Aksi — Always Visible */}
+                            <div className="col-span-2 flex items-center justify-center gap-2">
+                              <button onClick={() => handleEditSekolah(s)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 hover:text-blue-700 transition-all duration-200" title="Edit">
+                                <Pencil size={15} />
+                              </button>
+                              <button onClick={() => handleDeleteSekolah(s.id)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 hover:text-red-700 transition-all duration-200" title="Hapus">
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {listSekolah.length === 0 && (
+                          <div className="px-5 py-16 text-center">
+                            <School size={32} className="mx-auto text-slate-200 mb-3" />
+                            <p className="text-sm font-semibold text-slate-400">Belum ada titik layanan terdaftar</p>
+                            <p className="text-[11px] text-slate-300 mt-1">Gunakan form di atas untuk menambah data baru</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
