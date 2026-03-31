@@ -190,11 +190,10 @@ export default function DashboardSPPGPage() {
               <button
                 key={item.label}
                 onClick={() => router.push(item.href)}
-                className={`w-full flex items-center gap-4 px-4 py-4 text-xs font-black uppercase rounded-2xl transition-all duration-300 backdrop-blur-sm ${
-                  isActive
+                className={`w-full flex items-center gap-4 px-4 py-4 text-xs font-black uppercase rounded-2xl transition-all duration-300 backdrop-blur-sm ${isActive
                     ? 'bg-white/10 text-white shadow-lg hover:bg-white/20'
                     : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-                }`}
+                  }`}
               >
                 <item.icon size={24} className="shrink-0" />
                 <span className={sidebarOpen ? 'block' : 'hidden'}>{item.label}</span>
