@@ -21,36 +21,120 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { data: user, error } = await supabase
+      // ===== STEP 1: Cek apakah email terdaftar di users_app =====
+      console.log('[LOGIN] Step 1 — Mencari email:', email.trim())
+      const { data: userByEmail, error: emailErr } = await supabase
         .from('users_app')
         .select('*')
         .eq('email', email.trim())
-        .eq('password', password.trim())
         .maybeSingle()
 
-      if (error || !user) {
-        toast('error', 'Email atau Password salah!', 'Periksa kembali kredensial Anda.')
-      } else {
-        if (user.role === 'pending') {
-          toast('warning', 'Akun dalam verifikasi', 'Akun Anda sedang menunggu aktivasi oleh Admin.')
-          setLoading(false)
-          return
-        }
+      if (emailErr) {
+        console.error('[LOGIN] Error query email:', emailErr.message, emailErr)
+        toast('error', 'Kesalahan Database', emailErr.message)
+        setLoading(false)
+        return
+      }
 
-        localStorage.clear()
-        localStorage.setItem('user_role', user.role)
-        localStorage.setItem('unit_id', user.sppg_unit_id)
+      if (!userByEmail) {
+        console.warn('[LOGIN] Email tidak ditemukan di users_app:', email.trim())
+        toast('error', 'Email Tidak Terdaftar', 'Akun dengan email ini belum pernah didaftarkan.')
+        setLoading(false)
+        return
+      }
 
-        if (user.role === 'it') {
-          router.push('/it')
-        } else if (user.role === 'korwil') {
-          router.push('/korwil')
-        } else if (user.role === 'sppg') {
-          router.push(`/sppg/dashboard/${user.sppg_unit_id}`)
+      // ===== STEP 2: Email ditemukan, cek password =====
+      console.log('[LOGIN] Step 2 — Email ditemukan, cek password. Role:', userByEmail.role, 'Unit ID:', userByEmail.sppg_unit_id)
+      if (userByEmail.password !== password.trim()) {
+        console.warn('[LOGIN] Password tidak cocok untuk email:', email.trim())
+        toast('error', 'Password Salah!', 'Password yang Anda masukkan tidak sesuai.')
+        setLoading(false)
+        return
+      }
+
+      // ===== STEP 3: Cek status role (pending / aktif) =====
+      console.log('[LOGIN] Step 3 — Password cocok. Cek role:', userByEmail.role)
+      if (userByEmail.role === 'pending') {
+        console.warn('[LOGIN] Akun masih pending:', email.trim())
+        toast('warning', 'Akun dalam verifikasi', 'Akun Anda sedang menunggu aktivasi oleh Admin.')
+        setLoading(false)
+        return
+      }
+
+      // ===== STEP 4: Untuk role SPPG, cek apakah data profil di daftar_sppg ada =====
+      let unitId = userByEmail.sppg_unit_id
+
+      if (userByEmail.role === 'sppg') {
+        console.log('[LOGIN] Step 4 — Role SPPG, cek profil di daftar_sppg. Unit ID:', unitId)
+
+        if (!unitId) {
+          // User SPPG tapi tidak punya unit_id sama sekali — auto-create
+          console.warn('[LOGIN] User SPPG tanpa sppg_unit_id, membuat profil baru...')
+          const { data: newUnit, error: insertErr } = await supabase
+            .from('daftar_sppg')
+            .insert([{ nama_unit: email.trim().split('@')[0], kepala_unit: '-' }])
+            .select()
+            .single()
+
+          if (insertErr || !newUnit) {
+            console.error('[LOGIN] Gagal auto-create daftar_sppg:', insertErr?.message)
+            toast('error', 'Data Profil Gagal Dibuat', 'Gagal membuat data profil SPPG otomatis. Hubungi Admin.')
+            setLoading(false)
+            return
+          }
+
+          // Update users_app dengan unit_id baru
+          unitId = newUnit.id
+          await supabase.from('users_app').update({ sppg_unit_id: unitId }).eq('id', userByEmail.id)
+          console.log('[LOGIN] Auto-create profil berhasil. New Unit ID:', unitId)
+        } else {
+          // Cek apakah row di daftar_sppg benar-benar ada
+          const { data: existingUnit, error: unitErr } = await supabase
+            .from('daftar_sppg')
+            .select('id')
+            .eq('id', unitId)
+            .maybeSingle()
+
+          if (unitErr) {
+            console.error('[LOGIN] Error cek daftar_sppg:', unitErr.message, unitErr)
+          }
+
+          if (!existingUnit) {
+            // Row di daftar_sppg hilang / tidak ada — auto re-create via upsert
+            console.warn('[LOGIN] Unit ID', unitId, 'tidak ditemukan di daftar_sppg. Auto-create (upsert)...')
+            const { error: upsertErr } = await supabase
+              .from('daftar_sppg')
+              .upsert({ id: unitId, nama_unit: email.trim().split('@')[0], kepala_unit: '-' })
+
+            if (upsertErr) {
+              console.error('[LOGIN] Gagal upsert daftar_sppg:', upsertErr.message)
+              toast('error', 'Data Profil Belum Terdaftar', 'Data profil SPPG Anda tidak ditemukan dan gagal dibuat ulang. Hubungi Admin IT.')
+              setLoading(false)
+              return
+            }
+            console.log('[LOGIN] Upsert profil berhasil untuk Unit ID:', unitId)
+          } else {
+            console.log('[LOGIN] Profil daftar_sppg ditemukan. OK.')
+          }
         }
       }
-    } catch (err) {
-      toast('error', 'Kesalahan Sistem', 'Silakan coba beberapa saat lagi.')
+
+      // ===== STEP 5: Login berhasil — simpan session & redirect =====
+      console.log('[LOGIN] Step 5 — Login berhasil! Role:', userByEmail.role, 'Unit ID:', unitId)
+      localStorage.clear()
+      localStorage.setItem('user_role', userByEmail.role)
+      localStorage.setItem('unit_id', unitId || '')
+
+      if (userByEmail.role === 'it') {
+        router.push('/it')
+      } else if (userByEmail.role === 'korwil') {
+        router.push('/korwil')
+      } else if (userByEmail.role === 'sppg') {
+        router.push(`/sppg/dashboard/${unitId}`)
+      }
+    } catch (err: any) {
+      console.error('[LOGIN] Unexpected error:', err?.message || err)
+      toast('error', 'Kesalahan Sistem', `Silakan coba beberapa saat lagi. (${err?.message || 'Unknown error'})`)
     } finally {
       setLoading(false)
     }
