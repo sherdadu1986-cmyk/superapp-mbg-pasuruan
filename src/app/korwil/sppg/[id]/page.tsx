@@ -69,7 +69,7 @@ export default function KorwilSPPGDetailPage() {
 
   if (loading && !unit) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/30 gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F9FAFB] gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
         <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest animate-pulse">Memuat Detail SPPG...</p>
       </div>
@@ -106,81 +106,82 @@ export default function KorwilSPPGDetailPage() {
     ]},
   ]
 
-  const legalitasItems = [
-    { key: 'ikl', label: 'IKL', desc: 'Izin Komitmen Lingkungan' },
-    { key: 'slhs', label: 'SLHS', desc: 'Sertifikat Laik Hygiene Sanitasi' },
-    { key: 'smo', label: 'SMO', desc: 'Surat Memulai Operasional' },
-    { key: 'bpjs', label: 'BPJS', desc: 'Jaminan Sosial Tenaga Kerja' },
+  const sertifikasiItems = [
+    { key: 'slhs', label: 'Sertifikat SLHS', desc: 'Sertifikat Laik Higiene Sanitasi' },
+    { key: 'sertifikat_halal', label: 'Sertifikat Halal', desc: 'Sertifikasi Halal dari BPJPH/MUI' },
+    { key: 'sertifikat_haccp', label: 'Sertifikat HACCP', desc: 'Hazard Analysis and Critical Control Points' },
+    { key: 'sertifikat_chef', label: 'Sertifikat Chef', desc: 'Sertifikasi Kompetensi Koki' },
+    { key: 'sertifikat_iso22000', label: 'Sertifikat ISO 22000', desc: 'Food Safety Management System' },
+    { key: 'sertifikat_iso45001', label: 'Sertifikat ISO 45001 K3', desc: 'Keselamatan dan Kesehatan Kerja' },
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 text-slate-800 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#F9FAFB] text-slate-800 font-sans relative">
 
-      {/* DECORATIVE BLOBS */}
-      <div className="fixed top-[-100px] left-[-100px] w-[500px] h-[500px] bg-indigo-400/15 rounded-full blur-3xl pointer-events-none z-0" />
-      <div className="fixed bottom-[-80px] left-[-60px] w-[400px] h-[400px] bg-emerald-400/15 rounded-full blur-3xl pointer-events-none z-0" />
-
-      {/* SIDEBAR */}
-      <aside className="w-24 lg:w-72 bg-white/40 backdrop-blur-xl border-r border-white/50 fixed h-full z-50 transition-all" style={{ boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.6), inset 0 -1px 1px rgba(255,255,255,0.3), 0 10px 40px -10px rgba(0,0,0,0.08)' }}>
-        <div className="p-8 border-b border-white/20 flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-500/20 text-white">
-            <Settings size={24} />
+      {/* SIDEBAR — SOLID DARK NAVY */}
+      <aside className="w-20 lg:w-64 bg-[#111827] fixed h-full z-50 transition-all duration-300 flex flex-col">
+        <div className="p-5 lg:px-6 lg:py-7 border-b border-white/[0.06] flex items-center gap-3.5">
+          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
+            <Settings size={20} className="text-white" />
           </div>
           <div className="hidden lg:block">
-            <h1 className="font-black tracking-tighter text-xl italic text-slate-900 uppercase leading-none">KORWIL</h1>
-            <p className="text-[9px] font-black text-slate-400 tracking-[0.3em] uppercase mt-1">Control Panel</p>
+            <h1 className="font-extrabold tracking-tight text-[15px] text-white leading-none">KORWIL</h1>
+            <p className="text-[10px] font-medium text-slate-500 tracking-wider mt-0.5">Control Panel</p>
           </div>
         </div>
 
-        <nav className="p-6 space-y-3">
-          <button onClick={() => router.push('/korwil')} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 text-slate-500 hover:bg-white/50 hover:text-slate-800">
-            <BarChart3 size={20} />
-            <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Monitoring</span>
-          </button>
-          <button onClick={() => router.push('/korwil/monitoring-wilayah')} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 text-slate-500 hover:bg-white/50 hover:text-slate-800">
-            <Map size={20} />
-            <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Peta Wilayah</span>
-          </button>
-          <button className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 bg-indigo-600 text-white shadow-xl shadow-indigo-600/10">
-            <Database size={20} />
-            <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Data SPPG</span>
-          </button>
-          <button onClick={() => router.push('/korwil')} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 text-slate-500 hover:bg-white/50 hover:text-slate-800">
-            <Camera size={20} />
-            <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Galeri</span>
-          </button>
-          <button onClick={() => router.push('/korwil/akun')} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 text-slate-500 hover:bg-white/50 hover:text-slate-800">
-            <Users size={20} />
-            <span className="hidden lg:block font-bold text-xs uppercase tracking-widest">Akun Pengguna</span>
-          </button>
+        <nav className="flex-1 p-3 lg:p-4 space-y-1.5 mt-2">
+          {[
+            { label: 'Monitoring', icon: BarChart3, action: () => router.push('/korwil'), isActive: false },
+            { label: 'Peta Wilayah', icon: Map, action: () => router.push('/korwil/monitoring-wilayah'), isActive: false },
+            { label: 'Galeri', icon: Camera, action: () => router.push('/korwil'), isActive: false },
+            { label: 'Data SPPG', icon: Database, action: () => router.push('/korwil/sppg'), isActive: true },
+            { label: 'Akun Pengguna', icon: Users, action: () => router.push('/korwil/akun'), isActive: false },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={item.action}
+              className={`w-full flex items-center gap-3.5 px-3.5 py-3 lg:px-4 lg:py-3 rounded-xl transition-all duration-200 group relative ${
+                item.isActive
+                  ? 'bg-emerald-500/10 text-emerald-400'
+                  : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
+              }`}
+            >
+              {item.isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-emerald-400 rounded-r-full" />
+              )}
+              <item.icon size={20} className="shrink-0" />
+              <span className="hidden lg:block font-semibold text-[13px] tracking-wide">{item.label}</span>
+            </button>
+          ))}
         </nav>
 
-        <div className="absolute bottom-8 w-full px-6">
-          <button onClick={() => router.push('/')} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-rose-500 hover:bg-rose-50 transition-all font-bold text-xs uppercase tracking-widest">
-            <LogOut size={20} />
-            <span className="hidden lg:block">Sign Out</span>
+        <div className="p-3 lg:p-4 border-t border-white/[0.06]">
+          <button onClick={() => router.push('/')} className="w-full flex items-center gap-3.5 px-3.5 py-3 lg:px-4 lg:py-3 rounded-xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200">
+            <LogOut size={20} className="shrink-0" />
+            <span className="hidden lg:block font-semibold text-[13px]">Sign Out</span>
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="pl-24 lg:pl-72 p-6 transition-all">
-        <div className="max-w-6xl mx-auto space-y-5">
+      <main className="pl-20 lg:pl-64 min-h-screen transition-all">
+        <div className="max-w-6xl mx-auto p-5 lg:p-8 space-y-5">
 
           {/* HEADER */}
           <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-4">
-              <button onClick={() => router.push('/korwil/sppg')} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+              <button onClick={() => router.push('/korwil/sppg')} className="p-2 hover:bg-white rounded-xl text-slate-400 transition-colors border border-[#E5E7EB]">
                 <ArrowLeft size={20} />
               </button>
               <div>
-                <h2 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase leading-none">{unit?.nama_unit}</h2>
+                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">{unit?.nama_unit}</h2>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold uppercase tracking-wider border border-emerald-200">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Operasional Aktif
                   </span>
                   {unit?.kecamatan && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-medium uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-slate-500 rounded-full text-[10px] font-medium border border-[#E5E7EB]">
                       <MapPin size={10} /> {unit.kecamatan}
                     </span>
                   )}
@@ -190,18 +191,18 @@ export default function KorwilSPPGDetailPage() {
           </header>
 
           {/* TAB NAVIGATION */}
-          <div className="bg-white/60 backdrop-blur-sm rounded-xl border border-white/50 p-1.5 flex gap-1" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)' }}>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-1.5 flex gap-1 shadow-sm">
             {tabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                   activeTab === tab.key
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-                    : 'text-slate-500 hover:bg-white/80 hover:text-slate-700'
+                    ? 'bg-[#111827] text-white'
+                    : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
                 }`}
               >
-                <tab.icon size={16} />
+                <tab.icon size={15} />
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
@@ -216,22 +217,22 @@ export default function KorwilSPPGDetailPage() {
               <div className="space-y-5">
                 {/* Stats Row */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 text-center">
+                  <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-5 text-center">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Kapasitas Porsi</p>
                     <p className="text-3xl font-bold text-slate-800 mt-1">{(totalPM || 0).toLocaleString()}</p>
                     <p className="text-[10px] text-emerald-500 font-medium mt-1">porsi/hari</p>
                   </div>
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 text-center">
+                  <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm p-5 text-center">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Titik Layanan</p>
                     <p className="text-3xl font-bold text-slate-800 mt-1">{totalSekolah}</p>
-                    <p className="text-[10px] text-indigo-500 font-medium mt-1">sekolah aktif</p>
+                    <p className="text-[10px] text-emerald-500 font-medium mt-1">sekolah aktif</p>
                   </div>
                 </div>
 
                 {/* Card 1: Informasi Unit */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-indigo-50 text-indigo-500 rounded-lg flex items-center justify-center">
+                    <div className="w-8 h-8 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center">
                       <Building2 size={18} />
                     </div>
                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Informasi Unit</h3>
@@ -252,9 +253,9 @@ export default function KorwilSPPGDetailPage() {
                 </div>
 
                 {/* Card 2: Personel & Kemitraan */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-amber-50 text-amber-500 rounded-lg flex items-center justify-center">
+                    <div className="w-8 h-8 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center">
                       <Users size={18} />
                     </div>
                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Data Personel & Kemitraan</h3>
@@ -283,34 +284,39 @@ export default function KorwilSPPGDetailPage() {
                   </div>
                 </div>
 
-                {/* Card 3: Legalitas */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                {/* Card 3: Sertifikasi Standar Kompetensi */}
+                <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
                     <div className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-lg flex items-center justify-center">
                       <Shield size={18} />
                     </div>
-                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Status Legalitas</h3>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Sertifikasi Standar Kompetensi</h3>
+                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">Status kelengkapan sertifikasi unit SPPG</p>
+                    </div>
                   </div>
-                  <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {legalitasItems.map((item) => {
+                  <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {sertifikasiItems.map((item) => {
                       const isActive = unit?.[item.key] ?? false
                       return (
                         <div
                           key={item.key}
-                          className={`p-4 rounded-xl border transition-all ${
-                            isActive ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'
+                          className={`p-4 rounded-xl border transition-all duration-200 ${
+                            isActive ? 'border-emerald-200 bg-emerald-50/40' : 'border-[#E5E7EB] bg-white'
                           }`}
                         >
-                          <div className="flex items-center gap-2 mb-2">
-                            {isActive ? <BadgeCheck size={18} className="text-emerald-500" /> : <XCircle size={18} className="text-red-400" />}
-                            <span className="text-sm font-bold text-slate-700">{item.label}</span>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {isActive ? <BadgeCheck size={17} className="text-emerald-500" /> : <XCircle size={17} className="text-slate-300" />}
+                              <span className="text-[13px] font-bold text-slate-700">{item.label}</span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
+                              isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {isActive ? '✓ Ada' : '—'}
+                            </span>
                           </div>
-                          <p className="text-[10px] text-slate-400 font-medium leading-snug mb-2">{item.desc}</p>
-                          <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                            isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
-                          }`}>
-                            {isActive ? '✓ Terpenuhi' : '✗ Belum'}
-                          </span>
+                          <p className="text-[10px] text-slate-400 font-medium leading-snug">{item.desc}</p>
                         </div>
                       )
                     })}

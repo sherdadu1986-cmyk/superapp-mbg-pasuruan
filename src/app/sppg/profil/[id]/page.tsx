@@ -124,44 +124,60 @@ export default function ProfilSPPGPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('daftar_sppg').update({
-        id_dapur: formData.idDapur,
-        no: formData.no,
-        sppi_batch: formData.sppiBatch,
-        kepala_unit: formData.namaKaSppg,
-        gelar_ka_sppg: formData.gelarKaSppg,
-        no_hp_ka_sppg: formData.noHpKaSppg,
-        skep_nomor: formData.skepNomor,
-        id_sppg: formData.idSppg,
-        tanggal_operasional: formData.tanggalOperasional,
-        nama_unit: formData.namaSppg,
-        alamat: formData.alamatLengkap,
-        kecamatan: formData.kecamatan,
-        gmaps: formData.gmaps,
-        nama_mitra: formData.namaMitra,
-        no_hp_mitra: formData.noHpMitra,
-        yayasan: formData.yayasan,
-        nama_perwakilan_yayasan: formData.namaPerwakilanYayasan,
-        no_hp_perwakilan_yayasan: formData.noHpPerwakilanYayasan,
-        slhs: legalitas.slhs,
-        sertifikat_halal: legalitas.sertifikat_halal,
-        sertifikat_haccp: legalitas.sertifikat_haccp,
-        sertifikat_chef: legalitas.sertifikat_chef,
-        sertifikat_iso22000: legalitas.sertifikat_iso22000,
-        sertifikat_iso45001: legalitas.sertifikat_iso45001,
-      }).eq('id', id)
+      // Build payload explicitly — HANYA kolom yang ADA di tabel daftar_sppg
+      const payload = {
+        // -- Kolom Identitas & Info Unit --
+        id_dapur: formData.idDapur || null,
+        no: formData.no || null,
+        sppi_batch: formData.sppiBatch || null,
+        kepala_unit: formData.namaKaSppg || null,
+        gelar_ka_sppg: formData.gelarKaSppg || null,
+        no_hp_ka_sppg: formData.noHpKaSppg || null,
+        skep_nomor: formData.skepNomor || null,
+        tanggal_operasional: formData.tanggalOperasional || null,
+        nama_unit: formData.namaSppg || null,
+        alamat: formData.alamatLengkap || null,
+        kecamatan: formData.kecamatan || null,
+        gmaps: formData.gmaps || null,
+        // -- Kolom Mitra & Yayasan --
+        nama_mitra: formData.namaMitra || null,
+        no_hp_mitra: formData.noHpMitra || null,
+        yayasan: formData.yayasan || null,
+        nama_perwakilan_yayasan: formData.namaPerwakilanYayasan || null,
+        no_hp_perwakilan_yayasan: formData.noHpPerwakilanYayasan || null,
+        // -- Sertifikasi (BOOLEAN) --
+        slhs: legalitas.slhs ?? false,
+        sertifikat_halal: legalitas.sertifikat_halal ?? false,
+        sertifikat_haccp: legalitas.sertifikat_haccp ?? false,
+        sertifikat_chef: legalitas.sertifikat_chef ?? false,
+        sertifikat_iso22000: legalitas.sertifikat_iso22000 ?? false,
+        sertifikat_iso45001: legalitas.sertifikat_iso45001 ?? false,
+      }
+
+      // DEBUG: Log payload sebelum kirim
+      console.log('📤 Payload yang dikirim ke Supabase:', JSON.stringify(payload, null, 2))
+      console.log('🆔 Target ID:', id)
+
+      const { error } = await supabase.from('daftar_sppg').update(payload).eq('id', id)
 
       if (error) {
-        console.error('Supabase update error:', error)
-        toast('error', 'Gagal Menyimpan', error.message || error.details || 'Error tidak diketahui dari Supabase.')
+        // DETAILED error logging
+        console.error('❌ Supabase update error:')
+        console.error('  → message:', error.message)
+        console.error('  → details:', error.details)
+        console.error('  → hint:', error.hint)
+        console.error('  → code:', error.code)
+        console.error('  → Full object:', JSON.stringify(error, null, 2))
+        toast('error', 'Gagal Menyimpan', error.message || error.details || error.hint || 'Error tidak diketahui. Cek Console (F12).')
       } else {
+        console.log('✅ Profil berhasil disimpan!')
         toast('success', 'Profil Tersimpan!', 'Data profil SPPG berhasil diperbarui.')
         setBackupForm(formData)
         setBackupLegalitas(legalitas)
         setIsEditing(false)
       }
     } catch (err: any) {
-      console.error('Save error:', err)
+      console.error('💥 Save catch error:', err?.message, err)
       toast('error', 'Kesalahan Sistem', err?.message || 'Terjadi kesalahan tak terduga.')
     } finally {
       setSaving(false)
