@@ -684,55 +684,43 @@ export default function SuperKorwilPage() {
           ) : (
             <>
               {/* ======== GALERI VIEW ======== */}
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">Galeri Dokumentasi</h2>
-                  <div className="flex items-center gap-2.5 mt-2.5">
-                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-[#E5E7EB] text-slate-500">
-                      <Camera size={13} className="text-slate-400" />
-                      <span className="text-[11px] font-semibold">Bukti Operasional Harian</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-[#E5E7EB] text-slate-500">
-                      <Clock size={13} className="text-slate-400" />
-                      <span className="text-[11px] font-semibold">{formatDisplayDate(monitoringDate)}</span>
+                  <h2 className="text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight leading-none">Galeri Dokumentasi</h2>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 transition-colors px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">
+                      <Camera size={14} className="text-indigo-500" />
+                      <span className="text-[11px] font-semibold uppercase tracking-widest">Bukti Operasional</span>
                     </div>
                   </div>
                 </div>
 
-                {/* DATE STEPPER for galeri */}
-                <div className="flex items-center gap-2.5">
-                  <div className="bg-white rounded-lg border border-[#E5E7EB] flex items-center overflow-hidden">
-                    <button onClick={() => shiftDate(-1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-r border-[#E5E7EB]">
-                      <ChevronLeft size={15} className="text-slate-400" />
+                {/* GALLERY COUNTER & DATE STEPPER */}
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+                    <ImageIcon size={16} />
+                    <span className="text-sm font-bold tracking-wide">{galeriData.length} Foto Masuk</span>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex items-center overflow-hidden">
+                    <button onClick={() => shiftDate(-1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-r border-slate-100">
+                      <ChevronLeft size={16} className="text-slate-400" />
                     </button>
-                    <div className="px-3.5 py-2 flex items-center gap-2">
-                      <Calendar size={13} className="text-slate-400" />
-                      <span className="text-[12px] font-semibold text-slate-700 min-w-[120px] text-center">{formatDisplayDate(monitoringDate)}</span>
+                    <div className="px-4 py-2 flex items-center gap-2 bg-slate-50/50">
+                      <Calendar size={14} className="text-indigo-500" />
+                      <span className="text-[12px] font-bold text-slate-700 min-w-[120px] text-center">{formatDisplayDate(monitoringDate)}</span>
                     </div>
-                    <button onClick={() => shiftDate(1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-l border-[#E5E7EB]">
-                      <ChevronRight size={15} className="text-slate-400" />
+                    <button onClick={() => shiftDate(1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-l border-slate-100">
+                      <ChevronRight size={16} className="text-slate-400" />
                     </button>
                   </div>
                   {monitoringDate !== today && (
-                    <button onClick={() => setMonitoringDate(today)} className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-[11px] font-semibold hover:bg-slate-200 transition-all border border-[#E5E7EB]">
+                    <button onClick={() => setMonitoringDate(today)} className="px-4 py-2.5 bg-slate-800 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-700 transition-all shadow-md">
                       Hari Ini
                     </button>
                   )}
                 </div>
               </header>
-
-              {/* GALLERY COUNTER */}
-              <div className="flex items-center gap-4">
-                <div className="bg-white border border-[#E5E7EB] px-6 py-3.5 rounded-xl flex items-center gap-3.5 shadow-sm">
-                  <div className="w-9 h-9 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center">
-                    <ImageIcon size={18} />
-                  </div>
-                  <div>
-                    <p className="text-xl font-extrabold text-slate-800 tracking-tight leading-none">{galeriData.length}</p>
-                    <p className="text-[10px] font-medium text-slate-400 mt-0.5">Foto Masuk</p>
-                  </div>
-                </div>
-              </div>
 
               {/* PHOTO GRID */}
               {galeriLoading ? (
@@ -746,42 +734,44 @@ export default function SuperKorwilPage() {
                   <p className="text-sm text-slate-400 font-medium mt-2">Tidak ada foto operasional untuk {formatDisplayDate(monitoringDate)}</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {galeriData.filter(item => item.foto_url && item.foto_url.startsWith('http')).map(item => (
                     <div
                       key={item.id}
                       onClick={() => setSelectedFoto(item)}
-                      className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden group cursor-pointer hover:border-slate-300 hover:shadow-lg transition-all duration-300 shadow-sm"
+                      className="group bg-white rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl hover:-translate-y-1 hover:shadow-indigo-500/10 transition-all duration-300 border border-slate-100 flex flex-col"
                     >
                       {/* Photo Area */}
-                      <div className="relative w-full aspect-[4/3] overflow-hidden bg-slate-100">
+                      <div className="relative w-full aspect-[4/3] bg-slate-100 overflow-hidden shrink-0">
                         <Image
                           src={item.foto_url || '/placeholder.png'}
                           alt={`Dokumentasi ${item.nama_unit}`}
                           fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                          className="object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
                         />
                         {/* Hover Overlay */}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                          <span className="text-[11px] font-semibold text-white bg-white/20 backdrop-blur-md px-4 py-2 rounded-lg border border-white/20">Klik untuk Perbesar</span>
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                          <span className="w-fit text-[10px] font-semibold text-white bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 shadow-lg flex items-center gap-1.5">
+                            <Utensils size={12} /> Buka Preview
+                          </span>
                         </div>
                       </div>
 
                       {/* Info Area */}
-                      <div className="p-4 space-y-2.5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-all">
-                            <Utensils size={15} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-slate-800 leading-none truncate group-hover:text-emerald-700 transition-colors">{item.nama_unit}</p>
-                            <p className="text-[10px] font-medium text-slate-400 mt-1 truncate">&quot;{item.menu_makanan}&quot;</p>
-                          </div>
+                      <div className="p-4 space-y-3 flex flex-col flex-1">
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-slate-800 leading-tight truncate group-hover:text-indigo-600 transition-colors" title={item.nama_unit}>{item.nama_unit}</p>
+                          <p className="text-[11px] font-medium italic text-slate-500 mt-1 truncate" title={item.menu_makanan}>"{item.menu_makanan}"</p>
                         </div>
-                        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100">
-                          <Clock size={11} className="text-slate-400 shrink-0" />
-                          <span className="text-[10px] font-medium text-slate-400">{item.tanggal_ops}</span>
+                        <div className="flex justify-between items-center pt-3 border-t border-slate-100 shrink-0">
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={12} className="text-orange-400 shrink-0" />
+                            <span className="text-[10px] font-bold text-slate-400 tracking-wider">{item.tanggal_ops}</span>
+                          </div>
+                          <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 shrink-0">
+                            <span className="text-[8px] font-bold text-slate-400">{item.nama_unit.charAt(0)}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -799,45 +789,50 @@ export default function SuperKorwilPage() {
       {/* ============================================ */}
       {selectedFoto && (
         <div
-          className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6 lg:p-12 animate-in fade-in duration-300"
           onClick={() => setSelectedFoto(null)}
         >
           <div
-            className="relative max-w-4xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-[#E5E7EB]"
+            className="relative max-w-5xl w-full bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl shadow-indigo-500/10 border border-white/10 flex flex-col items-center"
             onClick={e => e.stopPropagation()}
           >
             {/* Close Button */}
             <button
               onClick={() => setSelectedFoto(null)}
-              className="absolute top-4 right-4 z-10 p-2.5 bg-white/90 backdrop-blur-md text-slate-500 hover:text-slate-800 hover:bg-white rounded-xl transition-all border border-[#E5E7EB]"
+              className="absolute top-4 right-4 sm:top-6 sm:right-6 z-10 p-2.5 bg-black/40 backdrop-blur-md text-slate-300 hover:text-white hover:bg-black/60 rounded-full transition-all border border-white/10"
             >
               <X size={20} />
             </button>
 
             {/* Large Image */}
-            <div className="relative w-full aspect-[16/10] bg-slate-100">
+            <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] lg:aspect-[21/9] max-h-[70vh] flex items-center justify-center bg-black/50">
               <Image
                 src={selectedFoto.foto_url || '/placeholder.png'}
                 alt={`Dokumentasi ${selectedFoto.nama_unit}`}
                 fill
-                sizes="(max-width: 768px) 100vw, 900px"
+                sizes="100vw"
                 className="object-contain"
                 priority
               />
             </div>
 
-            {/* Caption */}
-            <div className="p-6 flex items-center gap-4 border-t border-[#E5E7EB]">
-              <div className="w-11 h-11 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center shrink-0">
-                <Utensils size={20} />
+            {/* Caption (Glassmorphism over dark) */}
+            <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-slate-900/40 backdrop-blur-3xl border-t border-white/5">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/30">
+                  <Utensils size={22} className="shrink-0" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base sm:text-lg font-extrabold text-white leading-tight truncate">{selectedFoto.nama_unit}</p>
+                  <p className="text-[12px] sm:text-sm font-medium text-slate-400 italic mt-1 truncate">"{selectedFoto.menu_makanan}"</p>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-bold text-slate-900 leading-none truncate">{selectedFoto.nama_unit}</p>
-                <p className="text-[11px] font-medium text-slate-400 mt-1.5 truncate">Menu: &quot;{selectedFoto.menu_makanan}&quot;</p>
-              </div>
-              <div className="text-right shrink-0 hidden sm:block">
-                <p className="text-[10px] font-medium text-slate-400">Tanggal Ops</p>
-                <p className="text-sm font-bold text-slate-700 mt-0.5">{selectedFoto.tanggal_ops}</p>
+              <div className="text-left sm:text-right shrink-0 bg-white/5 px-5 py-2.5 rounded-xl border border-white/10 flex items-center sm:items-end flex-col justify-center">
+                <p className="text-[9px] uppercase tracking-[0.2em] font-bold text-slate-500">Operasional</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <Clock size={12} className="text-emerald-400" />
+                  <p className="text-[13px] font-bold text-slate-300">{selectedFoto.tanggal_ops}</p>
+                </div>
               </div>
             </div>
           </div>
