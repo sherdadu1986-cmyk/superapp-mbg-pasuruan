@@ -1,11 +1,11 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense, Component, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLocalToday } from '@/lib/date'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import {
-  ArrowLeft, Utensils, Activity, RotateCcw, ArrowRight, CheckCircle2, Calendar, Layout, Loader2, Camera, AlertTriangle, Edit3, PartyPopper
+  ArrowLeft, Utensils, Activity, RotateCcw, ArrowRight, CheckCircle2, Calendar, Layout, Loader2, Camera, AlertTriangle, Edit3, PartyPopper, RefreshCcw
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 
@@ -33,11 +33,100 @@ const successStyles = `
 .confetti-piece { animation: confetti 2.5s ease-in forwards; }
 `;
 
-export default function InputLaporanPage() {
+// ============================================================
+// ERROR BOUNDARY — Prevents white screen of death
+// ============================================================
+class InputErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; errorMsg: string }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, errorMsg: '' }
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMsg: error?.message || 'Unknown error' }
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[InputLaporan ErrorBoundary]', error, info)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-10 max-w-md w-full text-center space-y-5">
+            <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle size={32} className="text-amber-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Data sedang disiapkan</h2>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                Mohon maaf, halaman ini memerlukan waktu untuk memuat data. Silakan coba lagi dalam beberapa saat.
+              </p>
+              {process.env.NODE_ENV === 'development' && this.state.errorMsg && (
+                <p className="mt-3 text-xs text-rose-400 bg-rose-50 rounded-lg p-3 text-left font-mono break-all">
+                  {this.state.errorMsg}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, errorMsg: '' })
+                window.location.reload()
+              }}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:-translate-y-0.5 transition-all"
+            >
+              <RefreshCcw size={16} /> Muat Ulang
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// ============================================================
+// LOADING SPINNER
+// ============================================================
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <div className="w-14 h-14 bg-white rounded-2xl shadow-lg border border-slate-100 flex items-center justify-center mx-auto">
+          <Loader2 size={28} className="text-indigo-500 animate-spin" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-slate-600">Memuat Form Laporan...</p>
+          <p className="text-[11px] text-slate-400 mt-1">Menyinkronkan data unit & sekolah</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// EMPTY GIZI DEFAULTS (used as safe fallback)
+// ============================================================
+const EMPTY_GIZI = {
+  besar: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
+  kecil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
+}
+
+// ============================================================
+// MAIN FORM COMPONENT (uses useSearchParams)
+// ============================================================
+function InputLaporanForm() {
   const { id } = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const editId = searchParams.get('edit')
+  const editId = searchParams?.get('edit') ?? null
+
+  // --- LOADING STATE ---
+  const [pageLoading, setPageLoading] = useState(true)
 
   const [loading, setLoading] = useState(false)
   const [listSekolah, setListSekolah] = useState<any[]>([])
@@ -60,41 +149,43 @@ export default function InputLaporanPage() {
   const [existingLaporanId, setExistingLaporanId] = useState<string | null>(editId || null)
   const [dupMessage, setDupMessage] = useState('')
 
-  // --- EMPTY FORM DEFAULTS ---
-  const emptyGizi = {
-    besar: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-    kecil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
-  }
+  // --- REALISASI & GIZI (safely initialized) ---
+  const [realisasi, setRealisasi] = useState<Record<string, string>>({})
+  const [gizi, setGizi] = useState(EMPTY_GIZI)
 
   // --- CHECK EXISTING REPORT ON DATE CHANGE (auto-fill or reset) ---
   const checkExistingReport = async (dateVal: string) => {
     if (editId) return // already in edit mode via URL
-    const { data } = await supabase
-      .from('laporan_harian_final')
-      .select('*')
-      .eq('tanggal_ops', dateVal)
-      .eq('unit_id', id)
-      .maybeSingle()
-    if (data) {
-      // AUTO-FILL: populate all fields from existing report
-      setExistingLaporanId(data.id)
-      setMenu(data.menu_makanan || '')
-      setGizi(data.data_gizi || emptyGizi)
-      setRealisasi(data.realisasi_sekolah || {})
-      setExistingFotoUrl(data.foto_url || '')
-      setFoto(null)
-      setPreviewUrl('')
-      setDupMessage('Laporan untuk tanggal ini sudah ada. Anda masuk mode edit.')
-    } else {
-      // RESET: clear all fields for new input
-      setExistingLaporanId(null)
-      setMenu('')
-      setGizi(emptyGizi)
-      setRealisasi({})
-      setExistingFotoUrl('')
-      setFoto(null)
-      setPreviewUrl('')
-      setDupMessage('')
+    try {
+      const { data } = await supabase
+        .from('laporan_harian_final')
+        .select('*')
+        .eq('tanggal_ops', dateVal)
+        .eq('unit_id', id)
+        .maybeSingle()
+      if (data) {
+        // AUTO-FILL: populate all fields from existing report
+        setExistingLaporanId(data?.id ?? null)
+        setMenu(data?.menu_makanan ?? '')
+        setGizi(data?.data_gizi ?? EMPTY_GIZI)
+        setRealisasi(data?.realisasi_sekolah ?? {})
+        setExistingFotoUrl(data?.foto_url ?? '')
+        setFoto(null)
+        setPreviewUrl('')
+        setDupMessage('Laporan untuk tanggal ini sudah ada. Anda masuk mode edit.')
+      } else {
+        // RESET: clear all fields for new input
+        setExistingLaporanId(null)
+        setMenu('')
+        setGizi(EMPTY_GIZI)
+        setRealisasi({})
+        setExistingFotoUrl('')
+        setFoto(null)
+        setPreviewUrl('')
+        setDupMessage('')
+      }
+    } catch (err) {
+      console.error('[checkExistingReport] Error:', err)
     }
   }
 
@@ -134,28 +225,34 @@ export default function InputLaporanPage() {
       setIsCompressing(false)
     }
   }
-  const [realisasi, setRealisasi] = useState<Record<string, string>>({})
-  const [gizi, setGizi] = useState({
-    besar: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-    kecil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
-  })
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: u } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
-      const { data: s } = await supabase.from('daftar_sekolah').select('*').eq('sppg_id', id).order('nama_sekolah')
-      if (u) setUnit(u)
-      if (s) setListSekolah(s)
+      setPageLoading(true)
+      try {
+        const { data: u } = await supabase.from('daftar_sppg').select('*').eq('id', id).single()
+        const { data: s } = await supabase.from('daftar_sekolah').select('*').eq('sppg_id', id).order('nama_sekolah')
+        if (u) setUnit(u)
+        if (s) setListSekolah(s)
 
-      if (editId) {
-        const { data: lap } = await supabase.from('laporan_harian_final').select('*').eq('id', editId).single()
-        if (lap) {
-          setTanggal(lap.tanggal_ops); setMenu(lap.menu_makanan); setGizi(lap.data_gizi); setRealisasi(lap.realisasi_sekolah); setExistingFotoUrl(lap.foto_url || '');
-          setExistingLaporanId(editId)
+        if (editId) {
+          const { data: lap } = await supabase.from('laporan_harian_final').select('*').eq('id', editId).single()
+          if (lap) {
+            setTanggal(lap?.tanggal_ops ?? getLocalToday())
+            setMenu(lap?.menu_makanan ?? '')
+            setGizi(lap?.data_gizi ?? EMPTY_GIZI)
+            setRealisasi(lap?.realisasi_sekolah ?? {})
+            setExistingFotoUrl(lap?.foto_url ?? '')
+            setExistingLaporanId(editId)
+          }
+        } else {
+          // Auto-check if today already has a report (for new input mode)
+          await checkExistingReport(getLocalToday())
         }
-      } else {
-        // Auto-check if today already has a report (for new input mode)
-        checkExistingReport(getLocalToday())
+      } catch (err) {
+        console.error('[fetchData] Error:', err)
+      } finally {
+        setPageLoading(false)
       }
     }
     fetchData()
@@ -164,6 +261,12 @@ export default function InputLaporanPage() {
   const handleSimpan = async () => {
     if (!menu || !tanggal) {
       toast('warning', 'Lengkapi Data', 'Isi Menu & Tanggal terlebih dahulu!')
+      return
+    }
+
+    // Safety check — unit must be loaded
+    if (!unit) {
+      toast('error', 'Data Belum Siap', 'Data unit belum ter-load. Silakan muat ulang halaman.')
       return
     }
 
@@ -179,7 +282,7 @@ export default function InputLaporanPage() {
         .eq('unit_id', id)
       if (existing && existing.length > 0) {
         // Don't alert — just switch to edit mode
-        setExistingLaporanId(existing[0].id)
+        setExistingLaporanId(existing[0]?.id ?? null)
         setDupMessage('Laporan sudah ada. Klik tombol "Ubah Laporan" untuk menyesuaikan data.')
         return
       }
@@ -192,13 +295,18 @@ export default function InputLaporanPage() {
         const fileName = `${Date.now()}_${id}.jpg`
         const filePath = `dokumentasi_harian/${fileName}`
         await supabase.storage.from('dokumentasi').upload(filePath, foto)
-        finalFotoUrl = supabase.storage.from('dokumentasi').getPublicUrl(filePath).data.publicUrl
+        finalFotoUrl = supabase.storage.from('dokumentasi').getPublicUrl(filePath)?.data?.publicUrl ?? ''
       }
 
       const cleanRealisasi = Object.fromEntries(Object.entries(realisasi).filter(([_, v]) => v !== ""));
       const payload = {
-        unit_id: id, nama_unit: unit.nama_unit, tanggal_ops: tanggal,
-        menu_makanan: menu, data_gizi: gizi, realisasi_sekolah: cleanRealisasi, foto_url: finalFotoUrl
+        unit_id: id,
+        nama_unit: unit?.nama_unit ?? '',
+        tanggal_ops: tanggal,
+        menu_makanan: menu,
+        data_gizi: gizi,
+        realisasi_sekolah: cleanRealisasi,
+        foto_url: finalFotoUrl
       }
 
       const { error } = activeEditId
@@ -216,7 +324,18 @@ export default function InputLaporanPage() {
         sub: 'Terima kasih telah memperbarui data gizi hari ini.'
       })
       setShowSuccess(true)
-    } catch (err: any) { toast('error', 'Gagal Menyimpan', err.message) } finally { setLoading(false) }
+    } catch (err: any) {
+      toast('error', 'Gagal Menyimpan', err?.message ?? 'Terjadi kesalahan.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ============================================================
+  // SHOW LOADING SPINNER while data is being fetched
+  // ============================================================
+  if (pageLoading) {
+    return <LoadingSpinner />
   }
 
   return (
@@ -250,8 +369,8 @@ export default function InputLaporanPage() {
               </div>
             </div>
 
-            <h2 className="text-xl font-bold text-slate-800 mb-2">{successMsg.title}</h2>
-            <p className="text-sm text-slate-500 mb-8">{successMsg.sub}</p>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">{successMsg?.title ?? ''}</h2>
+            <p className="text-sm text-slate-500 mb-8">{successMsg?.sub ?? ''}</p>
 
             <button
               onClick={() => router.push(`/sppg/dashboard/${id}`)}
@@ -280,7 +399,7 @@ export default function InputLaporanPage() {
                 {editId ? 'Perbarui Data' : 'Input Laporan Baru'}
               </h2>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                Unit: {unit?.nama_unit}
+                Unit: {unit?.nama_unit ?? '—'}
               </p>
             </div>
             <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
@@ -314,12 +433,29 @@ export default function InputLaporanPage() {
                     <Activity size={12} /> {tipe}
                   </div>
                   <div className="flex-1 grid grid-cols-5 gap-2">
-                    {['Energi', 'Protein', 'Lemak', 'Karbo', 'Serat'].map(g => (
-                      <div key={g} className="relative">
-                        <input type="number" placeholder={g} className="w-full h-8 px-2 pr-8 bg-slate-50 border border-slate-200 rounded-md text-xs font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all" value={gizi[tipe.toLowerCase() as 'besar' | 'kecil'][g.toLowerCase() as keyof typeof gizi.besar] || ''} onChange={e => setGizi(prev => ({ ...prev, [tipe.toLowerCase()]: { ...prev[tipe.toLowerCase() as 'besar' | 'kecil'], [g.toLowerCase()]: e.target.value } }))} />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-300 uppercase pointer-events-none">{g === 'Energi' ? 'kkal' : 'gr'}</span>
-                      </div>
-                    ))}
+                    {['Energi', 'Protein', 'Lemak', 'Karbo', 'Serat'].map(g => {
+                      const tipeKey = tipe.toLowerCase() as 'besar' | 'kecil'
+                      const giziKey = g.toLowerCase() as keyof typeof EMPTY_GIZI.besar
+                      const currentGiziGroup = gizi?.[tipeKey] ?? EMPTY_GIZI[tipeKey]
+                      return (
+                        <div key={g} className="relative">
+                          <input
+                            type="number"
+                            placeholder={g}
+                            className="w-full h-8 px-2 pr-8 bg-slate-50 border border-slate-200 rounded-md text-xs font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                            value={currentGiziGroup?.[giziKey] ?? ''}
+                            onChange={e => setGizi(prev => ({
+                              ...prev,
+                              [tipeKey]: {
+                                ...(prev?.[tipeKey] ?? EMPTY_GIZI[tipeKey]),
+                                [giziKey]: e.target.value
+                              }
+                            }))}
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-300 uppercase pointer-events-none">{g === 'Energi' ? 'kkal' : 'gr'}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
@@ -332,21 +468,26 @@ export default function InputLaporanPage() {
               </h4>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 max-h-[400px] overflow-y-auto space-y-2">
                 {listSekolah.map(s => (
-                  <div key={s.id} className="py-2 px-3 bg-white border border-slate-200 rounded-lg flex flex-col md:flex-row justify-between items-center gap-3 hover:border-indigo-200 transition-all group">
+                  <div key={s?.id} className="py-2 px-3 bg-white border border-slate-200 rounded-lg flex flex-col md:flex-row justify-between items-center gap-3 hover:border-indigo-200 transition-all group">
                     <div className="flex-1 w-full text-center md:text-left">
-                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tighter leading-none group-hover:text-indigo-600 transition-colors">{s.nama_sekolah}</p>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target: {s.target_porsi}</span>
+                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tighter leading-none group-hover:text-indigo-600 transition-colors">{s?.nama_sekolah ?? '—'}</p>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target: {s?.target_porsi ?? 0}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => setRealisasi(prev => ({ ...prev, [s.id]: s.target_porsi.toString() }))} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold hover:bg-indigo-700 transition-all">{s.target_porsi}</button>
-                      <button onClick={() => setRealisasi(prev => ({ ...prev, [s.id]: '0' }))} className="p-1.5 bg-rose-50 text-rose-500 border border-rose-200 rounded-lg hover:bg-rose-500 hover:text-white transition-all" title="Reset"><RotateCcw size={14} /></button>
+                      <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: String(s?.target_porsi ?? 0) }))} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold hover:bg-indigo-700 transition-all">{s?.target_porsi ?? 0}</button>
+                      <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: '0' }))} className="p-1.5 bg-rose-50 text-rose-500 border border-rose-200 rounded-lg hover:bg-rose-500 hover:text-white transition-all" title="Reset"><RotateCcw size={14} /></button>
                       <div className="flex items-center gap-1">
-                        <input type="number" className="w-20 py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs font-bold outline-none focus:border-indigo-500 transition-all" value={realisasi[s.id] || ''} onChange={e => setRealisasi(prev => ({ ...prev, [s.id]: e.target.value }))} placeholder="0" />
+                        <input type="number" className="w-20 py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs font-bold outline-none focus:border-indigo-500 transition-all" value={realisasi?.[s?.id] ?? ''} onChange={e => setRealisasi(prev => ({ ...prev, [s?.id]: e.target.value }))} placeholder="0" />
                         <span className="text-[9px] font-bold text-slate-300">Pack</span>
                       </div>
                     </div>
                   </div>
                 ))}
+                {listSekolah.length === 0 && (
+                  <div className="py-8 text-center">
+                    <p className="text-xs text-slate-400 font-medium">Belum ada titik layanan terdaftar</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -377,7 +518,7 @@ export default function InputLaporanPage() {
                 {!isCompressing && foto && (
                   <div className="mt-3 flex flex-col items-center gap-1">
                     <div className="px-4 py-1.5 bg-emerald-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-2 uppercase">
-                      <CheckCircle2 size={14} /> {foto.name}
+                      <CheckCircle2 size={14} /> {foto?.name ?? 'foto.jpg'}
                     </div>
                     <span className="text-[9px] font-bold text-emerald-600 uppercase">{compressedSize} KB</span>
                   </div>
@@ -435,5 +576,18 @@ export default function InputLaporanPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ============================================================
+// EXPORTED PAGE — Wrapped with ErrorBoundary + Suspense
+// ============================================================
+export default function InputLaporanPage() {
+  return (
+    <InputErrorBoundary>
+      <Suspense fallback={<LoadingSpinner />}>
+        <InputLaporanForm />
+      </Suspense>
+    </InputErrorBoundary>
   )
 }
