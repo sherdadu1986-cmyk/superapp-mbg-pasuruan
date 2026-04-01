@@ -10,7 +10,7 @@ import {
   BarChart3, LogOut, CheckCircle2, ChevronRight, ChevronLeft, Settings,
   Utensils, School, Box, Activity, Users, Baby, GraduationCap,
   Clock, MapPin, Map, AlertTriangle, Camera, X, ImageIcon, FileSpreadsheet, Loader2, Calendar,
-  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp
+  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2
 } from 'lucide-react'
 
 export default function SuperKorwilPage() {
@@ -45,22 +45,77 @@ export default function SuperKorwilPage() {
   const [exportStart, setExportStart] = useState(today)
   const [exportEnd, setExportEnd] = useState(today)
 
+  // --- DELETE MODAL STATE ---
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [unitToDelete, setUnitToDelete] = useState<any>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // --- HANDLER DELETE ---
+  const handleDeleteUnit = async () => {
+    if (!unitToDelete) return
+    setIsDeleting(true)
+    try {
+      // 1. Validasi & hapus di users_app (cascade manually)
+      await supabase.from('users_app').delete().eq('sppg_unit_id', unitToDelete.id)
+
+      // 2. Hapus referensi lain jika perlu
+      await supabase.from('daftar_sekolah').delete().eq('sppg_id', unitToDelete.id)
+      await supabase.from('laporan_harian_final').delete().eq('unit_id', unitToDelete.id)
+
+      // 3. Hapus unit di daftar_sppg
+      const { error } = await supabase.from('daftar_sppg').delete().eq('id', unitToDelete.id)
+      if (error) throw error
+
+      toast('success', 'Berhasil Dihapus', `Unit ${unitToDelete.nama_unit} telah dihapus permanen.`)
+      setShowDeleteModal(false)
+      setUnitToDelete(null)
+      fetchData() // Refresh list otomatis
+    } catch (err: any) {
+      console.error(err)
+      toast('error', 'Gagal Menghapus', err.message || 'Terjadi kesalahan.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   // --- FETCH MONITORING ---
   const fetchData = useCallback(async () => {
     setDataLoading(true)
-    const { data: u } = await supabase.from('daftar_sppg').select('*').order('nama_unit')
-    const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', monitoringDate)
+
+    // Bypass cache with a timestamp parameter
+    const ts = new Date().getTime()
+
+    // 1. Ambil daftar users yang masih aktif / ada di Auth
+    const { data: usersApp } = await supabase.from('users_app').select('sppg_unit_id')
+    const validUnitIds = (usersApp || []).map(u => u.sppg_unit_id).filter(Boolean)
+
+    // 2. Ambil daftar SPPG yang ID-nya masih ada di users_app
+    let u: any[] = []
+    if (validUnitIds.length > 0) {
+      const { data } = await supabase
+        .from('daftar_sppg')
+        .select('*')
+        .in('id', validUnitIds)
+        .order('nama_unit')
+        // dummy filter to bust cache if Next.js caches it
+        .gte('created_at', '2000-01-01')
+      u = data || []
+    }
+
+    const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', monitoringDate).gte('created_at', '2000-01-01')
     const { data: s } = await supabase.from('daftar_sekolah').select('id, jenjang')
 
     if (u) setUnits(u)
     if (l && s) {
-      setLaporan(l)
+      // 3. CLEANUP: Filter laporan agar hanya menampilkan laporan dari Unit yang masih eksis di daftar_sppg
+      const validLaporan = l.filter(lap => u.some(unit => unit.id === lap.unit_id))
+      setLaporan(validLaporan)
 
       let mapping: Record<string, number> = {}
       KATEGORI_PM.forEach(k => mapping[k] = 0)
       let total = 0
 
-      l.forEach(lap => {
+      validLaporan.forEach(lap => {
         const realisasi = lap.realisasi_sekolah || {}
         Object.entries(realisasi).forEach(([sekolahId, porsi]) => {
           const porsiNum = Number(porsi) || 0
@@ -88,15 +143,25 @@ export default function SuperKorwilPage() {
   // --- FETCH GALERI ---
   const fetchGaleri = useCallback(async () => {
     setGaleriLoading(true)
-    const { data } = await supabase
-      .from('laporan_harian_final')
-      .select('id, foto_url, nama_unit, menu_makanan, tanggal_ops')
-      .eq('tanggal_ops', monitoringDate)
-      .not('foto_url', 'is', null)
-      .neq('foto_url', '')
-      .order('tanggal_ops', { ascending: false })
+    // 1. Validasi SPPG yang masih aktif
+    const { data: activeUsers } = await supabase.from('users_app').select('sppg_unit_id')
+    const validUnitIds = (activeUsers || []).map(u => u.sppg_unit_id).filter(Boolean)
 
-    setGaleriData(data || [])
+    if (validUnitIds.length > 0) {
+      const { data } = await supabase
+        .from('laporan_harian_final')
+        .select('id, foto_url, nama_unit, menu_makanan, tanggal_ops, unit_id')
+        .eq('tanggal_ops', monitoringDate)
+        .not('foto_url', 'is', null)
+        .neq('foto_url', '')
+        .in('unit_id', validUnitIds)
+        .order('tanggal_ops', { ascending: false })
+        .gte('created_at', '2000-01-01')
+
+      setGaleriData(data || [])
+    } else {
+      setGaleriData([])
+    }
     setGaleriLoading(false)
   }, [monitoringDate])
 
@@ -567,7 +632,20 @@ export default function SuperKorwilPage() {
                               </div>
                               <span className="text-[13px] font-semibold text-slate-700 group-hover:text-[#991B1B] transition-colors">{u.nama_unit}</span>
                             </div>
-                            <ChevronRight className="text-slate-300 group-hover:text-[#991B1B] transition-all group-hover:translate-x-1" size={18} />
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setUnitToDelete(u)
+                                  setShowDeleteModal(true)
+                                }}
+                                className="p-1.5 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg transition-all opacity-0 group-hover:opacity-100 flex-shrink-0"
+                                title="Hapus Unit"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                              <ChevronRight className="text-slate-300 group-hover:text-[#991B1B] transition-all group-hover:translate-x-1" size={18} />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -794,6 +872,40 @@ export default function SuperKorwilPage() {
             >
               {exporting ? <><Loader2 size={16} className="animate-spin" /> Mengekspor...</> : <><FileSpreadsheet size={16} /> Download Excel</>}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteModal && unitToDelete && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => !isDeleting && setShowDeleteModal(false)}>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="w-14 h-14 bg-red-50 text-[#991B1B] rounded-full flex items-center justify-center mx-auto mb-2">
+              <Trash2 size={24} />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-bold text-slate-800">Hapus Unit {unitToDelete.nama_unit}?</h3>
+              <p className="text-sm text-slate-500">
+                Peringatan: Seluruh data unit ini dan akun login-nya akan <b>dihapus permanen</b>. Anda yakin?
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleDeleteUnit}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white bg-[#991B1B] hover:bg-red-800 transition-colors flex items-center justify-center gap-2"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                {isDeleting ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
           </div>
         </div>
       )}
