@@ -139,6 +139,7 @@ function InputLaporanForm() {
   // --- FORM STATES ---
   const [tanggal, setTanggal] = useState(getLocalToday())
   const [menu, setMenu] = useState('')
+  const [submitted, setSubmitted] = useState(false)
   const [foto, setFoto] = useState<any>(null)
   const [existingFotoUrl, setExistingFotoUrl] = useState('')
   const [isCompressing, setIsCompressing] = useState(false)
@@ -259,8 +260,44 @@ function InputLaporanForm() {
   }, [id, editId])
 
   const handleSimpan = async () => {
+    setSubmitted(true)
+
     if (!menu || !tanggal) {
       toast('warning', 'Lengkapi Data', 'Isi Menu & Tanggal terlebih dahulu!')
+      return
+    }
+
+    // Validasi Gizi: tidak boleh kosong/0
+    let isGiziValid = true
+    const tipeList = ['besar', 'kecil'] as const
+    const keyList = ['energi', 'protein', 'lemak', 'karbo', 'serat'] as const
+    for (const tipe of tipeList) {
+      for (const k of keyList) {
+        const val = Number(gizi?.[tipe]?.[k] || 0)
+        if (val <= 0) isGiziValid = false
+      }
+    }
+    if (!isGiziValid) {
+      toast('error', 'Gizi Tidak Valid', 'Pastikan semua kolom nutrisi (Besar/Kecil) sudah diisi dan bukan 0.')
+      return
+    }
+
+    // Validasi Realisasi: semua sekolah harus ada isinya (bisa 0) dan total tidak boleh 0 semua
+    let totalRealisasi = 0
+    let isAdaKosong = false
+    listSekolah.forEach(s => {
+      const valStr = realisasi?.[s.id]
+      if (valStr === undefined || valStr === '') isAdaKosong = true
+      totalRealisasi += Number(valStr || 0)
+    })
+
+    if (isAdaKosong) {
+      toast('error', 'Realisasi Belum Lengkap', 'Seluruh kolom target per sekolah wajib diisi (ketik angka 0 jika memang tidak ada penerimaan).')
+      return
+    }
+
+    if (totalRealisasi <= 0) {
+      toast('error', 'Gagal!', 'Data realisasi tidak boleh 0 semua. Harap isi jumlah pack yang dikirim.')
       return
     }
 
@@ -402,8 +439,11 @@ function InputLaporanForm() {
                 Unit: {unit?.nama_unit ?? '—'}
               </p>
             </div>
-            <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-              {formatTanggalID(tanggal)}
+            <div className="text-right">
+              <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {formatTanggalID(tanggal)}
+              </div>
+              <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-1">* Wajib diisi sebelum simpan</p>
             </div>
           </div>
 
@@ -413,15 +453,15 @@ function InputLaporanForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
-                  <Calendar size={12} className="text-indigo-500" /> Tanggal
+                  <Calendar size={12} className="text-indigo-500" /> Tanggal <span className="text-rose-500">*</span>
                 </label>
-                <input type="date" className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all" value={tanggal} onChange={e => handleDateChange(e.target.value)} />
+                <input type="date" className={`w-full py-2 px-3 bg-slate-50 border rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all ${submitted && !tanggal ? 'border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`} value={tanggal} onChange={e => handleDateChange(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
-                  <Utensils size={12} className="text-indigo-500" /> Menu Utama
+                  <Utensils size={12} className="text-indigo-500" /> Menu Utama <span className="text-rose-500">*</span>
                 </label>
-                <input className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all" placeholder="Nasi Kuning, Ayam Suwir..." value={menu} onChange={e => setMenu(e.target.value)} />
+                <input className={`w-full py-2 px-3 bg-slate-50 border rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all ${submitted && !menu ? 'border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`} placeholder="Nasi Kuning, Ayam Suwir..." value={menu} onChange={e => setMenu(e.target.value)} />
               </div>
             </div>
 
@@ -437,13 +477,15 @@ function InputLaporanForm() {
                       const tipeKey = tipe.toLowerCase() as 'besar' | 'kecil'
                       const giziKey = g.toLowerCase() as keyof typeof EMPTY_GIZI.besar
                       const currentGiziGroup = gizi?.[tipeKey] ?? EMPTY_GIZI[tipeKey]
+                      const val = currentGiziGroup?.[giziKey] ?? ''
+                      const isError = submitted && (val === '' || Number(val) <= 0)
                       return (
                         <div key={g} className="relative">
                           <input
                             type="number"
-                            placeholder={g}
-                            className="w-full h-8 px-2 pr-8 bg-slate-50 border border-slate-200 rounded-md text-xs font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all"
-                            value={currentGiziGroup?.[giziKey] ?? ''}
+                            placeholder={g + ' *'}
+                            className={`w-full h-8 px-2 pr-8 bg-slate-50 border rounded-md text-xs font-bold outline-none focus:bg-white transition-all focus:ring-2 focus:ring-indigo-500/20 ${isError ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`}
+                            value={val}
                             onChange={e => setGizi(prev => ({
                               ...prev,
                               [tipeKey]: {
@@ -464,25 +506,29 @@ function InputLaporanForm() {
             {/* SECTION 3: REALISASI */}
             <div className="space-y-3">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Layout size={14} className="text-indigo-500" /> Realisasi per Sekolah
+                <Layout size={14} className="text-indigo-500" /> Realisasi per Sekolah <span className="text-rose-500">*</span>
               </h4>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 max-h-[400px] overflow-y-auto space-y-2">
-                {listSekolah.map(s => (
-                  <div key={s?.id} className="py-2 px-3 bg-white border border-slate-200 rounded-lg flex flex-col md:flex-row justify-between items-center gap-3 hover:border-indigo-200 transition-all group">
-                    <div className="flex-1 w-full text-center md:text-left">
-                      <p className="text-xs font-bold text-slate-700 uppercase tracking-tighter leading-none group-hover:text-indigo-600 transition-colors">{s?.nama_sekolah ?? '—'}</p>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target: {s?.target_porsi ?? 0}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: String(s?.target_porsi ?? 0) }))} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold hover:bg-indigo-700 transition-all">{s?.target_porsi ?? 0}</button>
-                      <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: '0' }))} className="p-1.5 bg-rose-50 text-rose-500 border border-rose-200 rounded-lg hover:bg-rose-500 hover:text-white transition-all" title="Reset"><RotateCcw size={14} /></button>
-                      <div className="flex items-center gap-1">
-                        <input type="number" className="w-20 py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs font-bold outline-none focus:border-indigo-500 transition-all" value={realisasi?.[s?.id] ?? ''} onChange={e => setRealisasi(prev => ({ ...prev, [s?.id]: e.target.value }))} placeholder="0" />
-                        <span className="text-[9px] font-bold text-slate-300">Pack</span>
+                {listSekolah.map(s => {
+                  const valStr = realisasi?.[s?.id]
+                  const isError = submitted && (valStr === undefined || valStr === '')
+                  return (
+                    <div key={s?.id} className={`py-2 px-3 bg-white border rounded-lg flex flex-col md:flex-row justify-between items-center gap-3 transition-all group ${isError ? 'border-rose-500 shadow-sm shadow-rose-100' : 'border-slate-200 hover:border-indigo-200'}`}>
+                      <div className="flex-1 w-full text-center md:text-left">
+                        <p className={`text-xs font-bold uppercase tracking-tighter leading-none transition-colors ${isError ? 'text-rose-600' : 'text-slate-700 group-hover:text-indigo-600'}`}>{s?.nama_sekolah ?? '—'}</p>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target: {s?.target_porsi ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: String(s?.target_porsi ?? 0) }))} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold hover:bg-indigo-700 transition-all">{s?.target_porsi ?? 0}</button>
+                        <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: '0' }))} className="p-1.5 bg-rose-50 text-rose-500 border border-rose-200 rounded-lg hover:bg-rose-500 hover:text-white transition-all" title="Reset ke 0"><RotateCcw size={14} /></button>
+                        <div className="flex items-center gap-1">
+                          <input type="number" className={`w-20 py-1.5 px-2 bg-slate-50 border rounded-lg text-center text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all ${isError ? 'border-rose-500 focus:border-rose-500 bg-rose-50' : 'border-slate-200 focus:border-indigo-500'}`} value={valStr ?? ''} onChange={e => setRealisasi(prev => ({ ...prev, [s?.id]: e.target.value }))} placeholder="" />
+                          <span className="text-[9px] font-bold text-slate-300">Pack</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
                 {listSekolah.length === 0 && (
                   <div className="py-8 text-center">
                     <p className="text-xs text-slate-400 font-medium">Belum ada titik layanan terdaftar</p>

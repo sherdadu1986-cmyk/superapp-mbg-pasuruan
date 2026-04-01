@@ -1,0 +1,22 @@
+{
+  "name": "MBG Control Panel - Kabupaten Pasuruan",
+  "short_name": "MBG Pasuruan",
+  "description": "Sistem Monitoring Pemberian Makanan Bergizi Gratis - Satuan Pelayanan Pemenuhan Gizi (SPPG)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "256x256",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
