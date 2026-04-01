@@ -56,7 +56,8 @@ export default function LoginPage() {
       console.log('[LOGIN] Step 3 — Password cocok. Cek role:', userByEmail.role)
       if (userByEmail.role === 'pending') {
         console.warn('[LOGIN] Akun masih pending:', email.trim())
-        toast('warning', 'Akun dalam verifikasi', 'Akun Anda sedang menunggu aktivasi oleh Admin.')
+        // Redirect ke halaman Menunggu Verifikasi
+        router.push('/waiting')
         setLoading(false)
         return
       }

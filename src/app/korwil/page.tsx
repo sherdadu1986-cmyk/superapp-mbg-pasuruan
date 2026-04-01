@@ -85,8 +85,8 @@ export default function SuperKorwilPage() {
     // Bypass cache with a timestamp parameter
     const ts = new Date().getTime()
 
-    // 1. Ambil daftar users yang masih aktif / ada di Auth
-    const { data: usersApp } = await supabase.from('users_app').select('sppg_unit_id')
+    // 1. Ambil daftar users yang sudah di-ACC (hanya role === 'sppg')
+    const { data: usersApp } = await supabase.from('users_app').select('sppg_unit_id').eq('role', 'sppg')
     const validUnitIds = (usersApp || []).map(u => u.sppg_unit_id).filter(Boolean)
 
     // 2. Ambil daftar SPPG yang ID-nya masih ada di users_app
@@ -143,8 +143,8 @@ export default function SuperKorwilPage() {
   // --- FETCH GALERI ---
   const fetchGaleri = useCallback(async () => {
     setGaleriLoading(true)
-    // 1. Validasi SPPG yang masih aktif
-    const { data: activeUsers } = await supabase.from('users_app').select('sppg_unit_id')
+    // 1. Validasi SPPG yang sudah di-ACC
+    const { data: activeUsers } = await supabase.from('users_app').select('sppg_unit_id').eq('role', 'sppg')
     const validUnitIds = (activeUsers || []).map(u => u.sppg_unit_id).filter(Boolean)
 
     if (validUnitIds.length > 0) {

@@ -4,9 +4,11 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import {
     Settings, LogOut, BarChart3, Camera, Users, ChevronLeft,
-    CheckCircle2, Clock, Loader2, ShieldCheck, Pencil, X, Save
+    CheckCircle2, Clock, Loader2, ShieldCheck, Pencil, X, Save, Trash2
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
+import Swal from 'sweetalert2'
+import { verifyAccount, rejectAccount } from '@/lib/verification'
 
 export default function ManajemenAkunPage() {
     const router = useRouter()
@@ -34,11 +36,66 @@ export default function ManajemenAkunPage() {
 
     // ACC / Approve
     const handleApproveUser = async (userId: string) => {
-        setApproving(userId)
-        const { error } = await supabase.from('users_app').update({ status: 'aktif' }).eq('id', userId)
-        if (error) { toast('error', 'Gagal mengaktifkan akun.') }
-        else { toast('success', 'Akun berhasil diaktifkan!'); fetchUsers() }
-        setApproving(null)
+        const result = await Swal.fire({
+            title: 'Aktifkan Akun?',
+            text: "Akun ini akan diberi izin akses ke dashboard SPPG.",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#10b981',
+            cancelButtonColor: '#94a3b8',
+            confirmButtonText: 'Ya, Aktifkan!'
+        })
+
+        if (result.isConfirmed) {
+            setApproving(userId)
+            try {
+                await verifyAccount(userId)
+                Swal.fire({
+                    title: 'Berhasil!',
+                    text: 'Akun Berhasil Diaktifkan!',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                })
+                fetchUsers()
+            } catch (err: any) {
+                toast('error', 'Gagal', err.message)
+            } finally {
+                setApproving(null)
+            }
+        }
+    }
+
+    // Tolak & Hapus
+    const handleRejectUser = async (userId: string, unitId: string) => {
+        const result = await Swal.fire({
+            title: 'Tolak Pendaftaran?',
+            text: "Seluruh data profil SPPG ini akan dihapus permanen.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#94a3b8',
+            confirmButtonText: 'Ya, Tolak!'
+        })
+
+        if (result.isConfirmed) {
+            setApproving(userId)
+            try {
+                await rejectAccount(userId, unitId)
+                Swal.fire({
+                    title: 'Ditolak!',
+                    text: 'Pendaftaran Ditolak & Data Dihapus!',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                })
+                fetchUsers()
+            } catch (err: any) {
+                toast('error', 'Gagal', err.message)
+            } finally {
+                setApproving(null)
+            }
+        }
     }
 
     // Open Edit Modal
@@ -124,7 +181,7 @@ export default function ManajemenAkunPage() {
                                     <Users size={12} className="text-indigo-500" /> {users.length} Terdaftar
                                 </span>
                                 <span className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 px-3 py-1 rounded-lg text-[10px] font-black text-orange-600 uppercase tracking-widest">
-                                    <Clock size={12} /> {users.filter(u => u.status === 'pending').length} Pending
+                                    <Clock size={12} /> {users.filter(u => u.role === 'pending').length} Pending
                                 </span>
                             </div>
                         </div>
@@ -165,34 +222,45 @@ export default function ManajemenAkunPage() {
                                                 <td className="px-3 py-2 text-slate-400 tracking-wider">••••••••</td>
                                                 <td className="px-3 py-2 text-slate-500">{getUnitName(user)}</td>
                                                 <td className="px-3 py-2">
-                                                    {user.status === 'aktif' ? (
-                                                        <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
-                                                            <CheckCircle2 size={11} /> Aktif
-                                                        </span>
-                                                    ) : (
+                                                    {user.role === 'pending' ? (
                                                         <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
                                                             <Clock size={11} /> Pending
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
+                                                            <CheckCircle2 size={11} /> Aktif
                                                         </span>
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-2">
                                                     <div className="flex items-center gap-2">
-                                                        {user.status === 'pending' && (
+                                                        {user.role === 'pending' ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleApproveUser(user.id)}
+                                                                    disabled={approving === user.id}
+                                                                    className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-[10px] uppercase font-black tracking-widest shadow-sm transition-all"
+                                                                >
+                                                                    {approving === user.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                                                                    ACC
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleRejectUser(user.id, user.sppg_unit_id)}
+                                                                    disabled={approving === user.id}
+                                                                    className="flex items-center gap-1.5 bg-white border border-rose-500 text-rose-500 hover:bg-rose-50 disabled:opacity-50 px-3 py-1.5 rounded-lg text-[10px] uppercase font-black tracking-widest shadow-sm transition-all"
+                                                                >
+                                                                    {approving === user.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                                                    Tolak
+                                                                </button>
+                                                            </>
+                                                        ) : (
                                                             <button
-                                                                onClick={() => handleApproveUser(user.id)}
-                                                                disabled={approving === user.id}
-                                                                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm"
+                                                                onClick={() => openEdit(user)}
+                                                                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm"
                                                             >
-                                                                {approving === user.id ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
-                                                                ACC
+                                                                <Pencil size={12} /> Edit
                                                             </button>
                                                         )}
-                                                        <button
-                                                            onClick={() => openEdit(user)}
-                                                            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-sm"
-                                                        >
-                                                            <Pencil size={12} /> Edit
-                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>

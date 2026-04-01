@@ -7,8 +7,10 @@ import { useToast } from '@/components/toast'
 import {
   Users, Plus, Trash2, LogOut, Search, ShieldCheck,
   Building2, Mail, Lock, UserCircle, BarChart3, Edit3,
-  X, Key, CheckCircle2, ChevronLeft, Menu
+  X, Key, CheckCircle2, ChevronLeft, Menu, Loader2
 } from 'lucide-react'
+import Swal from 'sweetalert2'
+import { verifyAccount, rejectAccount } from '@/lib/verification'
 
 export default function SuperAdminITPage() {
   const router = useRouter()
@@ -46,10 +48,30 @@ export default function SuperAdminITPage() {
   useEffect(() => { fetchData() }, [])
 
   const handleApprove = async (id: string) => {
-    const { error } = await supabase.from('users_app').update({ role: 'sppg' }).eq('id', id)
-    if (!error) {
-      toast('success', 'Akun SPPG Diaktifkan!', 'Akun telah berhasil disetujui.')
-      fetchData()
+    const result = await Swal.fire({
+      title: 'Aktifkan Akun?',
+      text: "Akun ini akan diverifikasi dan diizinkan mengakses dashboard SPPG.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Ya, Aktifkan!'
+    })
+
+    if (result.isConfirmed) {
+      try {
+        await verifyAccount(id)
+        Swal.fire({
+          title: 'Berhasil!',
+          text: 'Akun SPPG Diaktifkan!',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        })
+        fetchData()
+      } catch (err: any) {
+        toast('error', 'Gagal', err.message)
+      }
     }
   }
 
@@ -91,11 +113,31 @@ export default function SuperAdminITPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleDelete = async (userId: string, unitId: string) => {
-    if (confirm("Hapus akun SPPG ini secara permanen?")) {
-      await supabase.from('users_app').delete().eq('id', userId)
-      if (unitId) await supabase.from('daftar_sppg').delete().eq('id', unitId)
-      fetchData()
+  const handleDelete = async (userId: string, unitId: string, isPending: boolean) => {
+    const result = await Swal.fire({
+      title: isPending ? 'Tolak Pendaftaran?' : 'Hapus Permanen?',
+      text: isPending ? 'Akun pendaftar ini akan dihapus sepenuhnya.' : 'Seluruh rekaman unit terkait akun ini akan hilang dari server!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: isPending ? 'Ya, Tolak!' : 'Ya, Hapus Permanen!'
+    })
+
+    if (result.isConfirmed) {
+      try {
+        await rejectAccount(userId, unitId)
+        Swal.fire({
+          title: 'Terhapus!',
+          text: isPending ? 'Pendaftaran Ditolak & Data Dihapus!' : 'Akun berhasil dihapus permanen.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        })
+        fetchData()
+      } catch (err: any) {
+        toast('error', 'Gagal', err.message)
+      }
     }
   }
 
@@ -217,13 +259,18 @@ export default function SuperAdminITPage() {
                         <td className="p-6 text-right">
                           <div className="flex justify-end gap-2">
                             {u.role === 'pending' ? (
-                              <button onClick={() => handleApprove(u.id)} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white text-[9px] font-black rounded-xl uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all">
-                                <CheckCircle2 size={14} /> Aktifkan SPPG
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => handleApprove(u.id)} className="flex items-center gap-2 px-3 py-2 bg-emerald-500 text-white text-[9px] font-black rounded-lg uppercase tracking-widest shadow-md hover:bg-emerald-600 transition-all">
+                                  <CheckCircle2 size={13} /> ACC
+                                </button>
+                                <button onClick={() => handleDelete(u.id, u.sppg_unit_id, true)} className="flex items-center gap-2 px-3 py-2 bg-white border border-rose-500 text-rose-500 text-[9px] font-black rounded-lg uppercase tracking-widest shadow-sm hover:bg-rose-50 transition-all">
+                                  <Trash2 size={13} /> Tolak
+                                </button>
+                              </div>
                             ) : (
                               <div className="flex items-center gap-2">
                                 <button onClick={() => handleEditClick(u)} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit3 size={16} /></button>
-                                <button onClick={() => handleDelete(u.id, u.sppg_unit_id)} className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
+                                <button onClick={() => handleDelete(u.id, u.sppg_unit_id, false)} className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
                               </div>
                             )}
                           </div>
