@@ -5,82 +5,49 @@ import { getLocalToday } from '@/lib/date'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import {
-  ArrowLeft, Utensils, Activity, RotateCcw, ArrowRight, CheckCircle2, Calendar, Layout, Loader2, Camera, AlertTriangle, Edit3, PartyPopper, RefreshCcw
+  ArrowLeft, Activity, RotateCcw, ArrowRight, CheckCircle2, Calendar, Layout, Loader2, Camera, AlertTriangle, PartyPopper, RefreshCcw, CheckSquare, Square
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 
 // CSS for success modal animations
 const successStyles = `
 @keyframes modalIn {
-  0% { opacity: 0; transform: scale(0.8); }
+  0% { opacity: 0; transform: scale(0.9); }
   100% { opacity: 1; transform: scale(1); }
 }
 @keyframes checkDraw {
   0% { stroke-dashoffset: 50; }
   100% { stroke-dashoffset: 0; }
 }
-@keyframes confetti {
-  0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
-}
 @keyframes pulse-ring {
   0% { transform: scale(0.8); opacity: 1; }
   100% { transform: scale(1.8); opacity: 0; }
 }
-.success-modal { animation: modalIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.success-modal { animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .check-draw { stroke-dasharray: 50; stroke-dashoffset: 50; animation: checkDraw 0.6s 0.3s ease forwards; }
 .pulse-ring { animation: pulse-ring 1.2s ease-out infinite; }
-.confetti-piece { animation: confetti 2.5s ease-in forwards; }
 `;
 
 // ============================================================
-// ERROR BOUNDARY — Prevents white screen of death
+// ERROR BOUNDARY
 // ============================================================
-class InputErrorBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean; errorMsg: string }
-> {
+class InputErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; errorMsg: string }> {
   constructor(props: { children: ReactNode }) {
     super(props)
     this.state = { hasError: false, errorMsg: '' }
   }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, errorMsg: error?.message || 'Unknown error' }
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[InputLaporan ErrorBoundary]', error, info)
-  }
-
+  static getDerivedStateFromError(error: Error) { return { hasError: true, errorMsg: error?.message || 'Unknown error' } }
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-10 max-w-md w-full text-center space-y-5">
-            <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle size={32} className="text-amber-500" />
+        <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 p-10 max-w-md w-full text-center space-y-6">
+            <div className="w-20 h-20 bg-amber-50 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto text-amber-500">
+              <AlertTriangle size={40} />
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">Data sedang disiapkan</h2>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                Mohon maaf, halaman ini memerlukan waktu untuk memuat data. Silakan coba lagi dalam beberapa saat.
-              </p>
-              {process.env.NODE_ENV === 'development' && this.state.errorMsg && (
-                <p className="mt-3 text-xs text-rose-400 bg-rose-50 rounded-lg p-3 text-left font-mono break-all">
-                  {this.state.errorMsg}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                this.setState({ hasError: false, errorMsg: '' })
-                window.location.reload()
-              }}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:-translate-y-0.5 transition-all"
-            >
-              <RefreshCcw size={16} /> Muat Ulang
-            </button>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Ada Masalah Teknis</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Gagal memuat form. Silakan muat ulang halaman.</p>
+            <button onClick={() => window.location.reload()} className="w-full py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold transition-all hover:opacity-90">Muat Ulang</button>
           </div>
         </div>
       )
@@ -94,139 +61,41 @@ class InputErrorBoundary extends Component<
 // ============================================================
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
       <div className="text-center space-y-4">
-        <div className="w-14 h-14 bg-white rounded-2xl shadow-lg border border-slate-100 flex items-center justify-center mx-auto">
-          <Loader2 size={28} className="text-indigo-500 animate-spin" />
-        </div>
-        <div>
-          <p className="text-sm font-bold text-slate-600">Memuat Form Laporan...</p>
-          <p className="text-[11px] text-slate-400 mt-1">Menyinkronkan data unit & sekolah</p>
-        </div>
+        <Loader2 size={40} className="text-indigo-500 animate-spin mx-auto" />
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Menyiapkan Laporan...</p>
       </div>
     </div>
   )
 }
 
 // ============================================================
-// EMPTY GIZI DEFAULTS (used as safe fallback)
-// ============================================================
-const EMPTY_GIZI = {
-  besar: { energi: '', protein: '', lemak: '', karbo: '', serat: '' },
-  kecil: { energi: '', protein: '', lemak: '', karbo: '', serat: '' }
-}
-
-// ============================================================
-// MAIN FORM COMPONENT (uses useSearchParams)
+// MAIN FORM COMPONENT
 // ============================================================
 function InputLaporanForm() {
   const { id } = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams?.get('edit') ?? null
-
-  // --- LOADING STATE ---
-  const [pageLoading, setPageLoading] = useState(true)
-
-  const [loading, setLoading] = useState(false)
-  const [listSekolah, setListSekolah] = useState<any[]>([])
   const { toast } = useToast()
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [successMsg, setSuccessMsg] = useState({ title: '', sub: '' })
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [unit, setUnit] = useState<any>(null)
 
-  // --- FORM STATES ---
+  // --- STATES ---
+  const [pageLoading, setPageLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [unit, setUnit] = useState<any>(null)
+  const [listSekolah, setListSekolah] = useState<any[]>([])
+  
   const [tanggal, setTanggal] = useState(getLocalToday())
-  const [menu, setMenu] = useState('')
-  const [submitted, setSubmitted] = useState(false)
+  const [realisasi, setRealisasi] = useState<Record<string, string>>({})
   const [foto, setFoto] = useState<any>(null)
   const [existingFotoUrl, setExistingFotoUrl] = useState('')
-  const [isCompressing, setIsCompressing] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
-  const [compressedSize, setCompressedSize] = useState('')
-
-  // --- DUPLICATE DETECTION STATE ---
+  const [isCompressing, setIsCompressing] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const [existingLaporanId, setExistingLaporanId] = useState<string | null>(editId || null)
-  const [dupMessage, setDupMessage] = useState('')
 
-  // --- REALISASI & GIZI (safely initialized) ---
-  const [realisasi, setRealisasi] = useState<Record<string, string>>({})
-  const [gizi, setGizi] = useState(EMPTY_GIZI)
-
-  // --- CHECK EXISTING REPORT ON DATE CHANGE (auto-fill or reset) ---
-  const checkExistingReport = async (dateVal: string) => {
-    if (editId) return // already in edit mode via URL
-    try {
-      const { data } = await supabase
-        .from('laporan_harian_final')
-        .select('*')
-        .eq('tanggal_ops', dateVal)
-        .eq('unit_id', id)
-        .maybeSingle()
-      if (data) {
-        // AUTO-FILL: populate all fields from existing report
-        setExistingLaporanId(data?.id ?? null)
-        setMenu(data?.menu_makanan ?? '')
-        setGizi(data?.data_gizi ?? EMPTY_GIZI)
-        setRealisasi(data?.realisasi_sekolah ?? {})
-        setExistingFotoUrl(data?.foto_url ?? '')
-        setFoto(null)
-        setPreviewUrl('')
-        setDupMessage('Laporan untuk tanggal ini sudah ada. Anda masuk mode edit.')
-      } else {
-        // RESET: clear all fields for new input
-        setExistingLaporanId(null)
-        setMenu('')
-        setGizi(EMPTY_GIZI)
-        setRealisasi({})
-        setExistingFotoUrl('')
-        setFoto(null)
-        setPreviewUrl('')
-        setDupMessage('')
-      }
-    } catch (err) {
-      console.error('[checkExistingReport] Error:', err)
-    }
-  }
-
-  const handleDateChange = (val: string) => {
-    setTanggal(val)
-    checkExistingReport(val)
-  }
-
-  // --- FORMAT TANGGAL INDONESIA (DD/MM/YYYY) ---
-  const formatTanggalID = (dateStr: string) => {
-    if (!dateStr) return ''
-    const d = new Date(dateStr + 'T12:00:00')
-    return d.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', year: 'numeric' })
-  }
-
-  // --- AUTO COMPRESS HANDLER ---
-  const handleFileSelect = async (file: File | undefined) => {
-    if (!file) return
-    setIsCompressing(true)
-    try {
-      const options = {
-        maxSizeMB: 0.3,
-        maxWidthOrHeight: 1024,
-        useWebWorker: true,
-        fileType: 'image/jpeg' as const,
-      }
-      const compressed = await imageCompression(file, options)
-      const jpegFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
-      setFoto(jpegFile)
-      setCompressedSize((jpegFile.size / 1024).toFixed(0))
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
-      setPreviewUrl(URL.createObjectURL(jpegFile))
-    } catch (err) {
-      console.error('Compression failed:', err)
-      toast('error', 'Gagal Kompres Foto', 'Coba foto lain.')
-    } finally {
-      setIsCompressing(false)
-    }
-  }
-
+  // --- FETCH DATA ---
   useEffect(() => {
     const fetchData = async () => {
       setPageLoading(true)
@@ -240,18 +109,15 @@ function InputLaporanForm() {
           const { data: lap } = await supabase.from('laporan_harian_final').select('*').eq('id', editId).single()
           if (lap) {
             setTanggal(lap?.tanggal_ops ?? getLocalToday())
-            setMenu(lap?.menu_makanan ?? '')
-            setGizi(lap?.data_gizi ?? EMPTY_GIZI)
             setRealisasi(lap?.realisasi_sekolah ?? {})
             setExistingFotoUrl(lap?.foto_url ?? '')
             setExistingLaporanId(editId)
           }
         } else {
-          // Auto-check if today already has a report (for new input mode)
-          await checkExistingReport(getLocalToday())
+          await checkExisting(getLocalToday())
         }
       } catch (err) {
-        console.error('[fetchData] Error:', err)
+        console.error(err)
       } finally {
         setPageLoading(false)
       }
@@ -259,70 +125,73 @@ function InputLaporanForm() {
     fetchData()
   }, [id, editId])
 
-  const handleSimpan = async () => {
-    setSubmitted(true)
-
-    if (!menu || !tanggal) {
-      toast('warning', 'Lengkapi Data', 'Isi Menu & Tanggal terlebih dahulu!')
-      return
+  const checkExisting = async (dateVal: string) => {
+    if (editId) return
+    const { data } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', dateVal).eq('unit_id', id).maybeSingle()
+    if (data) {
+      setExistingLaporanId(data.id)
+      setRealisasi(data.realisasi_sekolah ?? {})
+      setExistingFotoUrl(data.foto_url ?? '')
+    } else {
+      setExistingLaporanId(null)
+      setRealisasi({})
+      setExistingFotoUrl('')
     }
+  }
 
-    // Validasi Gizi: tidak boleh kosong/0
-    let isGiziValid = true
-    const tipeList = ['besar', 'kecil'] as const
-    const keyList = ['energi', 'protein', 'lemak', 'karbo', 'serat'] as const
-    for (const tipe of tipeList) {
-      for (const k of keyList) {
-        const val = Number(gizi?.[tipe]?.[k] || 0)
-        if (val <= 0) isGiziValid = false
-      }
-    }
-    if (!isGiziValid) {
-      toast('error', 'Gizi Tidak Valid', 'Pastikan semua kolom nutrisi (Besar/Kecil) sudah diisi dan bukan 0.')
-      return
-    }
-
-    // Validasi Realisasi: semua sekolah harus ada isinya (bisa 0) dan total tidak boleh 0 semua
-    let totalRealisasi = 0
-    let isAdaKosong = false
+  // --- ACTIONS ---
+  const handleSelectAll = () => {
+    const newRealisasi: Record<string, string> = {}
     listSekolah.forEach(s => {
-      const valStr = realisasi?.[s.id]
-      if (valStr === undefined || valStr === '') isAdaKosong = true
-      totalRealisasi += Number(valStr || 0)
+      newRealisasi[s.id] = String(s.target_porsi ?? 0)
     })
+    setRealisasi(newRealisasi)
+    toast('success', 'Berhasil', 'Seluruh realisasi diisi sesuai target.')
+  }
 
-    if (isAdaKosong) {
-      toast('error', 'Realisasi Belum Lengkap', 'Seluruh kolom target per sekolah wajib diisi (ketik angka 0 jika memang tidak ada penerimaan).')
+  const handleDeselectAll = () => {
+    const newRealisasi: Record<string, string> = {}
+    listSekolah.forEach(s => {
+      newRealisasi[s.id] = '0'
+    })
+    setRealisasi(newRealisasi)
+    toast('warning', 'Dikosongkan', 'Seluruh realisasi telah dikosongkan.')
+  }
+
+  const handleToggleSekolah = (s: any) => {
+    const currentVal = Number(realisasi[s.id] || 0)
+    setRealisasi(prev => ({
+      ...prev,
+      [s.id]: currentVal === 0 ? String(s.target_porsi) : '0'
+    }))
+  }
+
+  const handleFileSelect = async (file: File | undefined) => {
+    if (!file) return
+    setIsCompressing(true)
+    try {
+      const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1024, useWebWorker: true, fileType: 'image/jpeg' as const }
+      const compressed = await imageCompression(file, options)
+      setFoto(compressed)
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(URL.createObjectURL(compressed))
+    } catch (err) {
+      toast('error', 'Gagal', 'Gagal memproses gambar.')
+    } finally {
+      setIsCompressing(false)
+    }
+  }
+
+  const handleSimpan = async () => {
+    if (!tanggal) {
+      toast('warning', 'Peringatan', 'Pilih tanggal terlebih dahulu.')
       return
     }
 
+    const totalRealisasi = Object.values(realisasi).reduce((acc, curr) => acc + Number(curr || 0), 0)
     if (totalRealisasi <= 0) {
-      toast('error', 'Gagal!', 'Data realisasi tidak boleh 0 semua. Harap isi jumlah pack yang dikirim.')
+      toast('error', 'Gagal', 'Data realisasi tidak boleh kosong atau nol semua.')
       return
-    }
-
-    // Safety check — unit must be loaded
-    if (!unit) {
-      toast('error', 'Data Belum Siap', 'Data unit belum ter-load. Silakan muat ulang halaman.')
-      return
-    }
-
-    // Determine if we're editing (either via URL editId or auto-detected existingLaporanId)
-    const activeEditId = editId || existingLaporanId
-
-    // Anti-duplikat: only for brand new reports (no editId and no existing detected)
-    if (!activeEditId) {
-      const { data: existing } = await supabase
-        .from('laporan_harian_final')
-        .select('id')
-        .eq('tanggal_ops', tanggal)
-        .eq('unit_id', id)
-      if (existing && existing.length > 0) {
-        // Don't alert — just switch to edit mode
-        setExistingLaporanId(existing[0]?.id ?? null)
-        setDupMessage('Laporan sudah ada. Klik tombol "Ubah Laporan" untuk menyesuaikan data.')
-        return
-      }
     }
 
     setLoading(true)
@@ -332,301 +201,194 @@ function InputLaporanForm() {
         const fileName = `${Date.now()}_${id}.jpg`
         const filePath = `dokumentasi_harian/${fileName}`
         await supabase.storage.from('dokumentasi').upload(filePath, foto)
-        finalFotoUrl = supabase.storage.from('dokumentasi').getPublicUrl(filePath)?.data?.publicUrl ?? ''
+        finalFotoUrl = supabase.storage.from('dokumentasi').getPublicUrl(filePath).data.publicUrl
       }
 
-      const cleanRealisasi = Object.fromEntries(Object.entries(realisasi).filter(([_, v]) => v !== ""));
+      const activeId = editId || existingLaporanId
       const payload = {
         unit_id: id,
         nama_unit: unit?.nama_unit ?? '',
         tanggal_ops: tanggal,
-        menu_makanan: menu,
-        data_gizi: gizi,
-        realisasi_sekolah: cleanRealisasi,
+        menu_makanan: 'Menu Terjadwal', // Automated/Defaulted
+        data_gizi: {}, // Simplified: No longer input manually
+        realisasi_sekolah: realisasi,
         foto_url: finalFotoUrl
       }
 
-      const { error } = activeEditId
-        ? await supabase.from('laporan_harian_final').update(payload).eq('id', activeEditId)
+      const { error } = activeId 
+        ? await supabase.from('laporan_harian_final').update(payload).eq('id', activeId)
         : await supabase.from('laporan_harian_final').insert([payload])
 
       if (error) throw error
-
-      // Flash green success on button for 2 seconds
-      setSubmitSuccess(true)
-      setTimeout(() => setSubmitSuccess(false), 2000)
-
-      setSuccessMsg({
-        title: activeEditId ? 'Data Berhasil Diperbarui!' : 'Laporan Berhasil Terkirim!',
-        sub: 'Terima kasih telah memperbarui data gizi hari ini.'
-      })
       setShowSuccess(true)
     } catch (err: any) {
-      toast('error', 'Gagal Menyimpan', err?.message ?? 'Terjadi kesalahan.')
+      toast('error', 'Gagal Simpan', err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  // ============================================================
-  // SHOW LOADING SPINNER while data is being fetched
-  // ============================================================
-  if (pageLoading) {
-    return <LoadingSpinner />
-  }
+  if (pageLoading) return <LoadingSpinner />
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 lg:p-6 font-sans text-slate-800">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 pb-24">
       <style>{successStyles}</style>
 
-      {/* SUCCESS CELEBRATION MODAL */}
+      {/* SUCCESS MODAL */}
       {showSuccess && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          {/* CONFETTI PIECES */}
-          {[...Array(12)].map((_, i) => (
-            <div key={i} className="confetti-piece fixed top-0" style={{
-              left: `${10 + Math.random() * 80}%`,
-              width: 8 + Math.random() * 6,
-              height: 8 + Math.random() * 6,
-              background: ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#3b82f6'][i % 5],
-              borderRadius: Math.random() > 0.5 ? '50%' : '2px',
-              animationDelay: `${Math.random() * 0.8}s`,
-              animationDuration: `${2 + Math.random() * 1.5}s`,
-            }} />
-          ))}
-
-          <div className="success-modal bg-white rounded-2xl shadow-2xl p-10 max-w-sm w-full mx-4 text-center relative">
-            {/* ANIMATED CHECKMARK */}
-            <div className="relative w-24 h-24 mx-auto mb-6">
-              <div className="absolute inset-0 bg-emerald-100 rounded-full pulse-ring" />
-              <div className="relative w-24 h-24 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md">
+          <div className="success-modal bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl p-12 max-w-sm w-full mx-4 text-center border border-slate-100 dark:border-slate-800">
+            <div className="relative w-24 h-24 mx-auto mb-8">
+              <div className="absolute inset-0 bg-emerald-100 dark:bg-emerald-500/20 rounded-full pulse-ring" />
+              <div className="relative w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" className="check-draw" />
                 </svg>
               </div>
             </div>
-
-            <h2 className="text-xl font-bold text-slate-800 mb-2">{successMsg?.title ?? ''}</h2>
-            <p className="text-sm text-slate-500 mb-8">{successMsg?.sub ?? ''}</p>
-
-            <button
-              onClick={() => router.push(`/sppg/dashboard/${id}`)}
-              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
-            >
-              <PartyPopper size={18} /> Mantap!
-            </button>
+            <h2 className="text-2xl font-bold mb-2">Laporan Disimpan!</h2>
+            <p className="text-slate-500 dark:text-slate-400 mb-8">Data harian telah berhasil tercatat di sistem.</p>
+            <button onClick={() => router.push(`/sppg/dashboard/${id}`)} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold text-lg hover:scale-105 transition-all">Selesai</button>
           </div>
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto space-y-4">
-
-        {/* BACK BUTTON */}
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:translate-x-[-4px] transition-all">
-          <ArrowLeft size={16} /> Kembali ke Dashboard
-        </button>
-
-        {/* MAIN CONTAINER */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-
-          {/* COMPACT HEADER */}
-          <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-black uppercase italic tracking-tighter text-slate-900 leading-none">
-                {editId ? 'Perbarui Data' : 'Input Laporan Baru'}
-              </h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                Unit: {unit?.nama_unit ?? '—'}
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                {formatTanggalID(tanggal)}
-              </div>
-              <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest mt-1">* Wajib diisi sebelum simpan</p>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-6">
-
-            {/* SECTION 1: INFO UMUM */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
-                  <Calendar size={12} className="text-indigo-500" /> Tanggal <span className="text-rose-500">*</span>
-                </label>
-                <input type="date" className={`w-full py-2 px-3 bg-slate-50 border rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all ${submitted && !tanggal ? 'border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`} value={tanggal} onChange={e => handleDateChange(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
-                  <Utensils size={12} className="text-indigo-500" /> Menu Utama <span className="text-rose-500">*</span>
-                </label>
-                <input className={`w-full py-2 px-3 bg-slate-50 border rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all ${submitted && !menu ? 'border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`} placeholder="Nasi Kuning, Ayam Suwir..." value={menu} onChange={e => setMenu(e.target.value)} />
-              </div>
-            </div>
-
-            {/* SECTION 2: NUTRISI — ULTRA COMPACT */}
-            <div className="space-y-0">
-              {['Besar', 'Kecil'].map((tipe, idx) => (
-                <div key={tipe} className={`flex items-center gap-3 py-2.5 px-1 ${idx === 0 ? 'border-t border-slate-100' : 'border-t border-slate-100'}`}>
-                  <div className={`shrink-0 text-[10px] font-black uppercase tracking-widest w-16 flex items-center gap-1.5 ${tipe === 'Besar' ? 'text-indigo-600' : 'text-amber-600'}`}>
-                    <Activity size={12} /> {tipe}
-                  </div>
-                  <div className="flex-1 grid grid-cols-5 gap-2">
-                    {['Energi', 'Protein', 'Lemak', 'Karbo', 'Serat'].map(g => {
-                      const tipeKey = tipe.toLowerCase() as 'besar' | 'kecil'
-                      const giziKey = g.toLowerCase() as keyof typeof EMPTY_GIZI.besar
-                      const currentGiziGroup = gizi?.[tipeKey] ?? EMPTY_GIZI[tipeKey]
-                      const val = currentGiziGroup?.[giziKey] ?? ''
-                      const isError = submitted && (val === '' || Number(val) <= 0)
-                      return (
-                        <div key={g} className="relative">
-                          <input
-                            type="number"
-                            placeholder={g + ' *'}
-                            className={`w-full h-8 px-2 pr-8 bg-slate-50 border rounded-md text-xs font-bold outline-none focus:bg-white transition-all focus:ring-2 focus:ring-indigo-500/20 ${isError ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`}
-                            value={val}
-                            onChange={e => setGizi(prev => ({
-                              ...prev,
-                              [tipeKey]: {
-                                ...(prev?.[tipeKey] ?? EMPTY_GIZI[tipeKey]),
-                                [giziKey]: e.target.value
-                              }
-                            }))}
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-300 uppercase pointer-events-none">{g === 'Energi' ? 'kkal' : 'gr'}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* SECTION 3: REALISASI */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Layout size={14} className="text-indigo-500" /> Realisasi per Sekolah <span className="text-rose-500">*</span>
-              </h4>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 max-h-[400px] overflow-y-auto space-y-2">
-                {listSekolah.map(s => {
-                  const valStr = realisasi?.[s?.id]
-                  const isError = submitted && (valStr === undefined || valStr === '')
-                  return (
-                    <div key={s?.id} className={`py-2 px-3 bg-white border rounded-lg flex flex-col md:flex-row justify-between items-center gap-3 transition-all group ${isError ? 'border-rose-500 shadow-sm shadow-rose-100' : 'border-slate-200 hover:border-indigo-200'}`}>
-                      <div className="flex-1 w-full text-center md:text-left">
-                        <p className={`text-xs font-bold uppercase tracking-tighter leading-none transition-colors ${isError ? 'text-rose-600' : 'text-slate-700 group-hover:text-indigo-600'}`}>{s?.nama_sekolah ?? '—'}</p>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target: {s?.target_porsi ?? 0}</span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: String(s?.target_porsi ?? 0) }))} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold hover:bg-indigo-700 transition-all">{s?.target_porsi ?? 0}</button>
-                        <button onClick={() => setRealisasi(prev => ({ ...prev, [s?.id]: '0' }))} className="p-1.5 bg-rose-50 text-rose-500 border border-rose-200 rounded-lg hover:bg-rose-500 hover:text-white transition-all" title="Reset ke 0"><RotateCcw size={14} /></button>
-                        <div className="flex items-center gap-1">
-                          <input type="number" className={`w-20 py-1.5 px-2 bg-slate-50 border rounded-lg text-center text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all ${isError ? 'border-rose-500 focus:border-rose-500 bg-rose-50' : 'border-slate-200 focus:border-indigo-500'}`} value={valStr ?? ''} onChange={e => setRealisasi(prev => ({ ...prev, [s?.id]: e.target.value }))} placeholder="" />
-                          <span className="text-[9px] font-bold text-slate-300">Pack</span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-                {listSekolah.length === 0 && (
-                  <div className="py-8 text-center">
-                    <p className="text-xs text-slate-400 font-medium">Belum ada titik layanan terdaftar</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* SECTION 4: DOKUMENTASI — COMPACT */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Camera size={14} className="text-indigo-500" /> Bukti Operasional
-              </h4>
-              <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-slate-400 relative group cursor-pointer transition-all ${isCompressing ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/20'}`}>
-                {previewUrl ? (
-                  <div className="w-24 h-24 rounded-xl overflow-hidden mb-3 shadow-md border border-white">
-                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                    <Camera size={24} className="text-slate-300 group-hover:text-indigo-500" />
-                  </div>
-                )}
-                <span className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-1">{editId ? 'Ganti Foto' : 'Pilih Foto'}</span>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Auto-Compress • Maks 300KB JPEG</p>
-                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" disabled={isCompressing} onChange={e => handleFileSelect(e.target.files?.[0])} />
-
-                {isCompressing && (
-                  <div className="mt-3 px-4 py-1.5 bg-amber-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-2 animate-pulse uppercase">
-                    <Loader2 size={14} className="animate-spin" /> Mengompres...
-                  </div>
-                )}
-                {!isCompressing && foto && (
-                  <div className="mt-3 flex flex-col items-center gap-1">
-                    <div className="px-4 py-1.5 bg-emerald-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-2 uppercase">
-                      <CheckCircle2 size={14} /> {foto?.name ?? 'foto.jpg'}
-                    </div>
-                    <span className="text-[9px] font-bold text-emerald-600 uppercase">{compressedSize} KB</span>
-                  </div>
-                )}
-                {!isCompressing && !foto && editId && existingFotoUrl && (
-                  <div className="mt-3 px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold flex items-center gap-2 uppercase">
-                    <CheckCircle2 size={14} /> Foto Sudah Ada
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* INLINE DUPLICATE BANNER */}
-            {dupMessage && !editId && (
-              <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-amber-800">{dupMessage}</p>
-                </div>
-              </div>
-            )}
-
-            {/* ACTION BUTTON — Interactive with loading/success states */}
-            {existingLaporanId && !editId ? (
-              <button
-                onClick={() => router.push(`/sppg/dashboard/${id}/input?edit=${existingLaporanId}`)}
-                className="w-full py-3 bg-amber-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-amber-600 active:scale-[0.97] transition-all duration-300 flex items-center justify-center gap-3"
-              >
-                <Edit3 size={18} /> Ubah Laporan Hari Ini
-              </button>
-            ) : (
-              <button
-                onClick={handleSimpan}
-                disabled={loading || isCompressing}
-                className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 transition-all duration-300 disabled:cursor-not-allowed ${submitSuccess
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-emerald-500/30 scale-100'
-                    : loading
-                      ? 'bg-indigo-500 text-white/90 scale-[0.97] shadow-indigo-500/20'
-                      : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.97] shadow-indigo-500/20'
-                  } ${(loading || isCompressing) && !submitSuccess ? 'opacity-80' : ''}`}
-              >
-                {submitSuccess ? (
-                  <><CheckCircle2 size={18} className="animate-bounce" /> Berhasil Terkirim!</>
-                ) : loading ? (
-                  <><Loader2 size={18} className="animate-spin" /> Mengirim...</>
-                ) : isCompressing ? (
-                  <><Loader2 size={18} className="animate-spin" /> Menunggu Kompresi...</>
-                ) : (
-                  <>{editId ? 'Simpan Perubahan' : 'Kirim Laporan'} <ArrowRight size={18} /></>
-                )}
-              </button>
-            )}
-
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-10">
+        
+        {/* HEADER */}
+        <div className="flex items-center justify-between">
+          <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all">
+            <ArrowLeft size={24} />
+          </button>
+          <div className="text-right">
+            <h1 className="text-xl font-bold tracking-tight">Input Laporan</h1>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">{unit?.nama_unit}</p>
           </div>
         </div>
+
+        {/* DATE PICKER */}
+        <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+          <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-sm text-indigo-500">
+            <Calendar size={24} />
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tanggal Laporan</label>
+            <input 
+              type="date" 
+              className="bg-transparent text-lg font-bold outline-none w-full cursor-pointer" 
+              value={tanggal} 
+              onChange={e => { setTanggal(e.target.value); checkExisting(e.target.value); }} 
+            />
+          </div>
+        </div>
+
+        {/* SCHOOLS SECTION */}
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <Layout size={16} /> Realisasi Sekolah
+            </h2>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleSelectAll}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
+              >
+                <CheckSquare size={14} /> Pilih Semua
+              </button>
+              <button 
+                onClick={handleDeselectAll}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
+              >
+                <RotateCcw size={14} /> Batal Semua
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {listSekolah.map(s => {
+              const val = realisasi[s.id] || ''
+              const isFilled = Number(val || 0) > 0
+              return (
+                <div key={s.id} className={`group bg-white dark:bg-slate-900 p-4 rounded-2xl border transition-all shadow-sm hover:shadow-md flex items-center gap-4 ${isFilled ? 'border-indigo-200 dark:border-indigo-500/30' : 'border-slate-100 dark:border-slate-800'}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-bold text-sm truncate transition-colors ${isFilled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-900 dark:text-slate-100'}`}>{s.nama_sekolah}</p>
+                    <p className="text-[10px] font-medium text-slate-400">Target: {s.target_porsi} porsi</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      placeholder="0"
+                      className={`w-20 py-2 px-3 rounded-xl text-center text-sm font-bold outline-none border transition-all ${isFilled ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30' : 'bg-slate-50 dark:bg-slate-800 border-transparent focus:border-indigo-500/50'}`}
+                      value={val}
+                      onChange={e => setRealisasi(prev => ({ ...prev, [s.id]: e.target.value }))}
+                    />
+                    <button 
+                      onClick={() => handleToggleSekolah(s)}
+                      className={`p-2 transition-all rounded-lg ${isFilled ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-300 hover:text-indigo-500'}`}
+                    >
+                      <RotateCcw size={16} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* PHOTO SECTION */}
+        <div className="space-y-4">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2 px-2">
+            <Camera size={16} /> Dokumentasi
+          </h2>
+          <div 
+            className="relative h-40 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] flex flex-col items-center justify-center gap-2 overflow-hidden hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-all cursor-pointer group"
+          >
+            {previewUrl || (editId && existingFotoUrl) ? (
+              <img src={previewUrl || existingFotoUrl} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" alt="Preview" />
+            ) : null}
+            
+            <div className="relative z-10 flex flex-col items-center gap-2">
+              {isCompressing ? (
+                <Loader2 size={32} className="text-amber-500 animate-spin" />
+              ) : (
+                <Camera size={32} className="text-slate-300" />
+              )}
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                {isCompressing ? 'Memproses...' : foto || existingFotoUrl ? 'Ganti Foto' : 'Ambil/Pilih Foto'}
+              </span>
+            </div>
+            <input 
+              type="file" 
+              accept="image/*" 
+              className="absolute inset-0 opacity-0 cursor-pointer" 
+              onChange={e => handleFileSelect(e.target.files?.[0])}
+              disabled={isCompressing}
+            />
+          </div>
+        </div>
+
+        {/* SUBMIT BUTTON - STICKY AT BOTTOM MOBILE */}
+        <div className="fixed bottom-0 left-0 right-0 p-6 md:static md:p-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md md:bg-transparent">
+          <button 
+            onClick={handleSimpan}
+            disabled={loading || isCompressing}
+            className="w-full max-w-2xl mx-auto py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-3xl font-black text-sm uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {loading ? (
+              <><Loader2 size={20} className="animate-spin" /> Mengirim...</>
+            ) : (
+              <>{editId ? 'Perbarui Laporan' : 'Kirim Laporan'} <ArrowRight size={20} /></>
+            )}
+          </button>
+        </div>
+
       </div>
     </div>
   )
 }
 
 // ============================================================
-// EXPORTED PAGE — Wrapped with ErrorBoundary + Suspense
+// EXPORTED PAGE
 // ============================================================
 export default function InputLaporanPage() {
   return (
