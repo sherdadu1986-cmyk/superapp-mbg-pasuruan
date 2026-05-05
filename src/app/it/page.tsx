@@ -514,7 +514,11 @@ export default function SuperAdminITPage() {
                        {laporanHarian.filter(l => l.nama_unit.toLowerCase().includes(monSearch.toLowerCase())).map(l => {
                          const isOp = l.is_operasional ?? true
                          return (
-                           <div key={l.id} className={`p-5 rounded-3xl border transition-all shadow-sm flex flex-col gap-3 ${isOp ? 'bg-white border-slate-100' : 'bg-rose-50/50 border-rose-100'}`}>
+                           <div 
+                             key={l.id} 
+                             onClick={() => isOp ? router.push(`/korwil/detail/${l.unit_id}`) : null}
+                             className={`p-5 rounded-3xl border transition-all shadow-sm flex flex-col gap-3 cursor-pointer hover:shadow-md ${isOp ? 'bg-white border-slate-100 hover:border-emerald-200' : 'bg-rose-50/50 border-rose-100 hover:border-rose-200'}`}
+                           >
                               <div className="flex justify-between items-center">
                                  <div className="flex items-center gap-2">
                                     <span className={`text-xs font-bold uppercase italic tracking-tighter ${isOp ? 'text-slate-700' : 'text-rose-700'}`}>{l.nama_unit}</span>
