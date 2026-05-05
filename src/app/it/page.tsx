@@ -12,6 +12,8 @@ import {
 import Swal from 'sweetalert2'
 import { verifyAccount, rejectAccount } from '@/lib/verification'
 
+import * as XLSX from 'xlsx'
+
 export default function SuperAdminITPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -27,6 +29,9 @@ export default function SuperAdminITPage() {
   const [units, setUnits] = useState<any[]>([])
   const [laporanHarian, setLaporanHarian] = useState<any[]>([])
   const [tanggal] = useState(getLocalToday())
+
+  // Import State
+  const [isImporting, setIsImporting] = useState(false)
 
   // Form State
   const [isEdit, setIsEdit] = useState(false)
@@ -173,6 +178,108 @@ export default function SuperAdminITPage() {
     }
   }
 
+  // --- EXCEL FUNCTIONS ---
+  const handleDownloadTemplate = () => {
+    const template = [
+      { 'Nama Unit': 'Unit SPPG Contoh', Email: 'contoh@pasuruan.com', Password: 'pass123' }
+    ]
+    const ws = XLSX.utils.json_to_sheet(template)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Template SPPG')
+    XLSX.writeFile(wb, 'Template_Import_SPPG.xlsx')
+    toast('success', 'Berhasil', 'Template berhasil diunduh.')
+  }
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsImporting(true)
+
+    const reader = new FileReader()
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result
+        const wb = XLSX.read(bstr, { type: 'binary' })
+        const wsname = wb.SheetNames[0]
+        const ws = wb.Sheets[wsname]
+        const data: any[] = XLSX.utils.sheet_to_json(ws)
+
+        if (data.length === 0) throw new Error('File Excel kosong atau format salah.')
+
+        // 1. Validation
+        const errors: string[] = []
+        const validData: any[] = []
+        
+        // Cek duplikat email yang sudah ada di DB
+        const { data: existingUsers } = await supabase.from('users_app').select('email')
+        const existingEmails = new Set(existingUsers?.map(u => u.email.toLowerCase()) || [])
+
+        data.forEach((row, idx) => {
+          const nama = row['Nama Unit']
+          const email = row['Email']?.toString().trim().toLowerCase()
+          const pass = row['Password']
+
+          if (!nama || !email || !pass) {
+            errors.push(`Baris ${idx + 2}: Data tidak lengkap.`)
+          } else if (existingEmails.has(email)) {
+            errors.push(`Baris ${idx + 2}: Email ${email} sudah terdaftar.`)
+          } else {
+            validData.push({ nama, email, pass })
+          }
+        })
+
+        if (errors.length > 0) {
+          Swal.fire({
+            title: 'Kesalahan Validasi',
+            html: `<div class="text-left text-xs max-h-40 overflow-auto">${errors.join('<br>')}</div>`,
+            icon: 'error'
+          })
+          setIsImporting(false)
+          return
+        }
+
+        // 2. Execution
+        const result = await Swal.fire({
+          title: 'Konfirmasi Import',
+          text: `Akan mengimport ${validData.length} akun SPPG. Lanjutkan?`,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Ya, Import Sekarang'
+        })
+
+        if (result.isConfirmed) {
+          setLoading(true)
+          for (const item of validData) {
+            // Create Unit
+            const { data: unit } = await supabase.from('daftar_sppg').insert([{ 
+              nama_unit: item.nama, 
+              kepala_unit: '-' 
+            }]).select().single()
+
+            if (unit) {
+              // Create User
+              await supabase.from('users_app').insert([{
+                email: item.email,
+                password: item.pass.toString(),
+                role: 'sppg',
+                sppg_unit_id: unit.id
+              }])
+            }
+          }
+          toast('success', 'Import Berhasil!', `${validData.length} akun telah ditambahkan.`)
+          fetchData()
+        }
+      } catch (err: any) {
+        toast('error', 'Gagal Import', err.message)
+      } finally {
+        setIsImporting(false)
+        setLoading(false)
+        e.target.value = '' // Reset input
+      }
+    }
+    reader.readAsBinaryString(file)
+  }
+
   return (
     <div className="min-h-screen bg-[#F3F4F9] flex font-sans transition-all duration-300">
 
@@ -227,9 +334,25 @@ export default function SuperAdminITPage() {
                   <h1 className="text-3xl font-bold text-slate-800 tracking-tight leading-none uppercase italic">Authority</h1>
                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-2 italic">Kendali Penuh Seluruh Akun & Sistem</p>
                 </div>
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input type="text" placeholder="Cari Email / Unit..." className="pl-12 pr-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:border-[#4F46E5] w-64 shadow-sm" onChange={(e) => setSearchTerm(e.target.value)} />
+                
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col items-end gap-1">
+                    <button 
+                      onClick={handleDownloadTemplate}
+                      className="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:underline"
+                    >
+                      Unduh Template Excel
+                    </button>
+                    <label className="cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2">
+                      <Plus size={14} /> Import dari Excel
+                      <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleImportExcel} disabled={isImporting || loading} />
+                    </label>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input type="text" placeholder="Cari Email / Unit..." className="pl-12 pr-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:border-[#4F46E5] w-64 shadow-sm" onChange={(e) => setSearchTerm(e.target.value)} />
+                  </div>
                 </div>
               </header>
 
