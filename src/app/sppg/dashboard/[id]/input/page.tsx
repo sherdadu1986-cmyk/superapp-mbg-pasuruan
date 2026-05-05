@@ -114,7 +114,7 @@ function InputLaporanForm() {
             setRealisasi(lap?.realisasi_sekolah ?? {})
             setExistingFotoUrl(lap?.foto_url ?? '')
             setExistingLaporanId(editId)
-            setStatusOperasional(lap?.status_operasional !== 'tidak_operasional')
+            setStatusOperasional(lap?.is_operasional ?? true)
             setCatatan(lap?.catatan_tidak_operasional ?? '')
           }
         } else {
@@ -136,7 +136,7 @@ function InputLaporanForm() {
       setExistingLaporanId(data.id)
       setRealisasi(data.realisasi_sekolah ?? {})
       setExistingFotoUrl(data.foto_url ?? '')
-      setStatusOperasional(data.status_operasional !== 'tidak_operasional')
+      setStatusOperasional(data.is_operasional ?? true)
       setCatatan(data.catatan_tidak_operasional ?? '')
     } else {
       setExistingLaporanId(null)
@@ -239,7 +239,7 @@ function InputLaporanForm() {
         unit_id: id,
         nama_unit: unit?.nama_unit ?? '',
         tanggal_ops: tanggal,
-        status_operasional: statusOperasional ? 'operasional' : 'tidak_operasional',
+        is_operasional: statusOperasional, // Map to boolean column
         catatan_tidak_operasional: statusOperasional ? null : catatan,
         menu_makanan: statusOperasional ? 'Menu Terjadwal' : '-', 
         data_gizi: {}, 
@@ -315,9 +315,9 @@ function InputLaporanForm() {
                </button>
                <button 
                  onClick={() => setStatusOperasional(false)}
-                 className={`flex-1 py-2 text-xs font-bold relative z-10 transition-colors ${!statusOperasional ? 'text-white' : 'text-slate-400'}`}
+                 className={`flex-1 py-2 text-[10px] font-bold relative z-10 transition-colors ${!statusOperasional ? 'text-white' : 'text-slate-400'}`}
                >
-                 Tutup
+                 Tidak Beroperasional
                </button>
             </div>
           </div>
