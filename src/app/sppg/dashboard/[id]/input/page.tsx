@@ -87,6 +87,8 @@ function InputLaporanForm() {
   const [listSekolah, setListSekolah] = useState<any[]>([])
   
   const [tanggal, setTanggal] = useState(getLocalToday())
+  const [statusOperasional, setStatusOperasional] = useState(true)
+  const [catatan, setCatatan] = useState('')
   const [realisasi, setRealisasi] = useState<Record<string, string>>({})
   const [foto, setFoto] = useState<any>(null)
   const [existingFotoUrl, setExistingFotoUrl] = useState('')
@@ -112,6 +114,8 @@ function InputLaporanForm() {
             setRealisasi(lap?.realisasi_sekolah ?? {})
             setExistingFotoUrl(lap?.foto_url ?? '')
             setExistingLaporanId(editId)
+            setStatusOperasional(lap?.status_operasional !== 'tidak_operasional')
+            setCatatan(lap?.catatan_tidak_operasional ?? '')
           }
         } else {
           await checkExisting(getLocalToday())
@@ -132,10 +136,14 @@ function InputLaporanForm() {
       setExistingLaporanId(data.id)
       setRealisasi(data.realisasi_sekolah ?? {})
       setExistingFotoUrl(data.foto_url ?? '')
+      setStatusOperasional(data.status_operasional !== 'tidak_operasional')
+      setCatatan(data.catatan_tidak_operasional ?? '')
     } else {
       setExistingLaporanId(null)
       setRealisasi({})
       setExistingFotoUrl('')
+      setStatusOperasional(true)
+      setCatatan('')
     }
   }
 
@@ -188,9 +196,31 @@ function InputLaporanForm() {
       return
     }
 
-    const totalRealisasi = Object.values(realisasi).reduce((acc, curr) => acc + Number(curr || 0), 0)
-    if (totalRealisasi <= 0) {
-      toast('error', 'Gagal', 'Data realisasi tidak boleh kosong atau nol semua.')
+    // Anti-Future Date Validation
+    const today = getLocalToday()
+    if (tanggal > today) {
+      toast('error', 'Gagal', 'Tidak bisa membuat laporan untuk tanggal masa depan.')
+      return
+    }
+
+    // Anti-Duplicate Logic
+    if (!editId) {
+      const { data: exist } = await supabase.from('laporan_harian_final').select('id').eq('tanggal_ops', tanggal).eq('unit_id', id).maybeSingle()
+      if (exist && exist.id !== existingLaporanId) {
+        toast('error', 'Sudah Ada', 'Laporan untuk tanggal ini sudah ada! Gunakan mode edit jika ingin mengubah.')
+        return
+      }
+    }
+
+    // Validation for Operational status
+    if (statusOperasional) {
+      const totalRealisasi = Object.values(realisasi).reduce((acc, curr) => acc + Number(curr || 0), 0)
+      if (totalRealisasi <= 0) {
+        toast('error', 'Gagal', 'Data realisasi tidak boleh kosong untuk status operasional.')
+        return
+      }
+    } else if (!catatan.trim()) {
+      toast('warning', 'Lengkapi', 'Berikan alasan/catatan kenapa unit tidak operasional.')
       return
     }
 
@@ -209,9 +239,11 @@ function InputLaporanForm() {
         unit_id: id,
         nama_unit: unit?.nama_unit ?? '',
         tanggal_ops: tanggal,
-        menu_makanan: 'Menu Terjadwal', // Automated/Defaulted
-        data_gizi: {}, // Simplified: No longer input manually
-        realisasi_sekolah: realisasi,
+        status_operasional: statusOperasional ? 'operasional' : 'tidak_operasional',
+        catatan_tidak_operasional: statusOperasional ? null : catatan,
+        menu_makanan: statusOperasional ? 'Menu Terjadwal' : '-', 
+        data_gizi: {}, 
+        realisasi_sekolah: statusOperasional ? realisasi : {},
         foto_url: finalFotoUrl
       }
 
@@ -266,106 +298,164 @@ function InputLaporanForm() {
           </div>
         </div>
 
-        {/* DATE PICKER */}
-        <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center gap-4">
-          <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-sm text-indigo-500">
-            <Calendar size={24} />
-          </div>
-          <div className="flex-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tanggal Laporan</label>
-            <input 
-              type="date" 
-              className="bg-transparent text-lg font-bold outline-none w-full cursor-pointer" 
-              value={tanggal} 
-              onChange={e => { setTanggal(e.target.value); checkExisting(e.target.value); }} 
-            />
-          </div>
-        </div>
-
-        {/* SCHOOLS SECTION */}
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
-              <Layout size={16} /> Realisasi Sekolah
-            </h2>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={handleSelectAll}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
-              >
-                <CheckSquare size={14} /> Pilih Semua
-              </button>
-              <button 
-                onClick={handleDeselectAll}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
-              >
-                <RotateCcw size={14} /> Batal Semua
-              </button>
+        {/* STATUS TOGGLE & DATE PICKER */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* STATUS TOGGLE */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-4">Status Operasional</label>
+            <div className="flex bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm relative overflow-hidden">
+               <div 
+                 className={`absolute inset-y-1 w-[calc(50%-4px)] bg-slate-900 dark:bg-indigo-600 rounded-xl transition-all duration-300 ease-out ${statusOperasional ? 'left-1' : 'left-[calc(50%+4px)] bg-rose-600 dark:bg-rose-600'}`}
+               />
+               <button 
+                 onClick={() => setStatusOperasional(true)}
+                 className={`flex-1 py-2 text-xs font-bold relative z-10 transition-colors ${statusOperasional ? 'text-white' : 'text-slate-400'}`}
+               >
+                 Operasional
+               </button>
+               <button 
+                 onClick={() => setStatusOperasional(false)}
+                 className={`flex-1 py-2 text-xs font-bold relative z-10 transition-colors ${!statusOperasional ? 'text-white' : 'text-slate-400'}`}
+               >
+                 Tutup
+               </button>
             </div>
           </div>
 
-          <div className="grid gap-3">
-            {listSekolah.map(s => {
-              const val = realisasi[s.id] || ''
-              const isFilled = Number(val || 0) > 0
-              return (
-                <div key={s.id} className={`group bg-white dark:bg-slate-900 p-4 rounded-2xl border transition-all shadow-sm hover:shadow-md flex items-center gap-4 ${isFilled ? 'border-indigo-200 dark:border-indigo-500/30' : 'border-slate-100 dark:border-slate-800'}`}>
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-bold text-sm truncate transition-colors ${isFilled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-900 dark:text-slate-100'}`}>{s.nama_sekolah}</p>
-                    <p className="text-[10px] font-medium text-slate-400">Target: {s.target_porsi} porsi</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      placeholder="0"
-                      className={`w-20 py-2 px-3 rounded-xl text-center text-sm font-bold outline-none border transition-all ${isFilled ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30' : 'bg-slate-50 dark:bg-slate-800 border-transparent focus:border-indigo-500/50'}`}
-                      value={val}
-                      onChange={e => setRealisasi(prev => ({ ...prev, [s.id]: e.target.value }))}
-                    />
-                    <button 
-                      onClick={() => handleToggleSekolah(s)}
-                      className={`p-2 transition-all rounded-lg ${isFilled ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-300 hover:text-indigo-500'}`}
-                    >
-                      <RotateCcw size={16} />
-                    </button>
+          {/* DATE PICKER */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+            <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-sm text-indigo-500">
+              <Calendar size={24} />
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tanggal</label>
+              <input 
+                type="date" 
+                max={getLocalToday()}
+                className="bg-transparent text-lg font-bold outline-none w-full cursor-pointer" 
+                value={tanggal} 
+                onChange={e => { setTanggal(e.target.value); checkExisting(e.target.value); }} 
+              />
+            </div>
+          </div>
+        </div>
+
+        {statusOperasional ? (
+          /* OPERATIONAL CONTENT */
+          <div className="space-y-10 animate-in fade-in duration-500">
+            {/* SCHOOLS SECTION */}
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
+                <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                  <Layout size={16} /> Realisasi Sekolah
+                </h2>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={handleSelectAll}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
+                  >
+                    <CheckSquare size={14} /> Pilih Semua
+                  </button>
+                  <button 
+                    onClick={handleDeselectAll}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
+                  >
+                    <RotateCcw size={14} /> Batal Semua
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                {listSekolah.map(s => {
+                  const val = realisasi[s.id] || ''
+                  const isFilled = Number(val || 0) > 0
+                  return (
+                    <div key={s.id} className={`group bg-white dark:bg-slate-900 p-4 rounded-2xl border transition-all shadow-sm hover:shadow-md flex items-center gap-4 ${isFilled ? 'border-indigo-200 dark:border-indigo-500/30' : 'border-slate-100 dark:border-slate-800'}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-bold text-sm truncate transition-colors ${isFilled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-900 dark:text-slate-100'}`}>{s.nama_sekolah}</p>
+                        <p className="text-[10px] font-medium text-slate-400">Target: {s.target_porsi} porsi</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          placeholder="0"
+                          className={`w-20 py-2 px-3 rounded-xl text-center text-sm font-bold outline-none border transition-all ${isFilled ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30' : 'bg-slate-50 dark:bg-slate-800 border-transparent focus:border-indigo-500/50'}`}
+                          value={val}
+                          onChange={e => setRealisasi(prev => ({ ...prev, [s.id]: e.target.value }))}
+                        />
+                        <button 
+                          onClick={() => handleToggleSekolah(s)}
+                          className={`p-2 transition-all rounded-lg ${isFilled ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-300 hover:text-indigo-500'}`}
+                        >
+                          <RotateCcw size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* PHOTO SECTION */}
+            <div className="space-y-4">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2 px-2">
+                <Camera size={16} /> Dokumentasi
+              </h2>
+              <div 
+                className="relative h-48 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2.5rem] flex flex-col items-center justify-center gap-2 overflow-hidden hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-all cursor-pointer group shadow-inner"
+              >
+                {previewUrl || (editId && existingFotoUrl) ? (
+                  <img src={previewUrl || existingFotoUrl} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" alt="Preview" />
+                ) : null}
+                
+                <div className="relative z-10 flex flex-col items-center gap-3">
+                  {isCompressing ? (
+                    <Loader2 size={36} className="text-amber-500 animate-spin" />
+                  ) : (
+                    <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-lg text-slate-300 group-hover:text-indigo-500 group-hover:scale-110 transition-all">
+                      <Camera size={28} />
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      {isCompressing ? 'Mengompres...' : foto || existingFotoUrl ? 'Ganti Dokumentasi' : 'Pilih Foto Operasional'}
+                    </span>
+                    <p className="text-[9px] text-slate-300 font-medium mt-1">Maksimal 300KB • JPEG/PNG</p>
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* PHOTO SECTION */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2 px-2">
-            <Camera size={16} /> Dokumentasi
-          </h2>
-          <div 
-            className="relative h-40 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] flex flex-col items-center justify-center gap-2 overflow-hidden hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-all cursor-pointer group"
-          >
-            {previewUrl || (editId && existingFotoUrl) ? (
-              <img src={previewUrl || existingFotoUrl} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" alt="Preview" />
-            ) : null}
-            
-            <div className="relative z-10 flex flex-col items-center gap-2">
-              {isCompressing ? (
-                <Loader2 size={32} className="text-amber-500 animate-spin" />
-              ) : (
-                <Camera size={32} className="text-slate-300" />
-              )}
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                {isCompressing ? 'Memproses...' : foto || existingFotoUrl ? 'Ganti Foto' : 'Ambil/Pilih Foto'}
-              </span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="absolute inset-0 opacity-0 cursor-pointer z-20" 
+                  onChange={e => handleFileSelect(e.target.files?.[0])}
+                  disabled={isCompressing}
+                />
+              </div>
             </div>
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="absolute inset-0 opacity-0 cursor-pointer" 
-              onChange={e => handleFileSelect(e.target.files?.[0])}
-              disabled={isCompressing}
-            />
           </div>
-        </div>
+        ) : (
+          /* NON-OPERATIONAL CONTENT */
+          <div className="animate-in slide-in-from-bottom duration-500">
+            <div className="bg-rose-50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/20 p-8 rounded-[2.5rem] space-y-6">
+              <div className="flex items-center gap-4 text-rose-500">
+                <AlertTriangle size={32} />
+                <div>
+                  <h3 className="font-bold">Unit Tidak Operasional</h3>
+                  <p className="text-xs text-rose-600/70 font-medium">Laporan akan tercatat sebagai hari libur/kendala.</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-rose-400 uppercase tracking-widest px-1">Alasan / Catatan</label>
+                <textarea 
+                  className="w-full bg-white dark:bg-slate-900 border border-rose-100 dark:border-rose-500/20 rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-rose-500 transition-all min-h-[120px]"
+                  placeholder="Contoh: Libur Nasional, Perbaikan Dapur, Kendala Pengiriman, dll..."
+                  value={catatan}
+                  onChange={e => setCatatan(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* SUBMIT BUTTON - STICKY AT BOTTOM MOBILE */}
         <div className="fixed bottom-0 left-0 right-0 p-6 md:static md:p-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md md:bg-transparent">
