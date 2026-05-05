@@ -5,7 +5,7 @@ import { getLocalToday } from '@/lib/date'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
 import {
-  ArrowLeft, Activity, RotateCcw, ArrowRight, CheckCircle2, Calendar, Layout, Loader2, Camera, AlertTriangle, PartyPopper, RefreshCcw, CheckSquare, Square
+  ArrowLeft, Activity, RotateCcw, ArrowRight, CheckCircle2, Calendar, Layout, Loader2, Camera, AlertTriangle, PartyPopper, RefreshCcw, CheckSquare, Square, X
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 
@@ -26,6 +26,11 @@ const successStyles = `
 .success-modal { animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .check-draw { stroke-dasharray: 50; stroke-dashoffset: 50; animation: checkDraw 0.6s 0.3s ease forwards; }
 .pulse-ring { animation: pulse-ring 1.2s ease-out infinite; }
+
+/* FORCE LIGHT MODE GLOBAL FOR THIS PAGE */
+:root {
+  color-scheme: light !important;
+}
 `;
 
 // ============================================================
@@ -40,14 +45,14 @@ class InputErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 p-10 max-w-md w-full text-center space-y-6">
-            <div className="w-20 h-20 bg-amber-50 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto text-amber-500">
+        <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-6 text-slate-900">
+          <div className="bg-white rounded-3xl shadow-xl border border-[#E5E7EB] p-10 max-w-md w-full text-center space-y-6">
+            <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-500">
               <AlertTriangle size={40} />
             </div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Ada Masalah Teknis</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Gagal memuat form. Silakan muat ulang halaman.</p>
-            <button onClick={() => window.location.reload()} className="w-full py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold transition-all hover:opacity-90">Muat Ulang</button>
+            <h2 className="text-xl font-bold text-slate-800">Ada Masalah Teknis</h2>
+            <p className="text-sm text-slate-500">Gagal memuat form. Silakan muat ulang halaman.</p>
+            <button onClick={() => window.location.reload()} className="w-full py-3.5 bg-slate-900 text-white rounded-2xl font-bold transition-all hover:opacity-90">Muat Ulang</button>
           </div>
         </div>
       )
@@ -61,10 +66,10 @@ class InputErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // ============================================================
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
+    <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
       <div className="text-center space-y-4">
         <Loader2 size={40} className="text-indigo-500 animate-spin mx-auto" />
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Menyiapkan Laporan...</p>
+        <p className="text-sm font-medium text-slate-500">Menyiapkan Laporan...</p>
       </div>
     </div>
   )
@@ -178,7 +183,13 @@ function InputLaporanForm() {
     if (!file) return
     setIsCompressing(true)
     try {
-      const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1024, useWebWorker: true, fileType: 'image/jpeg' as const }
+      // ULTRA-COMPRESS TARGET 100KB (0.1 MB)
+      const options = { 
+        maxSizeMB: 0.1, 
+        maxWidthOrHeight: 1080, 
+        useWebWorker: true, 
+        fileType: 'image/webp' as const 
+      }
       const compressed = await imageCompression(file, options)
       setFoto(compressed)
       if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -228,7 +239,7 @@ function InputLaporanForm() {
     try {
       let finalFotoUrl = existingFotoUrl
       if (foto) {
-        const fileName = `${Date.now()}_${id}.jpg`
+        const fileName = `${Date.now()}_${id}.webp`
         const filePath = `dokumentasi_harian/${fileName}`
         await supabase.storage.from('dokumentasi').upload(filePath, foto)
         finalFotoUrl = supabase.storage.from('dokumentasi').getPublicUrl(filePath).data.publicUrl
@@ -239,7 +250,7 @@ function InputLaporanForm() {
         unit_id: id,
         nama_unit: unit?.nama_unit ?? '',
         tanggal_ops: tanggal,
-        is_operasional: statusOperasional, // Map to boolean column
+        is_operasional: statusOperasional,
         catatan_tidak_operasional: statusOperasional ? null : catatan,
         menu_makanan: statusOperasional ? 'Menu Terjadwal' : '-', 
         data_gizi: {}, 
@@ -263,15 +274,15 @@ function InputLaporanForm() {
   if (pageLoading) return <LoadingSpinner />
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 pb-24">
+    <div className="min-h-screen bg-[#F9FAFB] text-slate-900 font-sans transition-colors duration-300 pb-24">
       <style>{successStyles}</style>
 
       {/* SUCCESS MODAL */}
       {showSuccess && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md">
-          <div className="success-modal bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl p-12 max-w-sm w-full mx-4 text-center border border-slate-100 dark:border-slate-800">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/80 backdrop-blur-md">
+          <div className="success-modal bg-white rounded-[2.5rem] shadow-2xl p-12 max-w-sm w-full mx-4 text-center border border-[#E5E7EB]">
             <div className="relative w-24 h-24 mx-auto mb-8">
-              <div className="absolute inset-0 bg-emerald-100 dark:bg-emerald-500/20 rounded-full pulse-ring" />
+              <div className="absolute inset-0 bg-emerald-100 rounded-full pulse-ring" />
               <div className="relative w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" className="check-draw" />
@@ -279,8 +290,8 @@ function InputLaporanForm() {
               </div>
             </div>
             <h2 className="text-2xl font-bold mb-2">Laporan Disimpan!</h2>
-            <p className="text-slate-500 dark:text-slate-400 mb-8">Data harian telah berhasil tercatat di sistem.</p>
-            <button onClick={() => router.push(`/sppg/dashboard/${id}`)} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold text-lg hover:scale-105 transition-all">Selesai</button>
+            <p className="text-slate-500 mb-8">Data harian telah berhasil tercatat di sistem.</p>
+            <button onClick={() => router.push(`/sppg/dashboard/${id}`)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-lg hover:scale-105 transition-all">Selesai</button>
           </div>
         </div>
       )}
@@ -289,7 +300,7 @@ function InputLaporanForm() {
         
         {/* HEADER */}
         <div className="flex items-center justify-between">
-          <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all">
+          <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full transition-all">
             <ArrowLeft size={24} />
           </button>
           <div className="text-right">
@@ -301,11 +312,11 @@ function InputLaporanForm() {
         {/* STATUS TOGGLE & DATE PICKER */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* STATUS TOGGLE */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800">
+          <div className="bg-white p-6 rounded-[2rem] border border-[#E5E7EB] shadow-sm">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-4">Status Operasional</label>
-            <div className="flex bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm relative overflow-hidden">
+            <div className="flex bg-slate-50 p-1 rounded-2xl border border-[#E5E7EB] relative overflow-hidden">
                <div 
-                 className={`absolute inset-y-1 w-[calc(50%-4px)] bg-slate-900 dark:bg-indigo-600 rounded-xl transition-all duration-300 ease-out ${statusOperasional ? 'left-1' : 'left-[calc(50%+4px)] bg-rose-600 dark:bg-rose-600'}`}
+                 className={`absolute inset-y-1 w-[calc(50%-4px)] bg-slate-900 rounded-xl transition-all duration-300 ease-out ${statusOperasional ? 'left-1' : 'left-[calc(50%+4px)] bg-rose-600'}`}
                />
                <button 
                  onClick={() => setStatusOperasional(true)}
@@ -323,8 +334,8 @@ function InputLaporanForm() {
           </div>
 
           {/* DATE PICKER */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center gap-4">
-            <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-sm text-indigo-500">
+          <div className="bg-white p-6 rounded-[2rem] border border-[#E5E7EB] shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center shadow-inner text-indigo-500">
               <Calendar size={24} />
             </div>
             <div className="flex-1">
@@ -352,13 +363,13 @@ function InputLaporanForm() {
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={handleSelectAll}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
                   >
                     <CheckSquare size={14} /> Pilih Semua
                   </button>
                   <button 
                     onClick={handleDeselectAll}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-bold text-rose-600 bg-rose-50 px-4 py-2 rounded-full transition-all hover:scale-105 active:scale-95"
                   >
                     <RotateCcw size={14} /> Batal Semua
                   </button>
@@ -370,22 +381,22 @@ function InputLaporanForm() {
                   const val = realisasi[s.id] || ''
                   const isFilled = Number(val || 0) > 0
                   return (
-                    <div key={s.id} className={`group bg-white dark:bg-slate-900 p-4 rounded-2xl border transition-all shadow-sm hover:shadow-md flex items-center gap-4 ${isFilled ? 'border-indigo-200 dark:border-indigo-500/30' : 'border-slate-100 dark:border-slate-800'}`}>
+                    <div key={s.id} className={`group bg-white p-4 rounded-2xl border transition-all shadow-sm hover:shadow-md flex items-center gap-4 ${isFilled ? 'border-indigo-200' : 'border-[#E5E7EB]'}`}>
                       <div className="flex-1 min-w-0">
-                        <p className={`font-bold text-sm truncate transition-colors ${isFilled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-900 dark:text-slate-100'}`}>{s.nama_sekolah}</p>
+                        <p className={`font-bold text-sm truncate transition-colors ${isFilled ? 'text-indigo-600' : 'text-slate-900'}`}>{s.nama_sekolah}</p>
                         <p className="text-[10px] font-medium text-slate-400">Target: {s.target_porsi} porsi</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <input 
                           type="number" 
                           placeholder="0"
-                          className={`w-20 py-2 px-3 rounded-xl text-center text-sm font-bold outline-none border transition-all ${isFilled ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30' : 'bg-slate-50 dark:bg-slate-800 border-transparent focus:border-indigo-500/50'}`}
+                          className={`w-20 py-2 px-3 rounded-xl text-center text-sm font-bold outline-none border transition-all ${isFilled ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-transparent focus:border-indigo-500/50'}`}
                           value={val}
                           onChange={e => setRealisasi(prev => ({ ...prev, [s.id]: e.target.value }))}
                         />
                         <button 
                           onClick={() => handleToggleSekolah(s)}
-                          className={`p-2 transition-all rounded-lg ${isFilled ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-300 hover:text-indigo-500'}`}
+                          className={`p-2 transition-all rounded-lg ${isFilled ? 'text-indigo-500 bg-indigo-50' : 'text-slate-300 hover:text-indigo-500'}`}
                         >
                           <RotateCcw size={16} />
                         </button>
@@ -402,7 +413,7 @@ function InputLaporanForm() {
                 <Camera size={16} /> Dokumentasi
               </h2>
               <div 
-                className="relative h-48 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2.5rem] flex flex-col items-center justify-center gap-2 overflow-hidden hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-all cursor-pointer group shadow-inner"
+                className="relative h-48 border-2 border-dashed border-[#E5E7EB] rounded-[2.5rem] flex flex-col items-center justify-center gap-2 overflow-hidden hover:bg-white transition-all cursor-pointer group shadow-sm bg-slate-50/50"
               >
                 {previewUrl || (editId && existingFotoUrl) ? (
                   <img src={previewUrl || existingFotoUrl} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" alt="Preview" />
@@ -410,18 +421,23 @@ function InputLaporanForm() {
                 
                 <div className="relative z-10 flex flex-col items-center gap-3">
                   {isCompressing ? (
-                    <Loader2 size={36} className="text-amber-500 animate-spin" />
-                  ) : (
-                    <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-lg text-slate-300 group-hover:text-indigo-500 group-hover:scale-110 transition-all">
-                      <Camera size={28} />
+                    <div className="flex flex-col items-center gap-3">
+                       <Loader2 size={36} className="text-amber-500 animate-spin" />
+                       <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest animate-pulse">Mengompres gambar (100KB target)...</span>
                     </div>
+                  ) : (
+                    <>
+                      <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg text-slate-300 group-hover:text-indigo-500 group-hover:scale-110 transition-all">
+                        <Camera size={28} />
+                      </div>
+                      <div className="text-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                          {foto || existingFotoUrl ? 'Ganti Dokumentasi' : 'Pilih Foto Operasional'}
+                        </span>
+                        <p className="text-[9px] text-slate-300 font-medium mt-1">Maksimal 100KB • WebP Ultra-Compress</p>
+                      </div>
+                    </>
                   )}
-                  <div className="text-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                      {isCompressing ? 'Mengompres...' : foto || existingFotoUrl ? 'Ganti Dokumentasi' : 'Pilih Foto Operasional'}
-                    </span>
-                    <p className="text-[9px] text-slate-300 font-medium mt-1">Maksimal 300KB • JPEG/PNG</p>
-                  </div>
                 </div>
                 <input 
                   type="file" 
@@ -436,7 +452,7 @@ function InputLaporanForm() {
         ) : (
           /* NON-OPERATIONAL CONTENT */
           <div className="animate-in slide-in-from-bottom duration-500">
-            <div className="bg-rose-50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/20 p-8 rounded-[2.5rem] space-y-6">
+            <div className="bg-rose-50 border border-rose-100 p-8 rounded-[2.5rem] space-y-6">
               <div className="flex items-center gap-4 text-rose-500">
                 <AlertTriangle size={32} />
                 <div>
@@ -447,7 +463,7 @@ function InputLaporanForm() {
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-rose-400 uppercase tracking-widest px-1">Alasan / Catatan</label>
                 <textarea 
-                  className="w-full bg-white dark:bg-slate-900 border border-rose-100 dark:border-rose-500/20 rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-rose-500 transition-all min-h-[120px]"
+                  className="w-full bg-white border border-rose-100 rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-rose-500 transition-all min-h-[120px]"
                   placeholder="Contoh: Libur Nasional, Perbaikan Dapur, Kendala Pengiriman, dll..."
                   value={catatan}
                   onChange={e => setCatatan(e.target.value)}
@@ -458,11 +474,11 @@ function InputLaporanForm() {
         )}
 
         {/* SUBMIT BUTTON - STICKY AT BOTTOM MOBILE */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 md:static md:p-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md md:bg-transparent">
+        <div className="fixed bottom-0 left-0 right-0 p-6 md:static md:p-0 bg-white/80 backdrop-blur-md md:bg-transparent">
           <button 
             onClick={handleSimpan}
             disabled={loading || isCompressing}
-            className="w-full max-w-2xl mx-auto py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-3xl font-black text-sm uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
+            className="w-full max-w-2xl mx-auto py-5 bg-slate-900 text-white rounded-3xl font-black text-sm uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
           >
             {loading ? (
               <><Loader2 size={20} className="animate-spin" /> Mengirim...</>
