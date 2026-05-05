@@ -168,7 +168,7 @@ export default function SuperAdminITPage() {
         </nav>
 
         <div className="p-4 border-t border-white/10">
-          <button onClick={() => router.push('/')} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-semibold text-red-200 hover:bg-red-500/10 rounded-xl transition-all overflow-hidden">
+          <button onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-semibold text-red-200 hover:bg-red-500/10 rounded-xl transition-all overflow-hidden">
             <LogOut size={20} className="shrink-0" />
             <span className={`transition-all duration-300 ${sidebarOpen ? 'opacity-100' : 'opacity-0 invisible'}`}>Logout</span>
           </button>

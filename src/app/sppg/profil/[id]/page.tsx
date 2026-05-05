@@ -275,7 +275,7 @@ export default function ProfilSPPGPage() {
           })}
         </nav>
         <div className="p-3 border-t border-white/[0.06]">
-          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200">
+          <button onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200">
             <LogOut size={18} className="shrink-0" />
             <span className={`text-[13px] font-semibold ${sidebarOpen ? 'block' : 'hidden'}`}>Logout</span>
           </button>

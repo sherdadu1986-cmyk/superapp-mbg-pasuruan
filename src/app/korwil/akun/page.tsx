@@ -157,7 +157,7 @@ export default function ManajemenAkunPage() {
                     </button>
                 </nav>
                 <div className="absolute bottom-8 w-full px-6">
-                    <button onClick={() => router.push('/')} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-rose-500 hover:bg-rose-50 transition-all font-bold text-xs uppercase tracking-widest">
+                    <button onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-rose-500 hover:bg-rose-50 transition-all font-bold text-xs uppercase tracking-widest">
                         <LogOut size={20} /><span className="hidden lg:block">Sign Out</span>
                     </button>
                 </div>

@@ -202,7 +202,7 @@ export default function DashboardSPPGPage() {
           })}
         </nav>
         <div className="p-4 border-t border-white/10">
-          <button onClick={() => { localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-4 px-4 py-4 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-2xl transition-all duration-300 uppercase tracking-widest overflow-hidden">
+          <button onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-4 px-4 py-4 text-[10px] font-black text-red-400 hover:bg-red-500/10 rounded-2xl transition-all duration-300 uppercase tracking-widest overflow-hidden">
             <LogOut size={24} className="shrink-0" />
             <span className={sidebarOpen ? 'block' : 'hidden'}>Logout</span>
           </button>
