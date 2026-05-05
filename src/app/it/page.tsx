@@ -30,6 +30,9 @@ export default function SuperAdminITPage() {
   const [laporanHarian, setLaporanHarian] = useState<any[]>([])
   const [tanggal] = useState(getLocalToday())
 
+  // --- MONITORING LIST STATES ---
+  const [monSearch, setMonSearch] = useState('')
+
   // Import State
   const [isImporting, setIsImporting] = useState(false)
 
@@ -455,7 +458,19 @@ export default function SuperAdminITPage() {
                   <h1 className="text-3xl font-bold text-slate-800 tracking-tight leading-none uppercase italic">System Monitor</h1>
                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-2 italic">Status Pengiriman Laporan Wilayah</p>
                 </div>
-                <div className="bg-white px-5 py-3 rounded-2xl border border-slate-200 font-black text-[10px] text-[#4F46E5] uppercase shadow-sm tracking-[0.2em]">{tanggal}</div>
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="Cari Unit..." 
+                      className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-bold outline-none focus:border-[#4F46E5] w-48 shadow-sm" 
+                      value={monSearch}
+                      onChange={e => setMonSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="bg-white px-5 py-3 rounded-2xl border border-slate-200 font-black text-[10px] text-[#4F46E5] uppercase shadow-sm tracking-[0.2em]">{tanggal}</div>
+                </div>
               </header>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -471,6 +486,55 @@ export default function SuperAdminITPage() {
                   <div className="w-16 h-16 bg-red-50 text-red-500 rounded-[1.5rem] flex items-center justify-center font-black text-2xl shadow-inner group-hover:bg-red-500 group-hover:text-white transition-all">{units.length - laporanHarian.length}</div>
                   <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">Pending</p><p className="text-lg font-black text-slate-800 uppercase italic leading-none">Belum</p></div>
                 </div>
+              </div>
+
+              {/* MONITORING LIST FOR IT ADMIN */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                 {/* BELUM LAPOR */}
+                 <div className="space-y-4">
+                    <h3 className="text-[10px] font-black text-red-500 uppercase tracking-widest px-4 flex items-center gap-2 italic">
+                      <X size={14} /> Belum Kirim Laporan
+                    </h3>
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                       {units.filter(u => !laporanHarian.find(l => l.unit_id === u.id)).filter(u => u.nama_unit.toLowerCase().includes(monSearch.toLowerCase())).map(u => (
+                         <div key={u.id} className="bg-white p-5 rounded-3xl border border-slate-100 flex justify-between items-center shadow-sm">
+                            <span className="text-xs font-bold text-slate-700 uppercase italic tracking-tighter">{u.nama_unit}</span>
+                            <span className="px-3 py-1 bg-red-50 text-red-500 text-[9px] font-black uppercase rounded-full">Pending</span>
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+
+                 {/* SUDAH LAPOR */}
+                 <div className="space-y-4">
+                    <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest px-4 flex items-center gap-2 italic">
+                      <CheckCircle2 size={14} /> Laporan Masuk
+                    </h3>
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                       {laporanHarian.filter(l => l.nama_unit.toLowerCase().includes(monSearch.toLowerCase())).map(l => {
+                         const isOp = l.is_operasional ?? true
+                         return (
+                           <div key={l.id} className={`p-5 rounded-3xl border transition-all shadow-sm flex flex-col gap-3 ${isOp ? 'bg-white border-slate-100' : 'bg-rose-50/50 border-rose-100'}`}>
+                              <div className="flex justify-between items-center">
+                                 <div className="flex items-center gap-2">
+                                    <span className={`text-xs font-bold uppercase italic tracking-tighter ${isOp ? 'text-slate-700' : 'text-rose-700'}`}>{l.nama_unit}</span>
+                                    {!isOp && <span className="text-[8px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full uppercase">[TIDAK BEROPERASIONAL]</span>}
+                                 </div>
+                                 <span className={`px-3 py-1 text-[9px] font-black uppercase rounded-full ${isOp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
+                                   {isOp ? 'Success' : 'Off-Day'}
+                                 </span>
+                              </div>
+                              {!isOp && (
+                                <div className="bg-white/50 p-3 rounded-xl border border-rose-100/50">
+                                   <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mb-1 italic">Alasan:</p>
+                                   <p className="text-[11px] text-slate-600 font-medium italic">"{l.catatan_tidak_operasional || 'Tidak ada catatan.'}"</p>
+                                </div>
+                              )}
+                           </div>
+                         )
+                       })}
+                    </div>
+                 </div>
               </div>
             </div>
           )}

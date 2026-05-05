@@ -140,6 +140,10 @@ export default function SuperKorwilPage() {
     setDataLoading(false)
   }, [monitoringDate])
 
+  // --- MODAL CATATAN STATE ---
+  const [showNoteModal, setShowNoteModal] = useState(false)
+  const [selectedNote, setSelectedNote] = useState({ unit: '', text: '' })
+
   // --- FETCH GALERI ---
   const fetchGaleri = useCallback(async () => {
     setGaleriLoading(true)
@@ -150,8 +154,9 @@ export default function SuperKorwilPage() {
     if (validUnitIds.length > 0) {
       const { data } = await supabase
         .from('laporan_harian_final')
-        .select('id, foto_url, nama_unit, menu_makanan, tanggal_ops, unit_id')
+        .select('id, foto_url, nama_unit, menu_makanan, tanggal_ops, unit_id, is_operasional')
         .eq('tanggal_ops', monitoringDate)
+        .eq('is_operasional', true) // Hanya tampilkan yang operasional di galeri
         .not('foto_url', 'is', null)
         .neq('foto_url', '')
         .in('unit_id', validUnitIds)
@@ -171,7 +176,13 @@ export default function SuperKorwilPage() {
 
   // --- ESC key to close modal ---
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelectedFoto(null); setShowExportModal(false) } }
+    const handleEsc = (e: KeyboardEvent) => { 
+      if (e.key === 'Escape') { 
+        setSelectedFoto(null); 
+        setShowExportModal(false); 
+        setShowNoteModal(false);
+      } 
+    }
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [])
@@ -664,17 +675,49 @@ export default function SuperKorwilPage() {
                         </span>
                       </div>
                       <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-                        {laporan.filter(l => l.nama_unit?.toLowerCase().includes(searchQuery.toLowerCase())).map(l => (
-                          <div key={l.id} onClick={() => router.push(`/korwil/detail/${l.unit_id}`)} className="bg-white border border-[#E5E7EB] p-3.5 rounded-lg flex justify-between items-center group cursor-pointer hover:border-emerald-200 hover:bg-emerald-50/30 transition-all duration-200">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
-                                <Utensils size={14} className="text-emerald-600" />
+                        {laporan.filter(l => l.nama_unit?.toLowerCase().includes(searchQuery.toLowerCase())).map(l => {
+                          const isOp = l.is_operasional ?? true
+                          return (
+                            <div 
+                              key={l.id} 
+                              onClick={() => isOp ? router.push(`/korwil/detail/${l.unit_id}`) : null} 
+                              className={`border p-3.5 rounded-lg flex justify-between items-center group transition-all duration-200 ${
+                                isOp 
+                                  ? 'bg-white border-[#E5E7EB] cursor-pointer hover:border-emerald-200 hover:bg-emerald-50/30' 
+                                  : 'bg-rose-50/50 border-rose-100 cursor-default hover:border-rose-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isOp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                  {isOp ? <Utensils size={14} /> : <AlertTriangle size={14} />}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-[13px] font-semibold transition-colors ${isOp ? 'text-slate-700 group-hover:text-emerald-700' : 'text-rose-700'}`}>
+                                      {l.nama_unit}
+                                    </span>
+                                    {!isOp && (
+                                      <span className="text-[9px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter">[TIDAK BEROPERASIONAL]</span>
+                                    )}
+                                  </div>
+                                  {!isOp && (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setSelectedNote({ unit: l.nama_unit, text: l.catatan_tidak_operasional || 'Tidak ada catatan.' })
+                                        setShowNoteModal(true)
+                                      }}
+                                      className="text-[10px] font-bold text-rose-500 hover:underline flex items-center gap-1 mt-1"
+                                    >
+                                      Lihat Alasan 
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              <span className="text-[13px] font-semibold text-slate-700 group-hover:text-emerald-700 transition-colors">{l.nama_unit}</span>
+                              {isOp && <ChevronRight className="text-slate-300 group-hover:text-emerald-500 transition-all group-hover:translate-x-1" size={18} />}
                             </div>
-                            <ChevronRight className="text-slate-300 group-hover:text-emerald-500 transition-all group-hover:translate-x-1" size={18} />
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   )}
@@ -904,6 +947,43 @@ export default function SuperKorwilPage() {
           </div>
         </div>
       )}
+      {/* ============================================ */}
+      {/* MODAL LIHAT CATATAN                         */}
+      {/* ============================================ */}
+      {showNoteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 dark:border-slate-800">
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center shadow-inner">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter leading-none italic">Alasan Kendala</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{selectedNote.unit}</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowNoteModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-all"><X size={20} /></button>
+              </div>
+              
+              <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 min-h-[120px]">
+                <p className="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed italic">
+                  "{selectedNote.text}"
+                </p>
+              </div>
+              
+              <button 
+                onClick={() => setShowNoteModal(false)}
+                className="w-full mt-8 py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
+              >
+                Tutup Catatan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
