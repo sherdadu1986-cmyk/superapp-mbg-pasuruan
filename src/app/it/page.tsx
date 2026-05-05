@@ -76,7 +76,7 @@ export default function SuperAdminITPage() {
   }
 
   const handleSimpan = async () => {
-    if (!form.nama_unit || !form.email) return toast('warning', 'Lengkapi Data', 'Nama dan Email wajib diisi.')
+    if (!form.nama_unit || !form.email || !form.password) return toast('warning', 'Lengkapi Data', 'Nama Unit, Email, dan Password wajib diisi.')
     setLoading(true)
     try {
       if (isEdit) {
@@ -85,19 +85,35 @@ export default function SuperAdminITPage() {
         if (user?.sppg_unit_id) {
           await supabase.from('daftar_sppg').update({ nama_unit: form.nama_unit, kepala_unit: form.kepala_unit }).eq('id', user.sppg_unit_id)
         }
-        toast('success', 'Data Berhasil Diperbarui!')
+        toast('success', 'Data Akun & Unit Berhasil Diperbarui!')
       } else {
-        const { data: unit } = await supabase.from('daftar_sppg').insert([{ nama_unit: form.nama_unit, kepala_unit: form.kepala_unit }]).select().single()
+        // One-Door Policy: Akun dibuat langsung aktif (role: sppg)
+        const { data: unit, error: unitErr } = await supabase.from('daftar_sppg').insert([{ 
+          nama_unit: form.nama_unit, 
+          kepala_unit: form.kepala_unit || '-' 
+        }]).select().single()
+        
+        if (unitErr) throw unitErr
+
         if (unit) {
-          await supabase.from('users_app').insert([{ email: form.email, password: form.password, role: form.role, sppg_unit_id: unit.id }])
+          const { error: userErr } = await supabase.from('users_app').insert([{ 
+            email: form.email, 
+            password: form.password, 
+            role: 'sppg', // Otomatis aktif
+            sppg_unit_id: unit.id 
+          }])
+          if (userErr) throw userErr
         }
-        toast('success', 'SPPG & Akun Berhasil Dibuat!')
+        toast('success', 'Akun SPPG Berhasil Dibuat & Aktif!')
       }
       setForm({ nama_unit: '', kepala_unit: '', email: '', password: '', role: 'sppg' })
       setIsEdit(false)
       fetchData()
-    } catch (err: any) { toast('error', 'Gagal Menyimpan', err.message) }
-    setLoading(false)
+    } catch (err: any) { 
+      toast('error', 'Gagal', err.message) 
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleEditClick = (u: any) => {
@@ -197,9 +213,9 @@ export default function SuperAdminITPage() {
                 <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-6 flex justify-between items-center px-2 italic">
                   <div className="flex items-center gap-3">
                     {isEdit ? <Edit3 size={18} className="text-amber-600" /> : <Plus size={18} className="text-[#4F46E5]" />}
-                    {isEdit ? 'Edit Akun SPPG' : 'Registrasi SPPG & Akun Baru'}
+                    {isEdit ? 'Edit Data Operasional SPPG' : 'Buat Akun SPPG Baru (Internal)'}
                   </div>
-                  {isEdit && <button onClick={() => { setIsEdit(false); setForm({ nama_unit: '', kepala_unit: '', email: '', password: '', role: 'sppg' }) }} className="text-red-500 hover:scale-110 transition-all"><X size={18} /></button>}
+                  {isEdit && <button onClick={() => { setIsEdit(false); setForm({ nama_unit: '', kepala_unit: '', email: '', password: '', role: 'sppg' }) }} className="text-red-500 hover:scale-110 transition-all font-black flex items-center gap-1 text-[9px] uppercase tracking-widest bg-red-50 px-3 py-1 rounded-full border border-red-100">Batal Edit <X size={14} /></button>}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
                   <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-widest">Nama SPPG</label>

@@ -136,7 +136,7 @@ export default function LoginPage() {
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email / Akun</label>
               <div className="relative group">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-600 transition-colors duration-200" size={18} />
-                <input required type="email" className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200" placeholder="admin@mbg.com" onChange={(e) => setEmail(e.target.value)} />
+                <input required type="email" className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-all duration-200" placeholder="admin@pasuruan.com" onChange={(e) => setEmail(e.target.value)} />
               </div>
             </div>
 
@@ -167,12 +167,10 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Register Link */}
-          <div className="pt-6 border-t border-slate-100 flex flex-col items-center gap-3 text-center">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Durung Ndue Akun?</p>
-            <button onClick={() => router.push('/register')} className="flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-all duration-200 uppercase tracking-widest group">
-              <UserPlus size={16} className="group-hover:scale-110 transition-transform" /> Daftar Akun Sek
-            </button>
+          {/* Helpdesk Only */}
+          <div className="pt-6 border-t border-slate-100 flex flex-col items-center gap-2 text-center">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Butuh Bantuan Akun?</p>
+            <p className="text-[10px] font-medium text-slate-500">Hubungi Administrator untuk pendaftaran unit baru.</p>
           </div>
         </motion.div>
       </div>
