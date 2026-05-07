@@ -16,7 +16,9 @@ import {
   School,
   Clock,
   LayoutDashboard,
-  Users
+  Users,
+  ShieldCheck,
+  AlertTriangle as LucideAlert
 } from 'lucide-react'
 
 export default function DetailLaporanUnitPage() {
@@ -184,10 +186,10 @@ export default function DetailLaporanUnitPage() {
                 {/* INFO STATUS BILA TIDAK OPERASIONAL */}
                 {!laporan.is_operasional && (
                   <div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-100 space-y-4 shadow-sm">
-                     <div className="flex items-center gap-3 text-rose-600">
-                        <AlertTriangle size={24} />
-                        <h4 className="font-black text-xs uppercase tracking-widest italic">Catatan Kendala</h4>
-                     </div>
+                      <div className="flex items-center gap-3 text-rose-600">
+                         <span className="text-rose-600"><LucideAlert size={24} /></span>
+                         <h4 className="font-black text-xs uppercase tracking-widest italic">Catatan Kendala</h4>
+                      </div>
                      <p className="text-sm text-rose-700 italic font-medium leading-relaxed bg-white/50 p-6 rounded-2xl border border-rose-100/50">
                        "{laporan.catatan_tidak_operasional || 'Tidak ada catatan.'}"
                      </p>
@@ -197,44 +199,84 @@ export default function DetailLaporanUnitPage() {
 
               {/* KANAN: REALISASI DISTRIBUSI */}
               <div className="lg:col-span-2 space-y-8">
-                 <div className="bg-white rounded-[2.5rem] p-8 lg:p-10 shadow-sm border border-slate-200 space-y-8">
-                    <header className="flex justify-between items-center border-b border-slate-100 pb-8">
-                       <h3 className="text-xs font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-3 italic">
-                         <School size={20} className="text-indigo-500" /> Realisasi Distribusi Sekolah
+
+                  {/* AUDIT DISTRIBUSI (POLISI DATA) */}
+                  <div className="bg-white rounded-[2.5rem] p-8 lg:p-10 shadow-xl border border-rose-100 space-y-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50/50 rounded-bl-[5rem] -mr-8 -mt-8 flex items-center justify-center pointer-events-none">
+                      <ShieldCheck size={40} className="text-rose-200/50" />
+                    </div>
+                    
+                    <header className="border-b border-slate-100 pb-8">
+                       <h3 className="text-xs font-black text-rose-600 uppercase tracking-[0.2em] flex items-center gap-3 italic">
+                         <ShieldCheck size={20} /> Audit Distribusi & Selisih Data
                        </h3>
-                       <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          <Clock size={14} /> Kirim: {laporan.created_at?.split('T')[1].substring(0, 5)} WIB
-                       </div>
+                       <p className="text-[10px] text-slate-400 font-bold uppercase mt-2">Pengecekan Akurasi Realisasi vs Kuota Resmi</p>
                     </header>
 
-                    <div className="grid gap-4">
-                      {listSekolah.length > 0 ? listSekolah.map((s, idx) => {
-                        const real = laporan.realisasi_sekolah?.[s.id] || '0'
-                        const isZero = Number(real) === 0
-                        return (
-                          <div key={idx} className={`flex justify-between items-center p-6 rounded-3xl border transition-all ${isZero ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-100 hover:border-emerald-200 shadow-sm'}`}>
-                            <div className="space-y-1">
-                              <p className="text-sm font-black text-slate-800 uppercase tracking-tighter italic">{s.nama_sekolah}</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target: {s.target_porsi} Pack</span>
-                                {isZero && <span className="text-[8px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter leading-none">Nol</span>}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className={`text-xl font-black ${isZero ? 'text-slate-300' : 'text-emerald-600'}`}>
-                                {real.toLocaleString()}
-                              </p>
-                              <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Penerima</p>
-                            </div>
-                          </div>
-                        )
-                      }) : (
-                        <div className="text-center py-16 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
-                           <LayoutDashboard size={40} className="text-slate-200 mx-auto mb-4" />
-                           <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Belum Ada Titik Layanan</p>
-                        </div>
-                      )}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-slate-50">
+                            <th className="py-4 px-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Nama Sekolah</th>
+                            <th className="py-4 px-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Target (Kuota)</th>
+                            <th className="py-4 px-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Realisasi</th>
+                            <th className="py-4 px-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Selisih</th>
+                            <th className="py-4 px-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Status Audit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {listSekolah.map((s, idx) => {
+                            const real = Number(laporan.realisasi_sekolah?.[s.id] || 0)
+                            const target = s.target_porsi || 0
+                            const selisih = real - target
+                            const isOver = real > target
+
+                            return (
+                              <tr key={idx} className={`border-b border-slate-50 transition-colors ${isOver ? 'bg-rose-50/50' : 'hover:bg-slate-50/30'}`}>
+                                <td className="py-4 px-2">
+                                  <p className={`text-[11px] font-black uppercase tracking-tighter italic ${isOver ? 'text-rose-600' : 'text-slate-700'}`}>{s.nama_sekolah}</p>
+                                </td>
+                                <td className="py-4 px-2">
+                                  <span className="text-[11px] font-bold text-slate-400">{target} <small>Porsi</small></span>
+                                </td>
+                                <td className="py-4 px-2">
+                                  <span className={`text-[11px] font-black ${isOver ? 'text-rose-600' : 'text-emerald-600'}`}>{real} <small>Porsi</small></span>
+                                </td>
+                                <td className="py-4 px-2">
+                                  <span className={`text-[11px] font-black ${selisih > 0 ? 'text-rose-600' : selisih < 0 ? 'text-amber-500' : 'text-slate-300'}`}>
+                                    {selisih > 0 ? `+${selisih}` : selisih}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  {isOver ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-600 text-white rounded-full text-[8px] font-black uppercase tracking-tighter animate-pulse shadow-lg shadow-rose-600/20">
+                                      <LucideAlert size={10} /> Anomali
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[8px] font-black uppercase tracking-tighter">
+                                      <CheckCircle2 size={10} /> Valid
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
                     </div>
+                    
+                    {/* DOUBLE COUNTING WARNING */}
+                    {Object.keys(laporan.realisasi_sekolah || {}).length > listSekolah.length && (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-4">
+                        <div className="w-10 h-10 bg-amber-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
+                          <Activity size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Peringatan Audit</p>
+                          <p className="text-[11px] font-medium text-amber-800 leading-tight mt-1">Terdeteksi data sekolah yang tidak terdaftar dalam rute resmi unit ini. Potensi <b>Double Counting</b> atau salah input rute.</p>
+                        </div>
+                      </div>
+                    )}
                  </div>
               </div>
 

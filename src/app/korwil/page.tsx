@@ -9,7 +9,7 @@ import {
   BarChart3, LogOut, CheckCircle2, ChevronRight, ChevronLeft, Settings,
   Utensils, School, Box, Activity, Users, Baby, GraduationCap,
   Clock, MapPin, Map, AlertTriangle, Camera, X, ImageIcon, FileSpreadsheet, Loader2, Calendar,
-  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2, Layout, ArrowRight, RotateCcw
+  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2, Layout, ArrowRight, RotateCcw, ShieldCheck
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 import {
@@ -88,9 +88,9 @@ export default function SuperKorwilPage() {
   const [selectedFoto, setSelectedFoto] = useState<any>(null)
   const [exporting, setExporting] = useState(false)
 
-  // --- SEARCH & FILTER STATE ---
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'semua' | 'sudah' | 'belum'>('semua')
+  const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // --- EXPORT MODAL STATE ---
@@ -229,9 +229,21 @@ export default function SuperKorwilPage() {
       setTotalPorsiHarian(total)
       const totalTarget = (s || []).reduce((acc, item) => acc + (item.target_porsi || 0), 0)
       setTotalTargetPorsi(totalTarget)
+
+      // Calculate Target Porsi per Unit for Anomaly Detection
+      const { data: schoolsWithSppg } = await supabase.from('daftar_sekolah').select('sppg_id, target_porsi')
+      const targetMap: Record<string, number> = {}
+      schoolsWithSppg?.forEach(sch => {
+        if (sch.sppg_id) {
+          targetMap[sch.sppg_id] = (targetMap[sch.sppg_id] || 0) + (sch.target_porsi || 0)
+        }
+      })
+      setUnitTargetMap(targetMap)
     }
     setDataLoading(false)
   }, [monitoringDate])
+
+  const [unitTargetMap, setUnitTargetMap] = useState<Record<string, number>>({})
 
   // --- MODAL CATATAN STATE ---
   const [showNoteModal, setShowNoteModal] = useState(false)
@@ -524,7 +536,7 @@ export default function SuperKorwilPage() {
             <Layout size={20} className="text-white" />
           </div>
           <div className="hidden lg:block">
-            <h1 className="font-black tracking-tight text-lg text-slate-900 leading-none">Jobie</h1>
+            <h1 className="font-black tracking-tight text-lg text-slate-900 leading-none">KORWIL KAB. PASURUAN</h1>
             <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-1">Korwil Dashboard</p>
           </div>
         </div>
@@ -567,8 +579,8 @@ export default function SuperKorwilPage() {
               {/* TOP HEADER */}
               <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Halo, Korwil! 👋</h2>
-                  <p className="text-xs text-slate-400 font-medium">Berikut ringkasan operasional wilayah Pasuruan hari ini.</p>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Halo, Mba Aisha! 👋</h2>
+                  <p className="text-xs text-slate-400 font-medium">Yuk cek pekerjaan anak-anaknya.</p>
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
@@ -611,7 +623,7 @@ export default function SuperKorwilPage() {
                         <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded uppercase">Progres Lapor</span>
                       </div>
                       <h3 className="text-xl font-bold text-slate-900 tracking-tight">{progres}%</h3>
-                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">{laporan.length} / {units.length} Unit</p>
+                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">{laporan.length} / {units.length} SPPG</p>
                       <div className="w-full h-1 bg-slate-50 rounded-full mt-3 overflow-hidden">
                         <div style={{ width: `${progres}%` }} className="h-full bg-indigo-600 transition-all duration-1000 ease-out" />
                       </div>
@@ -636,12 +648,14 @@ export default function SuperKorwilPage() {
                         <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-black rounded uppercase">Total Realisasi</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">{totalPorsiHarian.toLocaleString()}</h3>
+                        <h3 className={`text-xl font-bold tracking-tight ${totalPorsiHarian > totalTargetPorsi ? 'text-rose-600' : 'text-slate-900'}`}>
+                          {totalPorsiHarian.toLocaleString()}
+                        </h3>
                         {totalPorsiHarian > totalTargetPorsi && (
                           <div className="group/tip relative cursor-help">
-                            <AlertTriangle size={14} className="text-amber-500 animate-pulse" />
+                            <AlertTriangle size={14} className="text-rose-500 animate-pulse" />
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-900 text-white text-[8px] rounded-lg opacity-0 group-hover/tip:opacity-100 transition-all pointer-events-none z-50">
-                              Realisasi melebihi target kuota resmi. Mohon cek validitas input SPPG.
+                              Perhatian: Jumlah porsi terkirim melebihi kuota target!
                             </div>
                           </div>
                         )}
@@ -754,21 +768,30 @@ export default function SuperKorwilPage() {
                     </div>
 
                     {/* BROADCAST GLOBAL BUTTON */}
-                    <button
-                      onClick={() => {
-                        const belumLapor = units.filter(u => !laporan.some(l => l.unit_id === u.id))
-                        if (belumLapor.length === 0) {
-                          toast('info', 'Lengkap!', 'Seluruh unit sudah mengirimkan laporan.')
-                          return
-                        }
-                        const listNames = belumLapor.map((u, i) => `${i + 1}. ${u.nama_unit}`).join('\n')
-                        const pesan = `*INFO MONITORING MBG PASURUAN*\n\nBerikut adalah unit SPPG yang *BELUM* mengirimkan laporan hari ini:\n\n${listNames}\n\nMohon kerja samanya untuk segera mengisi laporan di aplikasi. Terima kasih.`
-                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(pesan)}`, '_blank')
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/10 group active:scale-95"
-                    >
-                      <Megaphone size={14} className="group-hover:animate-bounce" /> Ingatkan di Grup
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setShowAnomaliesOnly(!showAnomaliesOnly)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${showAnomaliesOnly ? 'bg-rose-600 text-white shadow-rose-600/20' : 'bg-white border border-rose-100 text-rose-500 hover:bg-rose-50'}`}
+                      >
+                        <span className={showAnomaliesOnly ? '' : 'text-rose-400'}><ShieldCheck size={14} /></span> Cek Selisih Data
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          const belumLapor = units.filter(u => !laporan.some(l => l.unit_id === u.id))
+                          if (belumLapor.length === 0) {
+                            toast('success', 'Lengkap!', 'Seluruh unit sudah mengirimkan laporan.')
+                            return
+                          }
+                          const listNames = belumLapor.map((u, i) => `${i + 1}. ${u.nama_unit}`).join('\n')
+                          const pesan = `*INFO MONITORING MBG PASURUAN*\n\nBerikut adalah unit SPPG yang *BELUM* mengirimkan laporan hari ini:\n\n${listNames}\n\nMohon kerja samanya untuk segera mengisi laporan di aplikasi. Terima kasih.`
+                          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(pesan)}`, '_blank')
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/10 group active:scale-95"
+                      >
+                        <span className="group-hover:animate-bounce"><Megaphone size={14} /></span> Ingatkan di Grup
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -785,19 +808,24 @@ export default function SuperKorwilPage() {
                           const report = laporan.find(l => l.unit_id === u.id)
                           const hasLapor = !!report
                           const isOp = report?.is_operasional ?? true
+                          
+                          const unitRealTotal = Object.values(report?.realisasi_sekolah || {}).reduce((acc: number, v: any) => acc + (parseInt(v) || 0), 0)
+                          const unitTargetTotal = unitTargetMap[u.id] || 0
+                          const isAnomali = hasLapor && isOp && unitRealTotal > unitTargetTotal
 
                           if (filterStatus === 'sudah' && (!hasLapor || !isOp)) return null
                           if (filterStatus === 'belum' && hasLapor) return null
+                          if (showAnomaliesOnly && !isAnomali) return null
 
                           return (
                             <div
                               key={u.id}
                               onClick={() => router.push(`/korwil/detail/${u.id}`)}
-                              className={`group bg-white p-4 rounded-xl border border-slate-100 shadow-lg shadow-slate-200/10 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer relative overflow-hidden`}
+                              className={`group bg-white p-4 rounded-xl border ${isAnomali ? 'border-rose-200' : 'border-slate-100'} shadow-lg shadow-slate-200/10 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer relative overflow-hidden`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${hasLapor ? (isOp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600') : 'bg-slate-50 text-slate-300'}`}>
-                                  {hasLapor ? (isOp ? <Utensils size={16} /> : <AlertTriangle size={16} />) : <Clock size={16} />}
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${hasLapor ? (isOp ? (isAnomali ? 'bg-rose-100 text-rose-600' : 'bg-emerald-50 text-emerald-600') : 'bg-rose-50 text-rose-600') : 'bg-slate-50 text-slate-300'}`}>
+                                  {hasLapor ? (isOp ? (isAnomali ? <AlertTriangle size={16} /> : <Utensils size={16} />) : <AlertTriangle size={16} />) : <Clock size={16} />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <h4 className="text-xs font-black text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{u.nama_unit}</h4>
