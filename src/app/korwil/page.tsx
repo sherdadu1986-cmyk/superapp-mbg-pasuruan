@@ -1,17 +1,20 @@
 "use client"
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLocalToday } from '@/lib/date'
-import { useRouter } from 'next/navigation'
-import { useToast } from '@/components/toast'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import {
   BarChart3, LogOut, CheckCircle2, ChevronRight, ChevronLeft, Settings,
   Utensils, School, Box, Activity, Users, Baby, GraduationCap,
   Clock, MapPin, Map, AlertTriangle, Camera, X, ImageIcon, FileSpreadsheet, Loader2, Calendar,
-  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2
+  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2, Layout, ArrowRight, RotateCcw
 } from 'lucide-react'
+import { useToast } from '@/components/toast'
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts'
 
 export default function SuperKorwilPage() {
   const router = useRouter()
@@ -30,6 +33,54 @@ export default function SuperKorwilPage() {
   const [statsPorsi, setStatsPorsi] = useState<Record<string, number>>({})
   const [totalPorsiHarian, setTotalPorsiHarian] = useState(0)
 
+  // --- MONTHLY CHART STATE ---
+  const [chartData, setChartData] = useState<any[]>([])
+  const [chartLoading, setChartLoading] = useState(true)
+
+  const fetchMonthlyData = useCallback(async () => {
+    setChartLoading(true)
+    try {
+      const now = new Date()
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString('en-CA')
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toLocaleDateString('en-CA')
+
+      // Fetch all reports for this month
+      const { data: reports } = await supabase
+        .from('laporan_harian_final')
+        .select('tanggal_ops, realisasi_sekolah')
+        .gte('tanggal_ops', firstDay)
+        .lte('tanggal_ops', lastDay)
+
+      // Fetch all schools for target calculation
+      const { data: schools } = await supabase.from('daftar_sekolah').select('target_porsi')
+      const totalTargetPerDay = (schools || []).reduce((acc, s) => acc + (s.target_porsi || 0), 0)
+
+      const dailyMap: Record<string, { tgl: string, realisasi: number, target: number }> = {}
+      
+      // Initialize with all days of the month
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+      for (let i = 1; i <= daysInMonth; i++) {
+        const dStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+        dailyMap[dStr] = { tgl: String(i), realisasi: 0, target: totalTargetPerDay }
+      }
+
+      // Aggregate realisasi
+      reports?.forEach(r => {
+        if (dailyMap[r.tanggal_ops]) {
+          const dailyTotal = Object.values(r.realisasi_sekolah || {}).reduce((acc: number, val: any) => acc + (parseInt(val) || 0), 0)
+          dailyMap[r.tanggal_ops].realisasi += dailyTotal
+        }
+      })
+
+      setChartData(Object.values(dailyMap))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setChartLoading(false)
+    }
+  }, [])
+
+
   // --- GALERI STATE ---
   const [galeriData, setGaleriData] = useState<any[]>([])
   const [galeriLoading, setGaleriLoading] = useState(false)
@@ -39,6 +90,7 @@ export default function SuperKorwilPage() {
   // --- SEARCH & FILTER STATE ---
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'semua' | 'sudah' | 'belum'>('semua')
+  const [copied, setCopied] = useState(false)
 
   // --- EXPORT MODAL STATE ---
   const [showExportModal, setShowExportModal] = useState(false)
@@ -50,7 +102,11 @@ export default function SuperKorwilPage() {
   const [unitToDelete, setUnitToDelete] = useState<any>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // --- HANDLER DELETE ---
+  // --- DELETE REPORT STATE ---
+  const [showDeleteReportModal, setShowDeleteReportModal] = useState(false)
+  const [reportToDelete, setReportToDelete] = useState<any>(null)
+  const [isDeletingReport, setIsDeletingReport] = useState(false)
+
   const handleDeleteUnit = async () => {
     if (!unitToDelete) return
     setIsDeleting(true)
@@ -75,6 +131,41 @@ export default function SuperKorwilPage() {
       toast('error', 'Gagal Menghapus', err.message || 'Terjadi kesalahan.')
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  // --- HANDLER DELETE REPORT ---
+  const handleDeleteReport = async () => {
+    if (!reportToDelete) return
+    setIsDeletingReport(true)
+    try {
+      // 1. Hapus Foto di Storage jika ada
+      if (reportToDelete.foto_url) {
+        try {
+          const urlParts = reportToDelete.foto_url.split('/dokumentasi/')
+          if (urlParts.length > 1) {
+            const filePath = urlParts[1]
+            await supabase.storage.from('dokumentasi').remove([filePath])
+          }
+        } catch (err) {
+          console.error('Gagal hapus storage:', err)
+        }
+      }
+
+      // 2. Hapus data di database
+      const { error } = await supabase.from('laporan_harian_final').delete().eq('id', reportToDelete.id)
+      if (error) throw error
+
+      toast('success', 'Berhasil Dihapus', 'Laporan berhasil dihapus.')
+      setShowDeleteReportModal(false)
+      setReportToDelete(null)
+      fetchData() // Refresh
+      fetchMonthlyData() // Refresh chart
+    } catch (err: any) {
+      console.error(err)
+      toast('error', 'Gagal Menghapus', err.message || 'Terjadi kesalahan.')
+    } finally {
+      setIsDeletingReport(false)
     }
   }
 
@@ -170,9 +261,51 @@ export default function SuperKorwilPage() {
     setGaleriLoading(false)
   }, [monitoringDate])
 
-  // --- EFFECTS (fixed: removed laporan.length to prevent infinite loop) ---
+  // --- CALCULATIONS ---
+  const progres = useMemo(() => {
+    return units.length > 0 ? Math.round((laporan.length / units.length) * 100) : 0
+  }, [units.length, laporan.length])
+
+  // --- EFFECTS ---
   useEffect(() => { fetchData() }, [monitoringDate, fetchData])
+  useEffect(() => { fetchMonthlyData() }, [fetchMonthlyData])
   useEffect(() => { if (activeView === 'galeri') fetchGaleri() }, [activeView, monitoringDate, fetchGaleri])
+
+  // --- SKELETON COMPONENTS ---
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-xl shadow-slate-200/20 animate-pulse">
+      <div className="flex justify-between items-start mb-4">
+        <div className="w-10 h-10 bg-slate-100 rounded-xl" />
+        <div className="w-20 h-4 bg-slate-100 rounded" />
+      </div>
+      <div className="w-24 h-8 bg-slate-100 rounded mb-2" />
+      <div className="w-32 h-4 bg-slate-100 rounded" />
+    </div>
+  )
+
+  const SkeletonChart = () => (
+    <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl shadow-slate-200/20 animate-pulse">
+      <div className="flex justify-between mb-8">
+        <div className="space-y-2">
+          <div className="w-48 h-6 bg-slate-100 rounded" />
+          <div className="w-32 h-4 bg-slate-100 rounded" />
+        </div>
+        <div className="w-32 h-10 bg-slate-100 rounded-full" />
+      </div>
+      <div className="w-full h-64 bg-slate-50 rounded-2xl" />
+    </div>
+  )
+
+  const SkeletonReport = () => (
+    <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-lg shadow-slate-200/20 animate-pulse flex items-center gap-4">
+      <div className="w-12 h-12 bg-slate-100 rounded-2xl" />
+      <div className="flex-1 space-y-2">
+        <div className="w-3/4 h-4 bg-slate-100 rounded" />
+        <div className="w-1/2 h-3 bg-slate-100 rounded" />
+      </div>
+      <div className="w-10 h-10 bg-slate-100 rounded-xl" />
+    </div>
+  )
 
   // --- ESC key to close modal ---
   useEffect(() => {
@@ -199,14 +332,7 @@ export default function SuperKorwilPage() {
     return () => clearInterval(interval)
   }, [today])
 
-  const progres = units.length > 0 ? Math.round((laporan.length / units.length) * 100) : 0
-
-  // --- DEADLINE CHECK (WIB) ---
-  const jamWIB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })).getHours()
-  const isLewatDeadline = jamWIB >= 9 && monitoringDate === today
-
   // --- COPY SUMMARY ---
-  const [copied, setCopied] = useState(false)
   const handleCopySummary = async () => {
     const tanggalDisplay = formatDisplayDate(monitoringDate)
     const belumLapor = units.length - laporan.length
@@ -378,444 +504,362 @@ export default function SuperKorwilPage() {
   // SIDEBAR NAV ITEMS
   // ============================================
   const sidebarItems = [
-    { label: 'Monitoring', icon: BarChart3, action: () => setActiveView('monitoring'), isActive: activeView === 'monitoring' && true },
+    { label: 'Monitoring', icon: BarChart3, action: () => setActiveView('monitoring'), isActive: activeView === 'monitoring' },
     { label: 'Peta Wilayah', icon: Map, action: () => router.push('/korwil/monitoring-wilayah'), isActive: false },
-    { label: 'Galeri', icon: Camera, action: () => setActiveView('galeri'), isActive: activeView === 'galeri' && true },
+    { label: 'Galeri', icon: Camera, action: () => setActiveView('galeri'), isActive: activeView === 'galeri' },
     { label: 'Data SPPG', icon: Database, action: () => router.push('/korwil/sppg'), isActive: false },
     { label: 'Akun Pengguna', icon: Users, action: () => router.push('/korwil/akun'), isActive: false },
   ]
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] text-slate-800 font-sans selection:bg-emerald-500/20 relative">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-500/20 relative pb-20">
 
-      {/* ============================================ */}
-      {/* SIDEBAR — SOLID DARK NAVY                   */}
-      {/* ============================================ */}
-      <aside className="w-20 lg:w-64 bg-[#111827] fixed h-full z-50 transition-all duration-300 flex flex-col">
+      {/* SIDEBAR — COMPACT STYLE */}
+      <aside className="w-20 lg:w-64 bg-white fixed h-full z-50 transition-all duration-300 flex flex-col border-r border-slate-100 shadow-xl shadow-slate-200/10">
         {/* Logo Area */}
-        <div className="p-5 lg:px-6 lg:py-7 border-b border-white/[0.06] flex items-center gap-3.5">
-          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
-            <Settings size={20} className="text-white" />
+        <div className="p-5 lg:p-8 flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-600/20">
+            <Layout size={20} className="text-white" />
           </div>
           <div className="hidden lg:block">
-            <h1 className="font-extrabold tracking-tight text-[15px] text-white leading-none">KORWIL</h1>
-            <p className="text-[10px] font-medium text-slate-500 tracking-wider mt-0.5">Control Panel</p>
+            <h1 className="font-black tracking-tight text-lg text-slate-900 leading-none">Jobie</h1>
+            <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-1">Korwil Dashboard</p>
           </div>
         </div>
 
         {/* Nav Items */}
-        <nav className="flex-1 p-3 lg:p-4 space-y-1.5 mt-2">
+        <nav className="flex-1 px-3 lg:px-4 space-y-1 mt-2">
           {sidebarItems.map((item) => (
             <button
               key={item.label}
               onClick={item.action}
-              className={`w-full flex items-center gap-3.5 px-3.5 py-3 lg:px-4 lg:py-3 rounded-xl transition-all duration-200 group relative ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group relative ${
                 item.isActive
-                  ? 'bg-emerald-500/10 text-emerald-400'
-                  : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
               }`}
             >
-              {/* Active indicator line */}
-              {item.isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-emerald-400 rounded-r-full" />
-              )}
               <item.icon size={20} className="shrink-0" />
-              <span className="hidden lg:block font-semibold text-[13px] tracking-wide">{item.label}</span>
+              <span className="hidden lg:block font-bold text-xs">{item.label}</span>
             </button>
           ))}
         </nav>
 
         {/* Sign Out */}
-        <div className="p-3 lg:p-4 border-t border-white/[0.06]">
-          <button onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }} className="w-full flex items-center gap-3.5 px-3.5 py-3 lg:px-4 lg:py-3 rounded-xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200">
-            <LogOut size={20} className="shrink-0" />
-            <span className="hidden lg:block font-semibold text-[13px]">Sign Out</span>
+        <div className="p-6 lg:p-8 border-t border-slate-50">
+          <button 
+            onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }} 
+            className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all duration-300 group"
+          >
+            <LogOut size={22} className="shrink-0 group-hover:rotate-12 transition-transform" />
+            <span className="hidden lg:block font-bold text-sm">Logout</span>
           </button>
         </div>
       </aside>
 
-      {/* ============================================ */}
-      {/* MAIN CONTENT — WHITE CANVAS                 */}
-      {/* ============================================ */}
+      {/* MAIN CONTENT */}
       <main className="pl-20 lg:pl-64 min-h-screen transition-all">
-        <div className="max-w-7xl mx-auto p-5 lg:p-8 space-y-6">
+        <div className="max-w-7xl mx-auto p-5 lg:p-8 space-y-8">
 
           {activeView === 'monitoring' ? (
             <>
-              {/* ======== MONITORING VIEW ======== */}
-              {/* TOP HEADER — DATE STEPPER */}
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">Infografis Wilayah</h2>
-                  <div className="flex items-center gap-2.5 mt-2.5">
-                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-[#E5E7EB] text-slate-500">
-                      <MapPin size={13} className="text-slate-400" />
-                      <span className="text-[11px] font-semibold">Kab. Pasuruan</span>
-                    </div>
-                  </div>
+              {/* TOP HEADER */}
+              <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Halo, Korwil! 👋</h2>
+                  <p className="text-xs text-slate-400 font-medium">Berikut ringkasan operasional wilayah Pasuruan hari ini.</p>
                 </div>
 
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  {/* COPY SUMMARY */}
-                  <button
-                    onClick={handleCopySummary}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[11px] font-semibold transition-all duration-200 border ${copied
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-white text-slate-600 border-[#E5E7EB] hover:border-slate-300 hover:bg-slate-50'
-                      }`}
-                  >
-                    {copied ? <><ClipboardCheck size={14} /> Disalin!</> : <><Copy size={14} /> Copy Summary</>}
-                  </button>
-
-                  {/* EXPORT EXCEL — opens modal */}
-                  <button
-                    onClick={() => setShowExportModal(true)}
-                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-lg text-[11px] font-semibold transition-all duration-200"
-                  >
-                    <FileSpreadsheet size={14} /> Ekspor Excel
-                  </button>
-
-                  {/* DATE STEPPER */}
-                  <div className="bg-white rounded-lg border border-[#E5E7EB] flex items-center overflow-hidden">
-                    <button onClick={() => shiftDate(-1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-r border-[#E5E7EB]">
-                      <ChevronLeft size={15} className="text-slate-400" />
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* DATE PICKER */}
+                  <div className="bg-white p-1.5 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/10 flex items-center pr-4">
+                    <button onClick={() => shiftDate(-1)} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-lg transition-all">
+                      <ChevronLeft size={16} />
                     </button>
-                    <div className="px-3.5 py-2 flex items-center gap-2">
-                      <Calendar size={13} className="text-slate-400" />
-                      <span className="text-[12px] font-semibold text-slate-700 min-w-[120px] text-center">{formatDisplayDate(monitoringDate)}</span>
+                    <div className="flex items-center gap-2 px-3 min-w-[150px] justify-center">
+                      <Calendar size={16} className="text-indigo-500" />
+                      <span className="text-xs font-black text-slate-700">{formatDisplayDate(monitoringDate)}</span>
                     </div>
-                    <button onClick={() => shiftDate(1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-l border-[#E5E7EB]">
-                      <ChevronRight size={15} className="text-slate-400" />
+                    <button onClick={() => shiftDate(1)} className="w-8 h-8 flex items-center justify-center hover:bg-slate-50 rounded-lg transition-all">
+                      <ChevronRight size={16} />
                     </button>
                   </div>
-                  {monitoringDate !== today && (
-                    <button onClick={() => setMonitoringDate(today)} className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-[11px] font-semibold hover:bg-slate-200 transition-all border border-[#E5E7EB]">
-                      Hari Ini
+
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleCopySummary} className="w-10 h-10 bg-white border border-slate-100 flex items-center justify-center rounded-xl hover:bg-slate-50 transition-all shadow-lg shadow-slate-200/10 text-slate-600">
+                      <Copy size={18} />
                     </button>
-                  )}
+                    <button onClick={() => setShowExportModal(true)} className="px-5 h-10 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-lg shadow-indigo-600/20 flex items-center gap-2 hover:scale-[1.02] active:scale-95 transition-all">
+                      <FileSpreadsheet size={16} /> Ekspor
+                    </button>
+                  </div>
                 </div>
               </header>
 
-              {/* ROW 1: 4 STAT CARDS — SEPARATED */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Card: Progres */}
-                <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Progres</p>
-                    <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
-                      <TrendingUp size={16} className="text-emerald-500" />
+              {/* STAT CARDS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {dataLoading ? (
+                  <>
+                    <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
+                          <TrendingUp size={20} />
+                        </div>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-md uppercase">Progres</span>
+                      </div>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{progres}%</h3>
+                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">{laporan.length} / {units.length} Unit Lapor</p>
+                      <div className="w-full h-1.5 bg-slate-50 rounded-full mt-4 overflow-hidden">
+                        <div style={{ width: `${progres}%` }} className="h-full bg-indigo-600 transition-all duration-1000 ease-out" />
+                      </div>
                     </div>
-                  </div>
-                  <h3 className="text-3xl font-extrabold text-emerald-600 tracking-tight">{progres}%</h3>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-3">
-                    <div style={{ width: `${progres}%` }} className="h-full bg-emerald-500 rounded-full transition-all duration-1000"></div>
-                  </div>
-                  <p className="text-[10px] font-medium text-slate-400 mt-2">{laporan.length} / {units.length} Unit</p>
-                </div>
 
-                {/* Card: Total Distribusi */}
-                <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Distribusi</p>
-                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <Box size={16} className="text-blue-500" />
+                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-500">
+                          <Box size={20} />
+                        </div>
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-black rounded-md uppercase">Porsi</span>
+                      </div>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{totalPorsiHarian.toLocaleString()}</h3>
+                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Porsi Harian</p>
                     </div>
-                  </div>
-                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">{totalPorsiHarian.toLocaleString()}</h3>
-                  <p className="text-[10px] font-medium text-slate-400 mt-2">Paket Porsi Terkirim</p>
-                </div>
 
-                {/* Card: Sudah Laporan */}
-                <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Sudah Lapor</p>
-                    <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
-                      <CheckCircle2 size={16} className="text-emerald-500" />
+                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all duration-500">
+                          <Utensils size={20} />
+                        </div>
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-black rounded-md uppercase">Rata-rata</span>
+                      </div>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{(totalPorsiHarian / (laporan.length || 1)).toFixed(0)}</h3>
+                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Porsi / Unit</p>
                     </div>
-                  </div>
-                  <h3 className="text-3xl font-extrabold text-emerald-600 tracking-tight">{laporan.length}</h3>
-                  <p className="text-[10px] font-medium text-slate-400 mt-2">Unit Terverifikasi</p>
-                </div>
 
-                {/* Card: Belum Laporan */}
-                <div className={`bg-white rounded-xl border p-5 shadow-sm hover:shadow-md transition-all duration-300 ${isLewatDeadline && units.length - laporan.length > 0 ? 'border-red-300' : 'border-[#E5E7EB]'}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Belum Lapor</p>
-                    <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center">
-                      <AlertTriangle size={16} className="text-[#991B1B]" />
+                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-all duration-500">
+                          <AlertTriangle size={20} />
+                        </div>
+                        <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[9px] font-black rounded-md uppercase">Pending</span>
+                      </div>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{units.length - laporan.length}</h3>
+                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Unit Belum Lapor</p>
                     </div>
-                  </div>
-                  <h3 className="text-3xl font-extrabold text-[#991B1B] tracking-tight">{units.length - laporan.length}</h3>
-                  <p className="text-[10px] font-medium text-slate-400 mt-2">Unit Tertunda</p>
-                </div>
+                  </>
+                )}
               </div>
 
-              {/* BROADCAST PENGINGAT → WHATSAPP SHARE */}
-              {units.length - laporan.length > 0 && (
-                <button
-                  onClick={() => {
-                    const belumList = units.filter(u => !laporan.find(l => l.unit_id === u.id)).map(u => `• ${u.nama_unit}`).join('\n')
-                    const text = `📢 *PENGINGAT MONITORING GIZI - KAB. PASURUAN*\n\nMohon perhatian untuk unit berikut yang *BELUM* mengirimkan laporan hari ini (${formatDisplayDate(monitoringDate)}):\n\n${belumList}\n\nMohon segera dilengkapi sebelum jam operasional berakhir. Terima kasih.`
-                    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
-                  }}
-                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2.5 transition-all duration-200 active:scale-[0.99]"
-                >
-                  <Megaphone size={16} /> Kirim via WhatsApp ke {units.length - laporan.length} Unit
-                </button>
-              )}
-
-              {/* ROW 2: GRID KATEGORI DINAMIS — FLAT MINIMALIST */}
-              <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
-                {KATEGORI_PM.map((kat) => (
-                  <div key={kat} className={`bg-white p-4 rounded-xl border transition-all duration-300 group ${statsPorsi[kat] > 0 ? 'border-[#E5E7EB] hover:border-slate-300 shadow-sm hover:shadow-md' : 'border-[#E5E7EB] opacity-40'}`}>
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-all duration-300 ${statsPorsi[kat] > 0 ? 'bg-slate-100 text-slate-500 group-hover:bg-emerald-50 group-hover:text-emerald-600' : 'bg-slate-50 text-slate-300'}`}>
-                      {kat.includes('TK') || kat.includes('PAUD') ? <School size={18} /> :
-                        kat.includes('BALITA') || kat.includes('BUMIL') || kat.includes('BUSUI') ? <Baby size={18} /> :
-                          kat.includes('SMP') || kat.includes('SMA') ? <GraduationCap size={18} /> :
-                            kat.includes('SANTRI') ? <Users size={18} /> : <Activity size={18} />}
+              {/* MONTHLY CHART */}
+              <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-xl shadow-slate-200/10">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                  <div className="space-y-0.5">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Statistik Bulanan</h3>
+                    <p className="text-[10px] text-slate-400 font-medium">Target vs Realisasi Porsi bulan ini.</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-indigo-600 rounded-full" />
+                      <span className="text-[10px] font-bold text-slate-500">Realisasi</span>
                     </div>
-                    <h5 className="text-xl font-extrabold text-slate-800 leading-none tracking-tight">{statsPorsi[kat]?.toLocaleString() || 0}</h5>
-                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mt-1.5">{kat}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* ROW 3: SEARCH BAR + FILTER + UNIT LISTS */}
-              <div className="space-y-4 pt-2">
-                {/* SEARCH & FILTER TOOLBAR */}
-                <div className="flex flex-col md:flex-row gap-3">
-                  {/* SEARCH BAR */}
-                  <div className="flex-1 relative">
-                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Cari nama SPPG / Unit..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E5E7EB] rounded-lg text-sm font-medium text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10 transition-all duration-200 placeholder:text-slate-400"
-                    />
-                  </div>
-                  {/* FILTER TOGGLES */}
-                  <div className="flex items-center gap-1 bg-white border border-[#E5E7EB] rounded-lg p-1">
-                    <button
-                      onClick={() => setFilterStatus('semua')}
-                      className={`px-3.5 py-2 rounded-md text-[11px] font-semibold transition-all duration-200 flex items-center gap-1.5 ${filterStatus === 'semua' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                    >
-                      <Filter size={12} /> Semua
-                    </button>
-                    <button
-                      onClick={() => setFilterStatus('sudah')}
-                      className={`px-3.5 py-2 rounded-md text-[11px] font-semibold transition-all duration-200 flex items-center gap-1.5 ${filterStatus === 'sudah' ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                    >
-                      <CheckCircle2 size={12} /> Sudah
-                    </button>
-                    <button
-                      onClick={() => setFilterStatus('belum')}
-                      className={`px-3.5 py-2 rounded-md text-[11px] font-semibold transition-all duration-200 flex items-center gap-1.5 ${filterStatus === 'belum' ? 'bg-[#991B1B] text-white' : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                    >
-                      <AlertTriangle size={12} /> Belum
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-slate-200 rounded-full" />
+                      <span className="text-[10px] font-bold text-slate-500">Target</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* FILTERED UNIT LISTS */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  {/* UNIT BELUM LAPOR */}
-                  {(filterStatus === 'semua' || filterStatus === 'belum') && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between px-1">
-                        <h3 className="text-[12px] font-bold text-[#991B1B] uppercase tracking-wider flex items-center gap-2">
-                          <AlertTriangle size={15} /> Belum Lapor
-                        </h3>
-                        <span className="text-[11px] font-semibold text-slate-400">
-                          {units.filter(u => !laporan.find(l => l.unit_id === u.id)).filter(u => u.nama_unit?.toLowerCase().includes(searchQuery.toLowerCase())).length} Unit
-                        </span>
-                      </div>
-                      <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-                        {units.filter(u => !laporan.find(l => l.unit_id === u.id)).filter(u => u.nama_unit?.toLowerCase().includes(searchQuery.toLowerCase())).map(u => (
-                          <div key={u.id} onClick={() => router.push(`/korwil/detail/${u.id}`)} className="bg-white border border-[#E5E7EB] p-3.5 rounded-lg flex justify-between items-center group cursor-pointer hover:border-red-200 hover:bg-red-50/30 transition-all duration-200">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center shrink-0">
-                                <Utensils size={14} className="text-[#991B1B]" />
-                              </div>
-                              <span className="text-[13px] font-semibold text-slate-700 group-hover:text-[#991B1B] transition-colors">{u.nama_unit}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setUnitToDelete(u)
-                                  setShowDeleteModal(true)
-                                }}
-                                className="p-1.5 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg transition-all opacity-0 group-hover:opacity-100 flex-shrink-0"
-                                title="Hapus Unit"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                              <ChevronRight className="text-slate-300 group-hover:text-[#991B1B] transition-all group-hover:translate-x-1" size={18} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                {chartLoading ? (
+                  <SkeletonChart />
+                ) : (
+                  <div className="h-[200px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F8FAFC" />
+                        <XAxis dataKey="tgl" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '10px' }}
+                          labelStyle={{ fontWeight: 900, fontSize: '10px', marginBottom: '4px', color: '#1E293B' }}
+                          itemStyle={{ fontSize: '10px', padding: '0' }}
+                        />
+                        <Area type="monotone" dataKey="target" stroke="#E2E8F0" strokeWidth={1} fill="transparent" />
+                        <Area type="monotone" dataKey="realisasi" stroke="#4F46E5" strokeWidth={2} fillOpacity={1} fill="url(#colorReal)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
 
-                  {/* UNIT SUDAH LAPOR */}
-                  {(filterStatus === 'semua' || filterStatus === 'sudah') && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between px-1">
-                        <h3 className="text-[12px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-2">
-                          <CheckCircle2 size={15} /> Sudah Lapor
-                        </h3>
-                        <span className="text-[11px] font-semibold text-slate-400">
-                          {laporan.filter(l => l.nama_unit?.toLowerCase().includes(searchQuery.toLowerCase())).length} Unit
-                        </span>
-                      </div>
-                      <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-                        {laporan.filter(l => l.nama_unit?.toLowerCase().includes(searchQuery.toLowerCase())).map(l => {
-                          const isOp = l.is_operasional ?? true
+              {/* REPORT GRID SECTION */}
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="space-y-0.5">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Monitoring Unit</h3>
+                    <p className="text-[10px] text-slate-400 font-medium">Detail status dan realisasi setiap unit.</p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                    {/* SEARCH BAR */}
+                    <div className="relative w-full sm:w-56">
+                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input 
+                        type="text" 
+                        placeholder="Cari unit..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-100 rounded-xl text-xs font-bold shadow-lg shadow-slate-200/10 focus:ring-4 focus:ring-indigo-500/5 transition-all outline-none"
+                      />
+                    </div>
+
+                    {/* STATUS FILTER */}
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-lg shadow-slate-200/10 w-full sm:w-auto">
+                      <button 
+                        onClick={() => setFilterStatus('semua')}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${filterStatus === 'semua' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}
+                      >
+                        Semua
+                      </button>
+                      <button 
+                        onClick={() => setFilterStatus('sudah')}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${filterStatus === 'sudah' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400'}`}
+                      >
+                        Operasional
+                      </button>
+                      <button 
+                        onClick={() => setFilterStatus('belum')}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${filterStatus === 'belum' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-400'}`}
+                      >
+                        Belum
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {dataLoading ? (
+                    <>
+                      <SkeletonReport /><SkeletonReport /><SkeletonReport /><SkeletonReport /><SkeletonReport /><SkeletonReport />
+                    </>
+                  ) : (
+                    <>
+                      {units
+                        .filter(u => u.nama_unit?.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .map(u => {
+                          const report = laporan.find(l => l.unit_id === u.id)
+                          const hasLapor = !!report
+                          const isOp = report?.is_operasional ?? true
+                          
+                          if (filterStatus === 'sudah' && (!hasLapor || !isOp)) return null
+                          if (filterStatus === 'belum' && hasLapor) return null
+
                           return (
                             <div 
-                              key={l.id} 
-                              onClick={() => isOp ? router.push(`/korwil/detail/${l.unit_id}`) : null} 
-                              className={`border p-3.5 rounded-lg flex justify-between items-center group transition-all duration-200 ${
-                                isOp 
-                                  ? 'bg-white border-[#E5E7EB] cursor-pointer hover:border-emerald-200 hover:bg-emerald-50/30' 
-                                  : 'bg-rose-50/50 border-rose-100 cursor-default hover:border-rose-200'
-                              }`}
+                              key={u.id} 
+                              onClick={() => router.push(`/korwil/detail/${u.id}`)}
+                              className={`group bg-white p-4 rounded-xl border border-slate-100 shadow-lg shadow-slate-200/10 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer relative overflow-hidden`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isOp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                                  {isOp ? <Utensils size={14} /> : <AlertTriangle size={14} />}
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${hasLapor ? (isOp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600') : 'bg-slate-50 text-slate-300'}`}>
+                                  {hasLapor ? (isOp ? <Utensils size={16} /> : <AlertTriangle size={16} />) : <Clock size={16} />}
                                 </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className={`text-[13px] font-semibold transition-colors ${isOp ? 'text-slate-700 group-hover:text-emerald-700' : 'text-rose-700'}`}>
-                                      {l.nama_unit}
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-xs font-black text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{u.nama_unit}</h4>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${hasLapor ? (isOp ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') : 'bg-slate-100 text-slate-500'}`}>
+                                      {hasLapor ? (isOp ? 'Lapor' : 'Tutup') : 'N/A'}
                                     </span>
-                                    {!isOp && (
-                                      <span className="text-[9px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter">[TIDAK BEROPERASIONAL]</span>
+                                    {hasLapor && isOp && (
+                                      <p className="text-[10px] font-black text-slate-400">{Object.values(report.realisasi_sekolah || {}).reduce((acc: number, v: any) => acc + (parseInt(v) || 0), 0)}</p>
                                     )}
                                   </div>
-                                  {!isOp && (
-                                    <button 
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {hasLapor && (
+                                    <button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        setSelectedNote({ unit: l.nama_unit, text: l.catatan_tidak_operasional || 'Tidak ada catatan.' })
-                                        setShowNoteModal(true)
+                                        setReportToDelete(report)
+                                        setShowDeleteReportModal(true)
                                       }}
-                                      className="text-[10px] font-bold text-rose-500 hover:underline flex items-center gap-1 mt-1"
+                                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-all shadow-sm"
                                     >
-                                      Lihat Alasan 
+                                      <Trash2 size={14} />
                                     </button>
                                   )}
+                                  <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 transition-all" />
                                 </div>
                               </div>
-                              {isOp && <ChevronRight className="text-slate-300 group-hover:text-emerald-500 transition-all group-hover:translate-x-1" size={18} />}
+                              
+                              {!isOp && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedNote({ unit: u.nama_unit, text: report.catatan_tidak_operasional || 'Tidak ada catatan.' })
+                                    setShowNoteModal(true)
+                                  }}
+                                  className="mt-3 w-full py-1.5 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all"
+                                >
+                                  Alasan
+                                </button>
+                              )}
                             </div>
                           )
                         })}
-                      </div>
-                    </div>
+                    </>
                   )}
                 </div>
               </div>
             </>
           ) : (
             <>
-              {/* ======== GALERI VIEW ======== */}
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div>
-                  <h2 className="text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight leading-none">Galeri Dokumentasi</h2>
-                  <div className="flex items-center gap-3 mt-3">
-                    <div className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 transition-colors px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">
-                      <Camera size={14} className="text-indigo-500" />
-                      <span className="text-[11px] font-semibold uppercase tracking-widest">Bukti Operasional</span>
-                    </div>
-                  </div>
+              {/* GALERI VIEW — JOBIE STYLE */}
+              <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 mb-12">
+                <div className="space-y-2">
+                  <h2 className="text-4xl font-black text-slate-900 tracking-tight">Galeri Dokumentasi 📸</h2>
+                  <p className="text-slate-400 font-medium">Bukti operasional harian seluruh unit wilayah.</p>
                 </div>
-
-                {/* GALLERY COUNTER & DATE STEPPER */}
-                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
-                  <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/20">
-                    <ImageIcon size={16} />
-                    <span className="text-sm font-bold tracking-wide">{galeriData.length} Foto Masuk</span>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex items-center overflow-hidden">
-                    <button onClick={() => shiftDate(-1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-r border-slate-100">
-                      <ChevronLeft size={16} className="text-slate-400" />
-                    </button>
-                    <div className="px-4 py-2 flex items-center gap-2 bg-slate-50/50">
-                      <Calendar size={14} className="text-indigo-500" />
-                      <span className="text-[12px] font-bold text-slate-700 min-w-[120px] text-center">{formatDisplayDate(monitoringDate)}</span>
-                    </div>
-                    <button onClick={() => shiftDate(1)} className="px-3 py-2.5 hover:bg-slate-50 transition-colors border-l border-slate-100">
-                      <ChevronRight size={16} className="text-slate-400" />
-                    </button>
-                  </div>
-                  {monitoringDate !== today && (
-                    <button onClick={() => setMonitoringDate(today)} className="px-4 py-2.5 bg-slate-800 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-700 transition-all shadow-md">
-                      Hari Ini
-                    </button>
-                  )}
+                <div className="bg-white p-2 rounded-[1.5rem] border border-slate-100 shadow-xl shadow-slate-200/20 flex items-center pr-6">
+                  <button onClick={() => shiftDate(-1)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all"><ChevronLeft size={18} /></button>
+                  <div className="flex items-center gap-3 px-4 min-w-[180px] justify-center"><Calendar size={18} className="text-indigo-500" /><span className="text-sm font-black text-slate-700">{formatDisplayDate(monitoringDate)}</span></div>
+                  <button onClick={() => shiftDate(1)} className="w-10 h-10 flex items-center justify-center hover:bg-slate-50 rounded-xl transition-all"><ChevronRight size={18} /></button>
                 </div>
               </header>
 
-              {/* PHOTO GRID */}
               {galeriLoading ? (
-                <div className="text-center py-32 font-semibold text-slate-400 animate-pulse text-sm">Memuat Galeri...</div>
-              ) : galeriData.length === 0 ? (
-                <div className="bg-white border border-[#E5E7EB] rounded-2xl p-20 text-center shadow-sm">
-                  <div className="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                    <Camera size={40} className="text-slate-300" />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-400">Belum Ada Dokumentasi</h3>
-                  <p className="text-sm text-slate-400 font-medium mt-2">Tidak ada foto operasional untuk {formatDisplayDate(monitoringDate)}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                  {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="aspect-[4/5] bg-white rounded-[2.5rem] animate-pulse border border-slate-50" />)}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {galeriData.filter(item => item.foto_url && item.foto_url.startsWith('http')).map(item => (
-                    <div
-                      key={item.id}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                  {galeriData.map(item => (
+                    <div 
+                      key={item.id} 
                       onClick={() => setSelectedFoto(item)}
-                      className="group bg-white rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl hover:-translate-y-1 hover:shadow-indigo-500/10 transition-all duration-300 border border-slate-100 flex flex-col"
+                      className="group relative aspect-[4/5] bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-200/30 cursor-pointer border-4 border-white hover:-translate-y-2 transition-all duration-700"
                     >
-                      {/* Photo Area */}
-                      <div className="relative w-full aspect-[4/3] bg-slate-100 overflow-hidden shrink-0">
-                        <Image
-                          src={item.foto_url || '/placeholder.png'}
-                          alt={`Dokumentasi ${item.nama_unit}`}
-                          fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
-                          className="object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-                        />
-                        {/* Hover Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                          <span className="w-fit text-[10px] font-semibold text-white bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 shadow-lg flex items-center gap-1.5">
-                            <Utensils size={12} /> Buka Preview
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Info Area */}
-                      <div className="p-4 space-y-3 flex flex-col flex-1">
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-slate-800 leading-tight truncate group-hover:text-indigo-600 transition-colors" title={item.nama_unit}>{item.nama_unit}</p>
-                          <p className="text-[11px] font-medium italic text-slate-500 mt-1 truncate" title={item.menu_makanan}>"{item.menu_makanan}"</p>
-                        </div>
-                        <div className="flex justify-between items-center pt-3 border-t border-slate-100 shrink-0">
-                          <div className="flex items-center gap-1.5">
-                            <Clock size={12} className="text-orange-400 shrink-0" />
-                            <span className="text-[10px] font-bold text-slate-400 tracking-wider">{item.tanggal_ops}</span>
-                          </div>
-                          <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 shrink-0">
-                            <span className="text-[8px] font-bold text-slate-400">{item.nama_unit.charAt(0)}</span>
-                          </div>
-                        </div>
+                      <Image 
+                        src={item.foto_url} 
+                        alt={item.nama_unit} 
+                        fill 
+                        className="object-cover group-hover:scale-110 transition-transform duration-1000"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60" />
+                      <div className="absolute bottom-0 left-0 right-0 p-8 space-y-2">
+                        <p className="text-white font-black text-lg leading-tight">{item.nama_unit}</p>
+                        <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md border border-white/30 rounded-full text-[10px] font-black text-white uppercase tracking-widest">
+                          Lihat Detail
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -978,6 +1022,36 @@ export default function SuperKorwilPage() {
                 className="w-full mt-8 py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
               >
                 Tutup Catatan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* DELETE REPORT CONFIRMATION MODAL */}
+      {showDeleteReportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 mb-4">
+              <Trash2 size={24} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-2">Hapus Laporan?</h3>
+            <p className="text-sm text-slate-500 leading-relaxed mb-6">
+              Apakah Anda yakin ingin menghapus laporan ini? Data yang dihapus tidak dapat dikembalikan.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowDeleteReportModal(false)}
+                className="flex-1 py-3 rounded-xl bg-slate-50 text-slate-600 font-bold text-xs hover:bg-slate-100 transition-all"
+                disabled={isDeletingReport}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDeleteReport}
+                className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2"
+                disabled={isDeletingReport}
+              >
+                {isDeletingReport ? <Loader2 size={14} className="animate-spin" /> : 'Hapus Sekarang'}
               </button>
             </div>
           </div>

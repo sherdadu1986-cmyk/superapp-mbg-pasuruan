@@ -506,22 +506,30 @@ function InputLaporanForm() {
           </div>
         )}
 
-        {/* SUBMIT BUTTON - STICKY AT BOTTOM MOBILE */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 md:static md:p-0 bg-white/60 backdrop-blur-xl md:bg-transparent z-[90]">
-          <button 
-            onClick={handleSimpan}
-            disabled={loading || isCompressing}
-            className={`w-full max-w-4xl mx-auto py-6 rounded-[2.2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all disabled:opacity-50 ${statusOperasional ? 'bg-[#0F172A] text-white shadow-slate-900/30' : 'bg-rose-600 text-white shadow-rose-600/30'}`}
-          >
-            {loading ? (
-              <><Loader2 size={20} className="animate-spin" /> Mengirim Data...</>
-            ) : (
-              <>
-                {editId ? 'Perbarui Laporan' : 'Kirim Laporan Sekarang'} 
-                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </>
+        {/* TOTAL SUMMARY & SUBMIT BUTTON */}
+        <div className="fixed bottom-0 left-0 right-0 p-6 md:static md:p-0 bg-white/80 backdrop-blur-xl md:bg-transparent z-[90] border-t border-slate-100 md:border-none">
+          <div className="max-w-4xl mx-auto flex flex-col gap-4">
+            {statusOperasional && (
+              <div className="flex items-center justify-between px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Total Porsi Terinput</span>
+                <span className="text-lg font-black text-indigo-600">{calculatedTotal.toLocaleString()} <small className="text-[10px] text-slate-400 font-bold uppercase ml-1">Porsi</small></span>
+              </div>
             )}
-          </button>
+            <button 
+              onClick={handleSimpan}
+              disabled={loading || isCompressing}
+              className={`w-full py-5 rounded-[1.8rem] font-black text-xs uppercase tracking-[0.3em] shadow-xl flex items-center justify-center gap-4 active:scale-95 transition-all disabled:opacity-50 ${statusOperasional ? 'bg-[#0F172A] text-white shadow-slate-900/20' : 'bg-rose-600 text-white shadow-rose-600/30'}`}
+            >
+              {loading ? (
+                <><Loader2 size={18} className="animate-spin" /> Mengirim Data...</>
+              ) : (
+                <>
+                  {editId ? 'Perbarui Laporan' : 'Kirim Laporan'} 
+                  <ArrowRight size={18} />
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
       </div>
