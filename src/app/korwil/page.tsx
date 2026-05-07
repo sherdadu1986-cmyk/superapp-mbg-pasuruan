@@ -32,6 +32,7 @@ export default function SuperKorwilPage() {
   const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
   const [statsPorsi, setStatsPorsi] = useState<Record<string, number>>({})
   const [totalPorsiHarian, setTotalPorsiHarian] = useState(0)
+  const [totalTargetPorsi, setTotalTargetPorsi] = useState(0)
 
   // --- MONTHLY CHART STATE ---
   const [chartData, setChartData] = useState<any[]>([])
@@ -56,7 +57,7 @@ export default function SuperKorwilPage() {
       const totalTargetPerDay = (schools || []).reduce((acc, s) => acc + (s.target_porsi || 0), 0)
 
       const dailyMap: Record<string, { tgl: string, realisasi: number, target: number }> = {}
-      
+
       // Initialize with all days of the month
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
       for (let i = 1; i <= daysInMonth; i++) {
@@ -185,16 +186,15 @@ export default function SuperKorwilPage() {
     if (validUnitIds.length > 0) {
       const { data } = await supabase
         .from('daftar_sppg')
-        .select('*')
+        .select('*, id, nama_unit, no_hp_ka_sppg')
         .in('id', validUnitIds)
         .order('nama_unit')
-        // dummy filter to bust cache if Next.js caches it
         .gte('created_at', '2000-01-01')
       u = data || []
     }
 
     const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', monitoringDate).gte('created_at', '2000-01-01')
-    const { data: s } = await supabase.from('daftar_sekolah').select('id, jenjang')
+    const { data: s } = await supabase.from('daftar_sekolah').select('id, jenjang, target_porsi')
 
     if (u) setUnits(u)
     if (l && s) {
@@ -227,6 +227,8 @@ export default function SuperKorwilPage() {
 
       setStatsPorsi(mapping)
       setTotalPorsiHarian(total)
+      const totalTarget = (s || []).reduce((acc, item) => acc + (item.target_porsi || 0), 0)
+      setTotalTargetPorsi(totalTarget)
     }
     setDataLoading(false)
   }, [monitoringDate])
@@ -309,12 +311,12 @@ export default function SuperKorwilPage() {
 
   // --- ESC key to close modal ---
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => { 
-      if (e.key === 'Escape') { 
-        setSelectedFoto(null); 
-        setShowExportModal(false); 
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedFoto(null);
+        setShowExportModal(false);
         setShowNoteModal(false);
-      } 
+      }
     }
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
@@ -533,11 +535,10 @@ export default function SuperKorwilPage() {
             <button
               key={item.label}
               onClick={item.action}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group relative ${
-                item.isActive
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group relative ${item.isActive
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                }`}
             >
               <item.icon size={20} className="shrink-0" />
               <span className="hidden lg:block font-bold text-xs">{item.label}</span>
@@ -547,8 +548,8 @@ export default function SuperKorwilPage() {
 
         {/* Sign Out */}
         <div className="p-6 lg:p-8 border-t border-slate-50">
-          <button 
-            onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }} 
+          <button
+            onClick={async () => { await fetch('/api/logout', { method: 'POST' }); localStorage.clear(); router.push('/') }}
             className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all duration-300 group"
           >
             <LogOut size={22} className="shrink-0 group-hover:rotate-12 transition-transform" />
@@ -596,59 +597,67 @@ export default function SuperKorwilPage() {
                 </div>
               </header>
 
-              {/* STAT CARDS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* STAT CARDS — ONE ROW COMPACT */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {dataLoading ? (
-                  <>
-                    <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
-                  </>
+                  <><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
                 ) : (
                   <>
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
-                          <TrendingUp size={20} />
+                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                          <TrendingUp size={18} />
                         </div>
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-md uppercase">Progres</span>
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded uppercase">Progres Lapor</span>
                       </div>
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{progres}%</h3>
-                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">{laporan.length} / {units.length} Unit Lapor</p>
-                      <div className="w-full h-1.5 bg-slate-50 rounded-full mt-4 overflow-hidden">
+                      <h3 className="text-xl font-bold text-slate-900 tracking-tight">{progres}%</h3>
+                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">{laporan.length} / {units.length} Unit</p>
+                      <div className="w-full h-1 bg-slate-50 rounded-full mt-3 overflow-hidden">
                         <div style={{ width: `${progres}%` }} className="h-full bg-indigo-600 transition-all duration-1000 ease-out" />
                       </div>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-500">
-                          <Box size={20} />
+                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="w-9 h-9 bg-rose-50 rounded-lg flex items-center justify-center text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-all">
+                          <AlertTriangle size={18} />
                         </div>
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-black rounded-md uppercase">Porsi</span>
+                        <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[8px] font-black rounded uppercase">Pending</span>
                       </div>
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{totalPorsiHarian.toLocaleString()}</h3>
-                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Porsi Harian</p>
+                      <h3 className="text-xl font-bold text-slate-900 tracking-tight">{units.length - laporan.length}</h3>
+                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">SPPG Belum Lapor</p>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all duration-500">
-                          <Utensils size={20} />
+                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                          <Box size={18} />
                         </div>
-                        <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-black rounded-md uppercase">Rata-rata</span>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-black rounded uppercase">Total Realisasi</span>
                       </div>
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{(totalPorsiHarian / (laporan.length || 1)).toFixed(0)}</h3>
-                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Porsi / Unit</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">{totalPorsiHarian.toLocaleString()}</h3>
+                        {totalPorsiHarian > totalTargetPorsi && (
+                          <div className="group/tip relative cursor-help">
+                            <AlertTriangle size={14} className="text-amber-500 animate-pulse" />
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-900 text-white text-[8px] rounded-lg opacity-0 group-hover/tip:opacity-100 transition-all pointer-events-none z-50">
+                              Realisasi melebihi target kuota resmi. Mohon cek validitas input SPPG.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">Porsi Tersalurkan</p>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xl shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-all duration-500">
-                          <AlertTriangle size={20} />
+                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                          <Users size={18} />
                         </div>
-                        <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[9px] font-black rounded-md uppercase">Pending</span>
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black rounded uppercase">Total Penerima</span>
                       </div>
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">{units.length - laporan.length}</h3>
-                      <p className="text-slate-400 font-bold text-[10px] mt-1 uppercase tracking-widest">Unit Belum Lapor</p>
+                      <h3 className="text-xl font-bold text-slate-900 tracking-tight">{totalTargetPorsi.toLocaleString()}</h3>
+                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">Target Porsi Pasuruan</p>
                     </div>
                   </>
                 )}
@@ -658,7 +667,7 @@ export default function SuperKorwilPage() {
               <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-xl shadow-slate-200/10">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div className="space-y-0.5">
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Statistik Bulanan</h3>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Tren Distribusi - {new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date())}</h3>
                     <p className="text-[10px] text-slate-400 font-medium">Target vs Realisasi Porsi bulan ini.</p>
                   </div>
                   <div className="flex items-center gap-4">
@@ -681,14 +690,14 @@ export default function SuperKorwilPage() {
                       <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2} />
+                            <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F8FAFC" />
                         <XAxis dataKey="tgl" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} dy={10} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} />
-                        <Tooltip 
+                        <Tooltip
                           contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '10px' }}
                           labelStyle={{ fontWeight: 900, fontSize: '10px', marginBottom: '4px', color: '#1E293B' }}
                           itemStyle={{ fontSize: '10px', padding: '0' }}
@@ -713,8 +722,8 @@ export default function SuperKorwilPage() {
                     {/* SEARCH BAR */}
                     <div className="relative w-full sm:w-56">
                       <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Cari unit..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
@@ -724,25 +733,42 @@ export default function SuperKorwilPage() {
 
                     {/* STATUS FILTER */}
                     <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-lg shadow-slate-200/10 w-full sm:w-auto">
-                      <button 
+                      <button
                         onClick={() => setFilterStatus('semua')}
                         className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${filterStatus === 'semua' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}
                       >
                         Semua
                       </button>
-                      <button 
+                      <button
                         onClick={() => setFilterStatus('sudah')}
                         className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${filterStatus === 'sudah' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400'}`}
                       >
                         Operasional
                       </button>
-                      <button 
+                      <button
                         onClick={() => setFilterStatus('belum')}
                         className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${filterStatus === 'belum' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-400'}`}
                       >
                         Belum
                       </button>
                     </div>
+
+                    {/* BROADCAST GLOBAL BUTTON */}
+                    <button
+                      onClick={() => {
+                        const belumLapor = units.filter(u => !laporan.some(l => l.unit_id === u.id))
+                        if (belumLapor.length === 0) {
+                          toast('info', 'Lengkap!', 'Seluruh unit sudah mengirimkan laporan.')
+                          return
+                        }
+                        const listNames = belumLapor.map((u, i) => `${i + 1}. ${u.nama_unit}`).join('\n')
+                        const pesan = `*INFO MONITORING MBG PASURUAN*\n\nBerikut adalah unit SPPG yang *BELUM* mengirimkan laporan hari ini:\n\n${listNames}\n\nMohon kerja samanya untuk segera mengisi laporan di aplikasi. Terima kasih.`
+                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(pesan)}`, '_blank')
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/10 group active:scale-95"
+                    >
+                      <Megaphone size={14} className="group-hover:animate-bounce" /> Ingatkan di Grup
+                    </button>
                   </div>
                 </div>
 
@@ -759,13 +785,13 @@ export default function SuperKorwilPage() {
                           const report = laporan.find(l => l.unit_id === u.id)
                           const hasLapor = !!report
                           const isOp = report?.is_operasional ?? true
-                          
+
                           if (filterStatus === 'sudah' && (!hasLapor || !isOp)) return null
                           if (filterStatus === 'belum' && hasLapor) return null
 
                           return (
-                            <div 
-                              key={u.id} 
+                            <div
+                              key={u.id}
                               onClick={() => router.push(`/korwil/detail/${u.id}`)}
                               className={`group bg-white p-4 rounded-xl border border-slate-100 shadow-lg shadow-slate-200/10 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer relative overflow-hidden`}
                             >
@@ -800,9 +826,9 @@ export default function SuperKorwilPage() {
                                   <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 transition-all" />
                                 </div>
                               </div>
-                              
-                              {!isOp && (
-                                <button 
+
+                              {!isOp ? (
+                                <button
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     setSelectedNote({ unit: u.nama_unit, text: report.catatan_tidak_operasional || 'Tidak ada catatan.' })
@@ -812,6 +838,20 @@ export default function SuperKorwilPage() {
                                 >
                                   Alasan
                                 </button>
+                              ) : (
+                                !hasLapor && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      const pesan = `Halo ${u.nama_unit}, kami dari Korwil ingin mengingatkan bahwa Anda belum mengirimkan laporan harian Makan Bergizi Gratis untuk hari ini. Mohon segera menginput data di aplikasi. Terima kasih.`
+                                      const phone = u.no_hp_ka_sppg || ''
+                                      window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(pesan)}`, '_blank')
+                                    }}
+                                    className="mt-3 w-full py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <Megaphone size={12} /> Ingatkan via WA
+                                  </button>
+                                )
                               )}
                             </div>
                           )
@@ -838,20 +878,20 @@ export default function SuperKorwilPage() {
 
               {galeriLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                  {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="aspect-[4/5] bg-white rounded-[2.5rem] animate-pulse border border-slate-50" />)}
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="aspect-[4/5] bg-white rounded-[2.5rem] animate-pulse border border-slate-50" />)}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                   {galeriData.map(item => (
-                    <div 
-                      key={item.id} 
+                    <div
+                      key={item.id}
                       onClick={() => setSelectedFoto(item)}
                       className="group relative aspect-[4/5] bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-200/30 cursor-pointer border-4 border-white hover:-translate-y-2 transition-all duration-700"
                     >
-                      <Image 
-                        src={item.foto_url} 
-                        alt={item.nama_unit} 
-                        fill 
+                      <Image
+                        src={item.foto_url}
+                        alt={item.nama_unit}
+                        fill
                         className="object-cover group-hover:scale-110 transition-transform duration-1000"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60" />
@@ -1010,14 +1050,14 @@ export default function SuperKorwilPage() {
                 </div>
                 <button onClick={() => setShowNoteModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-all"><X size={20} /></button>
               </div>
-              
+
               <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 min-h-[120px]">
                 <p className="text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed italic">
                   "{selectedNote.text}"
                 </p>
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => setShowNoteModal(false)}
                 className="w-full mt-8 py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
               >
@@ -1039,14 +1079,14 @@ export default function SuperKorwilPage() {
               Apakah Anda yakin ingin menghapus laporan ini? Data yang dihapus tidak dapat dikembalikan.
             </p>
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setShowDeleteReportModal(false)}
                 className="flex-1 py-3 rounded-xl bg-slate-50 text-slate-600 font-bold text-xs hover:bg-slate-100 transition-all"
                 disabled={isDeletingReport}
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={handleDeleteReport}
                 className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2"
                 disabled={isDeletingReport}
