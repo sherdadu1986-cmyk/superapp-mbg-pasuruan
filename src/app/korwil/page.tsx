@@ -729,7 +729,10 @@ export default function SuperKorwilPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Progres</p>
-                          <h3 className="text-sm font-black text-slate-900 leading-none">{progres}%</h3>
+                          <div className="flex items-baseline gap-2">
+                            <h3 className="text-sm font-black text-slate-900 leading-none">{progres}%</h3>
+                            <p className="text-[10px] text-slate-500 font-bold leading-none">{laporan.length} / {units.length} Unit Lapor</p>
+                          </div>
                         </div>
                       </div>
                     </div>
