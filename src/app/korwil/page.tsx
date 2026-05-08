@@ -9,7 +9,7 @@ import {
   BarChart3, LogOut, CheckCircle2, ChevronRight, ChevronLeft, Settings,
   Utensils, School, Box, Activity, Users, Baby, GraduationCap,
   Clock, MapPin, Map, AlertTriangle, Camera, X, ImageIcon, FileSpreadsheet, Loader2, Calendar,
-  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2, Layout, ArrowRight, RotateCcw, ShieldCheck
+  Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2, Layout, ArrowRight, RotateCcw, ShieldCheck, Shield, AlertCircle
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 import {
@@ -21,7 +21,7 @@ export default function SuperKorwilPage() {
   const { toast } = useToast()
 
   // --- VIEW STATE ---
-  const [activeView, setActiveView] = useState<'monitoring' | 'galeri'>('monitoring')
+  const [activeView, setActiveView] = useState<'monitoring' | 'galeri' | 'audit'>('monitoring')
 
   // --- MONITORING STATE (single day) ---
   const [today, setToday] = useState(getLocalToday())
@@ -34,6 +34,42 @@ export default function SuperKorwilPage() {
   const [statsTargetPorsi, setStatsTargetPorsi] = useState<Record<string, number>>({})
   const [totalPorsiHarian, setTotalPorsiHarian] = useState(0)
   const [totalTargetPorsi, setTotalTargetPorsi] = useState(0)
+  
+  // Compliance Audit States
+  const [complianceUnits, setComplianceUnits] = useState<any[]>([])
+  const [auditFilter, setAuditFilter] = useState<'active' | 'rare' | 'never' | 'all'>('all')
+  const [complianceLoading, setComplianceLoading] = useState(true)
+
+  const auditSummary = useMemo(() => {
+    const aktif = complianceUnits.filter(u => u.complianceStatus === 'active').length;
+    const rare = complianceUnits.filter(u => u.complianceStatus === 'rare').length;
+    const never = complianceUnits.filter(u => u.complianceStatus === 'never').length;
+    return { aktif, rare, never };
+  }, [complianceUnits]);
+
+  const groupedByKecamatan = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    const filtered = complianceUnits
+      .filter(u => {
+        if (auditFilter === 'all') return true;
+        return u.complianceStatus === auditFilter;
+      })
+      .sort((a, b) => (a.nama_unit || '').localeCompare(b.nama_unit || ''));
+
+    filtered.forEach(u => {
+      const parts = (u.nama_unit || '').split(' ');
+      // Logic: SPPG PASURUAN [KECAMATAN] [DESA]
+      const kecamatan = parts[2] || 'TIDAK TERDEFINISI';
+      const desa = parts.slice(3).join(' ') || 'UNIT';
+      
+      if (!groups[kecamatan]) groups[kecamatan] = [];
+      groups[kecamatan].push({ ...u, parsedDesa: desa });
+    });
+
+    return Object.fromEntries(
+      Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+    );
+  }, [complianceUnits, auditFilter]);
 
   // --- MONTHLY CHART STATE ---
   const [chartData, setChartData] = useState<any[]>([])
@@ -254,6 +290,51 @@ export default function SuperKorwilPage() {
       setTotalPorsiHarian(total)
       const totalTarget = (s || []).reduce((acc, item) => acc + (item.target_porsi || 0), 0)
       setTotalTargetPorsi(totalTarget)
+
+      // 5. COMPLIANCE AUDIT CALCULATION
+      setComplianceLoading(true)
+      try {
+        const { data: allLaporan } = await supabase.from('laporan_harian_final').select('unit_id, tanggal_ops')
+        const today = new Date()
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+        
+        let businessDays = 0;
+        let tempDate = new Date(monthStart);
+        while (tempDate <= today) {
+          const day = tempDate.getDay();
+          if (day !== 0) businessDays++; // Exclude ONLY Sunday (0) for 6-day work week
+          tempDate.setDate(tempDate.getDate() + 1);
+        }
+        if (businessDays === 0) businessDays = 1;
+        
+        const processed = u.map(unit => {
+          const unitReports = allLaporan?.filter(l => l.unit_id === unit.id) || []
+          const monthReports = unitReports.filter(l => new Date(l.tanggal_ops) >= monthStart)
+          const totalMonth = monthReports.length
+          const lastReport = unitReports.length > 0 
+            ? unitReports.sort((a, b) => b.tanggal_ops.localeCompare(a.tanggal_ops))[0].tanggal_ops 
+            : null
+          
+          const complianceScore = Math.min(Math.round((totalMonth / businessDays) * 100), 100)
+          
+          // Categorization Logic based on 60% and 40% thresholds
+          const status = complianceScore >= 60 ? 'active' : complianceScore >= 40 ? 'rare' : 'never';
+          
+          return {
+            ...unit,
+            totalMonth,
+            lastReport,
+            complianceScore,
+            hasNeverReported: unitReports.length === 0,
+            complianceStatus: status
+          }
+        })
+        setComplianceUnits(processed)
+      } catch (err) {
+        console.error("Failed to fetch compliance data:", err)
+      } finally {
+        setComplianceLoading(false)
+      }
 
       // Calculate Target Porsi per Unit for Anomaly Detection
       const { data: schoolsWithSppg } = await supabase.from('daftar_sekolah').select('sppg_id, target_porsi')
@@ -544,6 +625,7 @@ export default function SuperKorwilPage() {
   // ============================================
   const sidebarItems = [
     { label: 'Monitoring', icon: BarChart3, action: () => setActiveView('monitoring'), isActive: activeView === 'monitoring' },
+    { label: 'Cek Keaktifan SPPG', icon: Shield, action: () => setActiveView('audit'), isActive: activeView === 'audit' },
     { label: 'Peta Wilayah', icon: Map, action: () => router.push('/korwil/monitoring-wilayah'), isActive: false },
     { label: 'Galeri', icon: Camera, action: () => setActiveView('galeri'), isActive: activeView === 'galeri' },
     { label: 'Data SPPG', icon: Database, action: () => router.push('/korwil/sppg'), isActive: false },
@@ -635,96 +717,91 @@ export default function SuperKorwilPage() {
               </header>
 
               {/* STAT CARDS — ONE ROW COMPACT */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {dataLoading ? (
                   <><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
                 ) : (
                   <>
-                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                          <TrendingUp size={18} />
+                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+                          <TrendingUp size={16} />
                         </div>
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded uppercase">Progres Lapor</span>
-                      </div>
-                      <h3 className="text-xl font-bold text-slate-900 tracking-tight">{progres}%</h3>
-                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">{laporan.length} / {units.length} SPPG</p>
-                      <div className="w-full h-1 bg-slate-50 rounded-full mt-3 overflow-hidden">
-                        <div style={{ width: `${progres}%` }} className="h-full bg-indigo-600 transition-all duration-1000 ease-out" />
+                        <div className="min-w-0">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Progres</p>
+                          <h3 className="text-sm font-black text-slate-900 leading-none">{progres}%</h3>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="w-9 h-9 bg-rose-50 rounded-lg flex items-center justify-center text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-all">
-                          <AlertTriangle size={18} />
+                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center shrink-0">
+                          <AlertTriangle size={16} />
                         </div>
-                        <span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-[8px] font-black rounded uppercase">Pending</span>
+                        <div className="min-w-0">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Pending</p>
+                          <h3 className="text-sm font-black text-slate-900 leading-none">{units.length - laporan.length} <small className="text-[8px] text-slate-300">Unit</small></h3>
+                        </div>
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 tracking-tight">{units.length - laporan.length}</h3>
-                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">SPPG Belum Lapor</p>
                     </div>
 
-                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                          <Box size={18} />
+                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center shrink-0">
+                          <CheckCircle2 size={16} />
                         </div>
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[8px] font-black rounded uppercase">Total Realisasi</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <h3 className={`text-xl font-bold tracking-tight ${totalPorsiHarian > totalTargetPorsi ? 'text-rose-600' : 'text-slate-900'}`}>
-                          {totalPorsiHarian.toLocaleString()}
-                        </h3>
+                        <div className="min-w-0">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Realisasi</p>
+                          <h3 className="text-sm font-black text-slate-900 leading-none">{totalPorsiHarian.toLocaleString()}</h3>
+                        </div>
                         {totalPorsiHarian > totalTargetPorsi && (
-                          <div className="group/tip relative cursor-help">
-                            <AlertTriangle size={14} className="text-rose-500 animate-pulse" />
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-900 text-white text-[8px] rounded-lg opacity-0 group-hover/tip:opacity-100 transition-all pointer-events-none z-50">
-                              Perhatian: Jumlah porsi terkirim melebihi kuota target!
-                            </div>
-                          </div>
+                          <AlertTriangle size={12} className="text-rose-500 animate-pulse ml-auto" />
                         )}
                       </div>
-                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">Porsi Tersalurkan</p>
                     </div>
 
-                    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-lg shadow-slate-200/10 group hover:-translate-y-1 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                          <Users size={18} />
+                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                          <Users size={16} />
                         </div>
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black rounded uppercase">Total Penerima</span>
+                        <div className="min-w-0">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Target</p>
+                          <h3 className="text-sm font-black text-slate-900 leading-none">{totalTargetPorsi.toLocaleString()}</h3>
+                        </div>
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 tracking-tight">{totalTargetPorsi.toLocaleString()}</h3>
-                      <p className="text-slate-400 font-bold text-[9px] mt-1 uppercase tracking-widest">Target Porsi Pasuruan</p>
                     </div>
                   </>
                 )}
               </div>
 
               {/* MONTHLY CHART */}
-              <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-xl shadow-slate-200/10">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                   <div className="space-y-0.5">
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Tren Distribusi - {new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date())}</h3>
-                    <p className="text-[10px] text-slate-400 font-medium">Target vs Realisasi Porsi bulan ini.</p>
+                    <h3 className="text-base font-black text-slate-900 tracking-tight italic">TREN DISTRIBUSI BULANAN</h3>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Analisis Perbandingan Target vs Realisasi</p>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 bg-indigo-600 rounded-full" />
-                      <span className="text-[10px] font-bold text-slate-500">Realisasi</span>
+                      <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Realisasi</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 bg-slate-200 rounded-full" />
-                      <span className="text-[10px] font-bold text-slate-500">Target</span>
+                      <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Target</span>
                     </div>
                   </div>
                 </div>
 
                 {chartLoading ? (
-                  <SkeletonChart />
+                  <div className="h-[250px] flex flex-col items-center justify-center space-y-3">
+                    <Loader2 size={32} className="text-indigo-500 animate-spin" />
+                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Memuat Grafik...</p>
+                  </div>
                 ) : (
-                  <div className="h-[200px] w-full">
+                  <div className="h-[250px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
                         <defs>
@@ -781,46 +858,32 @@ export default function SuperKorwilPage() {
                     return (
                       <div 
                         key={kat}
-                        className={`relative group bg-white p-5 rounded-[2rem] border transition-all duration-300 hover:-translate-y-1 ${
-                          isOver ? 'border-rose-200 shadow-xl shadow-rose-500/10' : 'border-slate-50 shadow-lg shadow-slate-200/20'
+                        className={`relative group bg-white p-4 rounded-2xl border transition-all duration-300 ${
+                          isOver ? 'border-rose-200 shadow-lg shadow-rose-500/5' : 'border-slate-50 shadow-sm'
                         }`}
                       >
-                        {/* Background Decor */}
-                        <div className={`absolute -right-4 -bottom-4 w-20 h-20 ${theme.bg} rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700 pointer-events-none`} />
-                        
-                        <div className="relative z-10 space-y-3">
-                          <div className="flex justify-between items-start">
-                            <span className={`px-2.5 py-1 ${theme.bg} ${theme.text} text-[8px] font-black rounded-lg uppercase tracking-wider`}>
-                              {kat}
+                        <div className="relative z-10 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className={`px-2 py-0.5 ${theme.bg} ${theme.text} text-[7px] font-black rounded uppercase tracking-wider`}>
+                              {kat === 'BALITA' ? 'Data Balita' : kat === 'BUMIL' ? 'Data Ibu Hamil' : kat === 'BUSUI' ? 'Data Ibu Menyusui' : kat}
                             </span>
-                            {isOver && (
-                              <div className="bg-rose-600 text-white p-1 rounded-full animate-pulse shadow-lg shadow-rose-600/20">
-                                <AlertTriangle size={10} />
-                              </div>
-                            )}
+                            {isOver && <AlertTriangle size={10} className="text-rose-500 animate-pulse" />}
                           </div>
 
                           <div>
                             <div className="flex items-baseline gap-1">
-                              <h4 className={`text-xl font-black tracking-tight ${isOver ? 'text-rose-600' : 'text-slate-900'}`}>
+                              <h4 className={`text-sm font-black tracking-tight ${isOver ? 'text-rose-600' : 'text-slate-900'}`}>
                                 {real.toLocaleString()}
                               </h4>
-                              <span className="text-[10px] font-bold text-slate-400">/ {target.toLocaleString()}</span>
+                              <span className="text-[8px] font-bold text-slate-300">/ {target.toLocaleString()}</span>
                             </div>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Realisasi Porsi</p>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between text-[8px] font-black uppercase tracking-tighter">
-                              <span className={isOver ? 'text-rose-500' : 'text-slate-400'}>{pct}% {isOver ? 'Anomaly' : 'Tercapai'}</span>
-                              <span className="text-slate-300">{target - real > 0 ? (target - real).toLocaleString() : 0} Sisa</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
-                              <div 
-                                style={{ width: `${pct}%` }} 
-                                className={`h-full transition-all duration-500 ease-in-out ${isOver ? 'bg-rose-600' : theme.bar}`}
-                              />
-                            </div>
+                          <div className="w-full h-1 bg-slate-50 rounded-full overflow-hidden">
+                            <div 
+                              style={{ width: `${pct}%` }} 
+                              className={`h-full transition-all duration-500 ease-in-out ${isOver ? 'bg-rose-600' : theme.bar}`}
+                            />
                           </div>
                         </div>
 
@@ -834,7 +897,8 @@ export default function SuperKorwilPage() {
                 </div>
               </div>
 
-              {/* REPORT GRID SECTION */}
+
+              {/* Compliance Audit Moved to Separate View 'audit' */}
               <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-0.5">
@@ -999,6 +1063,170 @@ export default function SuperKorwilPage() {
                 </div>
               </div>
             </>
+          ) : activeView === 'audit' ? (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+              {/* CEK KEAKTIFAN HEADER */}
+              <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+                <div className="space-y-2">
+                  <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">CEK KEAKTIFAN SPPG 🛡️</h2>
+                  <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Sistem Pengawasan Performa & Aktivasi Unit Wilayah</p>
+                </div>
+                
+                <div className="bg-white p-1.5 rounded-[1.5rem] border border-slate-100 shadow-xl shadow-slate-200/20 flex items-center gap-1">
+                  {[
+                    { id: 'all', label: 'Semua', icon: Layout },
+                    { id: 'active', label: 'Aktif', icon: ClipboardCheck },
+                    { id: 'rare', label: 'Jarang', icon: AlertTriangle },
+                    { id: 'never', label: 'Tidak Aktif', icon: Shield }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setAuditFilter(tab.id as any)}
+                      className={`px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                        auditFilter === tab.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-50'
+                      }`}
+                    >
+                      <tab.icon size={12} /> {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </header>
+
+              {/* SUMMARY CARDS */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-6 rounded-[2rem] border border-emerald-100 shadow-lg shadow-emerald-500/5 flex items-center gap-5 group">
+                  <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-500">
+                    <CheckCircle2 size={28} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unit Aktif</p>
+                    <h4 className="text-3xl font-black text-slate-800 tracking-tight">{auditSummary.aktif} <small className="text-xs text-slate-300">Unit</small></h4>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] border border-amber-100 shadow-lg shadow-amber-500/5 flex items-center gap-5 group">
+                  <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-500">
+                    <AlertTriangle size={28} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Perlu Perhatian</p>
+                    <h4 className="text-3xl font-black text-slate-800 tracking-tight">{auditSummary.rare} <small className="text-xs text-slate-300">Unit</small></h4>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-[2rem] border border-rose-100 shadow-lg shadow-rose-500/5 flex items-center gap-5 group">
+                  <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-500">
+                    <Shield size={28} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Belum Aktivasi</p>
+                    <h4 className="text-3xl font-black text-slate-800 tracking-tight">{auditSummary.never} <small className="text-xs text-slate-300">Unit</small></h4>
+                  </div>
+                </div>
+              </div>
+
+              {complianceLoading ? (
+                <div className="flex flex-col items-center justify-center py-32 space-y-4">
+                  <Loader2 size={48} className="text-indigo-500 animate-spin" />
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Memuat Data Keaktifan...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {Object.entries(groupedByKecamatan).map(([kecamatan, unitsInKec]) => (
+                    <div key={kecamatan} className="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm">
+                      {/* STICKY KECAMATAN HEADER */}
+                      <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-md px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-[#0F172A] text-white rounded-xl flex items-center justify-center font-black italic shadow-lg">
+                            {kecamatan.charAt(0)}
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-black text-slate-800 tracking-tight uppercase italic">Kecamatan {kecamatan}</h3>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{unitsInKec.length} Unit Terdaftar</p>
+                          </div>
+                        </div>
+                        
+                        <button
+                          onClick={() => {
+                            const waMsg = `*INFO KORWIL: CEK KEAKTIFAN SPPG*\n\nHalo rekan-rekan SPPG di Kecamatan ${kecamatan}, kami dari Korwil mengingatkan kembali untuk rutin melakukan penginputan laporan harian MBG. Mohon kerja samanya untuk menjaga kedisiplinan pelaporan. Terima kasih.`
+                            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(waMsg)}`, '_blank')
+                          }}
+                          className="px-5 py-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 group"
+                        >
+                          <Megaphone size={12} className="group-hover:animate-bounce" /> Broadcast ({kecamatan})
+                        </button>
+                      </div>
+
+                      {/* MINIMALIST ROW LIST */}
+                      <div className="divide-y divide-slate-50">
+                        {unitsInKec.map(u => {
+                          const statusColor = u.hasNeverReported ? 'rose' : u.complianceScore >= 80 ? 'emerald' : 'amber';
+                          const statusIcon = u.hasNeverReported ? '🔴' : u.complianceScore >= 80 ? '🟢' : '🟡';
+                          const statusLabel = u.hasNeverReported ? 'Tidak Aktif' : u.complianceScore >= 80 ? 'Aktif' : 'Jarang';
+                          
+                          const waMsg = u.hasNeverReported 
+                            ? `Halo ${u.nama_unit}, sistem mendeteksi bahwa unit Anda *BELUM PERNAH* melakukan penginputan laporan harian MBG. Mohon segera melakukan aktivasi laporan atau hubungi Korwil jika ada kendala teknis.`
+                            : `Halo ${u.nama_unit}, tingkat keaktifan pelaporan Anda saat ini *${u.complianceScore}%*. Mohon ditingkatkan kedisiplinan laporannya demi akurasi data wilayah. Terima kasih.`;
+
+                          return (
+                            <div key={u.id} className="px-6 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors group">
+                              <div className="flex items-center gap-8 flex-1 min-w-0">
+                                {/* Visual Status Dot */}
+                                <div className="flex items-center gap-3 w-20 shrink-0">
+                                  <div className={`w-2 h-2 rounded-full bg-${statusColor}-500 shadow-sm`} />
+                                  <span className={`text-[8px] font-black uppercase tracking-widest text-${statusColor}-600`}>{statusLabel}</span>
+                                </div>
+                                
+                                <div className="flex-1 min-w-0 flex items-center gap-8">
+                                  <h4 className="text-[11px] font-black text-slate-700 truncate w-40 uppercase">
+                                    {u.parsedDesa}
+                                  </h4>
+                                  
+                                  <div className="flex items-center gap-6">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-32">
+                                      Last: <span className="text-slate-500">{u.lastReport ? (new Date(u.lastReport).toLocaleDateString('id-ID', {day:'2-digit', month:'short'})) : '—'}</span>
+                                    </p>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-16 text-right">
+                                      {u.complianceScore}%
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <a 
+                                  href={`https://wa.me/${u.no_hp_ka_sppg?.replace(/\D/g, '')}?text=${encodeURIComponent(waMsg)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                                    u.hasNeverReported ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                                  } hover:scale-110`}
+                                >
+                                  <Megaphone size={12} />
+                                </a>
+                                <button 
+                                  onClick={() => router.push(`/korwil/detail/${u.id}`)}
+                                  className="w-8 h-8 bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white rounded-lg flex items-center justify-center transition-all"
+                                >
+                                  <ChevronRight size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {Object.keys(groupedByKecamatan).length === 0 && (
+                    <div className="py-32 text-center space-y-4 bg-white rounded-[3rem] border border-dashed border-slate-200">
+                      <div className="w-20 h-20 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto">
+                        <Shield size={40} />
+                      </div>
+                      <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Data tidak ditemukan untuk kategori ini</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           ) : (
             <>
               {/* GALERI VIEW — JOBIE STYLE */}
