@@ -50,7 +50,7 @@ export default function DashboardSPPGPage() {
   const totalPorsiNew = isSD
     ? newSekolah.porsi_siswa_1_3 + newSekolah.porsi_siswa_4_6 + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
     : newSekolah.porsi_siswa + newSekolah.porsi_guru + newSekolah.porsi_tendik + newSekolah.porsi_kader
-  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
+  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SLB", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
 
   // Jenjang Pill Badge Color Map
   const jenjangColor: Record<string, string> = {
@@ -59,6 +59,7 @@ export default function DashboardSPPGPage() {
     'SD/MI': 'bg-blue-50 text-blue-700 border-blue-200',
     'SMP/MTS': 'bg-cyan-50 text-cyan-700 border-cyan-200',
     'SMA/SMK': 'bg-teal-50 text-teal-700 border-teal-200',
+    'SLB': 'bg-indigo-50 text-indigo-700 border-indigo-200',
     'SANTRI': 'bg-amber-50 text-amber-700 border-amber-200',
     'BALITA': 'bg-pink-50 text-pink-700 border-pink-200',
     'BUMIL': 'bg-rose-50 text-rose-700 border-rose-200',
@@ -369,10 +370,14 @@ export default function DashboardSPPGPage() {
                           </div>
                         </>
                       ) : (
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Porsi Siswa</label>
-                          <input type="number" min="0" className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" placeholder="0" value={newSekolah.porsi_siswa || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa: parseInt(e.target.value) || 0 })} />
-                        </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                              {newSekolah.jenjang === 'BALITA' ? 'Porsi Balita' : 
+                               newSekolah.jenjang === 'BUMIL' ? 'Porsi Ibu Hamil' : 
+                               newSekolah.jenjang === 'BUSUI' ? 'Porsi Ibu Menyusui' : 'Porsi Siswa'}
+                            </label>
+                            <input type="number" min="0" className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" placeholder="0" value={newSekolah.porsi_siswa || ''} onChange={e => setNewSekolah({ ...newSekolah, porsi_siswa: parseInt(e.target.value) || 0 })} />
+                          </div>
                       )}
                       {[
                         { label: 'Guru', key: 'porsi_guru' as const },
@@ -438,7 +443,11 @@ export default function DashboardSPPGPage() {
                           {/* Detail Porsi */}
                           <div className="col-span-3">
                             <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                              {s.jenjang === 'SD/MI' ? (<>Kls 1-3: <span className="font-bold text-slate-700">{s.porsi_siswa_1_3 ?? 0}</span> · Kls 4-6: <span className="font-bold text-slate-700">{s.porsi_siswa_4_6 ?? 0}</span></>) : (<>Siswa: <span className="font-bold text-slate-700">{s.porsi_siswa ?? 0}</span></>)}<br />Guru: <span className="font-bold text-slate-700">{s.porsi_guru ?? 0}</span> · Tendik: <span className="font-bold text-slate-700">{s.porsi_tendik ?? 0}</span> · Kader: <span className="font-bold text-slate-700">{s.porsi_kader ?? 0}</span>
+                              {s.jenjang === 'SD/MI' ? (
+                                <>Kls 1-3: <span className="font-bold text-slate-700">{s.porsi_siswa_1_3 ?? 0}</span> · Kls 4-6: <span className="font-bold text-slate-700">{s.porsi_siswa_4_6 ?? 0}</span></>
+                              ) : (
+                                <>{s.jenjang === 'BALITA' ? 'Balita' : s.jenjang === 'BUMIL' ? 'Ibu Hamil' : s.jenjang === 'BUSUI' ? 'Ibu Menyusui' : 'Siswa'}: <span className="font-bold text-slate-700">{s.porsi_siswa ?? 0}</span></>
+                              )}<br />Guru: <span className="font-bold text-slate-700">{s.porsi_guru ?? 0}</span> · Tendik: <span className="font-bold text-slate-700">{s.porsi_tendik ?? 0}</span> · Kader: <span className="font-bold text-slate-700">{s.porsi_kader ?? 0}</span>
                             </p>
                           </div>
                           {/* Total */}

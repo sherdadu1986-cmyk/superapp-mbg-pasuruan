@@ -29,8 +29,9 @@ export default function SuperKorwilPage() {
   const [units, setUnits] = useState<any[]>([])
   const [laporan, setLaporan] = useState<any[]>([])
   const [dataLoading, setDataLoading] = useState(true)
-  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
+  const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SLB", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
   const [statsPorsi, setStatsPorsi] = useState<Record<string, number>>({})
+  const [statsTargetPorsi, setStatsTargetPorsi] = useState<Record<string, number>>({})
   const [totalPorsiHarian, setTotalPorsiHarian] = useState(0)
   const [totalTargetPorsi, setTotalTargetPorsi] = useState(0)
 
@@ -215,7 +216,12 @@ export default function SuperKorwilPage() {
           const sekolahInfo = s.find(item => item.id === sekolahId)
           if (sekolahInfo) {
             const jenjang = sekolahInfo.jenjang?.toUpperCase() || ''
-            const targetKat = KATEGORI_PM.find(k => jenjang.includes(k.split('/')[0]))
+            // Check for match in KATEGORI_PM
+            const targetKat = KATEGORI_PM.find(k => {
+              const base = k.split('/')[0].toUpperCase();
+              return jenjang === k.toUpperCase() || jenjang.includes(base);
+            })
+            
             if (targetKat) {
               mapping[targetKat] += porsiNum
             } else {
@@ -226,6 +232,25 @@ export default function SuperKorwilPage() {
       })
 
       setStatsPorsi(mapping)
+      
+      // 4. Calculate TARGET per Category
+      let targetMapping: Record<string, number> = {}
+      KATEGORI_PM.forEach(k => targetMapping[k] = 0)
+      
+      s.forEach(sch => {
+        const jenjang = sch.jenjang?.toUpperCase() || ''
+        const targetKat = KATEGORI_PM.find(k => {
+          const base = k.split('/')[0].toUpperCase();
+          return jenjang === k.toUpperCase() || jenjang.includes(base);
+        })
+        
+        if (targetKat) {
+          targetMapping[targetKat] += (sch.target_porsi || 0)
+        } else {
+          targetMapping["SD/MI"] += (sch.target_porsi || 0)
+        }
+      })
+      setStatsTargetPorsi(targetMapping)
       setTotalPorsiHarian(total)
       const totalTarget = (s || []).reduce((acc, item) => acc + (item.target_porsi || 0), 0)
       setTotalTargetPorsi(totalTarget)
@@ -722,6 +747,91 @@ export default function SuperKorwilPage() {
                     </ResponsiveContainer>
                   </div>
                 )}
+              </div>
+
+              {/* DISTRIBUTION PER CATEGORY — JOBIE STYLE CARDS */}
+              <div className="space-y-4">
+                <div className="space-y-0.5">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Ringkasan Distribusi Per Jenjang</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Pantauan realisasi porsi berdasarkan kategori penerima manfaat.</p>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {KATEGORI_PM.map((kat) => {
+                    const real = statsPorsi[kat] || 0;
+                    const target = statsTargetPorsi[kat] || 0;
+                    const pct = target > 0 ? Math.min(Math.round((real / target) * 100), 100) : 0;
+                    const isOver = real > target;
+
+                    // Color Mapping for Jobie Style
+                    const colorMap: Record<string, string> = {
+                      'PAUD/KB': 'indigo',
+                      'TK/RA': 'violet',
+                      'SD/MI': 'blue',
+                      'SMP/MTS': 'cyan',
+                      'SMA/SMK': 'teal',
+                      'SLB': 'sky',
+                      'SANTRI': 'amber',
+                      'BALITA': 'pink',
+                      'BUMIL': 'rose',
+                      'BUSUI': 'orange'
+                    };
+                    const color = colorMap[kat] || 'slate';
+
+                    return (
+                      <div 
+                        key={kat}
+                        className={`relative group bg-white p-5 rounded-[2rem] border transition-all duration-300 hover:-translate-y-1 ${
+                          isOver ? 'border-rose-200 shadow-xl shadow-rose-500/10' : 'border-slate-50 shadow-lg shadow-slate-200/20'
+                        }`}
+                      >
+                        {/* Background Decor */}
+                        <div className={`absolute -right-4 -bottom-4 w-20 h-20 bg-${color}-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700 pointer-events-none`} />
+                        
+                        <div className="relative z-10 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <span className={`px-2.5 py-1 bg-${color}-50 text-${color}-600 text-[8px] font-black rounded-lg uppercase tracking-wider`}>
+                              {kat}
+                            </span>
+                            {isOver && (
+                              <div className="bg-rose-600 text-white p-1 rounded-full animate-pulse shadow-lg shadow-rose-600/20">
+                                <AlertTriangle size={10} />
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="flex items-baseline gap-1">
+                              <h4 className={`text-xl font-black tracking-tight ${isOver ? 'text-rose-600' : 'text-slate-900'}`}>
+                                {real.toLocaleString()}
+                              </h4>
+                              <span className="text-[10px] font-bold text-slate-400">/ {target.toLocaleString()}</span>
+                            </div>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Realisasi Porsi</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-[8px] font-black uppercase tracking-tighter">
+                              <span className={isOver ? 'text-rose-500' : 'text-slate-400'}>{pct}% {isOver ? 'Anomaly' : 'Tercapai'}</span>
+                              <span className="text-slate-300">{target - real > 0 ? (target - real).toLocaleString() : 0} Sisa</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
+                              <div 
+                                style={{ width: `${pct}%` }} 
+                                className={`h-full transition-all duration-1000 ${isOver ? 'bg-rose-600' : `bg-${color}-500`}`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Hover Overlay for Anomaly */}
+                        {isOver && (
+                          <div className="absolute inset-0 bg-rose-600/5 rounded-[2rem] pointer-events-none border-2 border-rose-600/20" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* REPORT GRID SECTION */}
