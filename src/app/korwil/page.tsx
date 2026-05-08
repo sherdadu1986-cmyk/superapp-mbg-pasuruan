@@ -763,20 +763,20 @@ export default function SuperKorwilPage() {
                     const pct = target > 0 ? Math.min(Math.round((real / target) * 100), 100) : 0;
                     const isOver = real > target;
 
-                    // Color Mapping for Jobie Style
-                    const colorMap: Record<string, string> = {
-                      'PAUD/KB': 'indigo',
-                      'TK/RA': 'violet',
-                      'SD/MI': 'blue',
-                      'SMP/MTS': 'cyan',
-                      'SMA/SMK': 'teal',
-                      'SLB': 'sky',
-                      'SANTRI': 'amber',
-                      'BALITA': 'pink',
-                      'BUMIL': 'rose',
-                      'BUSUI': 'orange'
+                    // Color Mapping for Jobie Style (Static classes for Tailwind)
+                    const colorClasses: Record<string, { bg: string, text: string, bar: string }> = {
+                      'PAUD/KB': { bg: 'bg-indigo-50', text: 'text-indigo-600', bar: 'bg-indigo-500' },
+                      'TK/RA': { bg: 'bg-violet-50', text: 'text-violet-600', bar: 'bg-violet-500' },
+                      'SD/MI': { bg: 'bg-blue-50', text: 'text-blue-600', bar: 'bg-blue-500' },
+                      'SMP/MTS': { bg: 'bg-cyan-50', text: 'text-cyan-600', bar: 'bg-cyan-500' },
+                      'SMA/SMK': { bg: 'bg-teal-50', text: 'text-teal-600', bar: 'bg-teal-500' },
+                      'SLB': { bg: 'bg-sky-50', text: 'text-sky-600', bar: 'bg-sky-500' },
+                      'SANTRI': { bg: 'bg-amber-50', text: 'text-amber-600', bar: 'bg-amber-500' },
+                      'BALITA': { bg: 'bg-pink-50', text: 'text-pink-600', bar: 'bg-pink-500' },
+                      'BUMIL': { bg: 'bg-rose-50', text: 'text-rose-600', bar: 'bg-rose-500' },
+                      'BUSUI': { bg: 'bg-orange-50', text: 'text-orange-600', bar: 'bg-orange-500' }
                     };
-                    const color = colorMap[kat] || 'slate';
+                    const theme = colorClasses[kat] || { bg: 'bg-slate-50', text: 'text-slate-600', bar: 'bg-slate-500' };
 
                     return (
                       <div 
@@ -786,11 +786,11 @@ export default function SuperKorwilPage() {
                         }`}
                       >
                         {/* Background Decor */}
-                        <div className={`absolute -right-4 -bottom-4 w-20 h-20 bg-${color}-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700 pointer-events-none`} />
+                        <div className={`absolute -right-4 -bottom-4 w-20 h-20 ${theme.bg} rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700 pointer-events-none`} />
                         
                         <div className="relative z-10 space-y-3">
                           <div className="flex justify-between items-start">
-                            <span className={`px-2.5 py-1 bg-${color}-50 text-${color}-600 text-[8px] font-black rounded-lg uppercase tracking-wider`}>
+                            <span className={`px-2.5 py-1 ${theme.bg} ${theme.text} text-[8px] font-black rounded-lg uppercase tracking-wider`}>
                               {kat}
                             </span>
                             {isOver && (
@@ -818,7 +818,7 @@ export default function SuperKorwilPage() {
                             <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
                               <div 
                                 style={{ width: `${pct}%` }} 
-                                className={`h-full transition-all duration-1000 ${isOver ? 'bg-rose-600' : `bg-${color}-500`}`}
+                                className={`h-full transition-all duration-500 ease-in-out ${isOver ? 'bg-rose-600' : theme.bar}`}
                               />
                             </div>
                           </div>
