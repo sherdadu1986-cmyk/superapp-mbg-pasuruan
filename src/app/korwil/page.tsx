@@ -632,7 +632,7 @@ export default function SuperKorwilPage() {
   // ============================================
   const sidebarItems = [
     { label: 'Monitoring', icon: BarChart3, action: () => setActiveView('monitoring'), isActive: activeView === 'monitoring' },
-    { label: 'Cek Keaktifan SPPG', icon: Shield, action: () => setActiveView('audit'), isActive: activeView === 'audit' },
+    { label: 'Cek Keaktifan SPPG', icon: Shield, action: () => router.push('/korwil/cek-keaktifan'), isActive: false },
     { label: 'Peta Wilayah', icon: Map, action: () => router.push('/korwil/monitoring-wilayah'), isActive: false },
     { label: 'Galeri', icon: Camera, action: () => setActiveView('galeri'), isActive: activeView === 'galeri' },
     { label: 'Data SPPG', icon: Database, action: () => router.push('/korwil/sppg'), isActive: false },
@@ -729,36 +729,44 @@ export default function SuperKorwilPage() {
                   <><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
                 ) : (
                   <>
-                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                    <button 
+                      onClick={() => router.push('/korwil/cek-keaktifan')}
+                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-indigo-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-all">
                           <TrendingUp size={16} />
                         </div>
                         <div className="min-w-0">
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Progres</p>
                           <div className="flex items-baseline gap-2">
                             <h3 className="text-sm font-black text-slate-900 leading-none">{progres}%</h3>
-                            <p className="text-[10px] text-slate-500 font-bold leading-none">{laporan.length} / {units.length} Unit Lapor</p>
+                            <p className="text-[10px] text-slate-500 font-bold leading-none">{laporan.length} / {units.length} Unit</p>
                           </div>
                         </div>
+                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                    <button 
+                      onClick={() => router.push('/korwil/cek-keaktifan?filter=pending')}
+                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-rose-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-all">
                           <AlertTriangle size={16} />
                         </div>
                         <div className="min-w-0">
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Pending</p>
-                          <h3 className="text-sm font-black text-slate-900 leading-none">{units.length - laporan.length} <small className="text-[8px] text-slate-300">Unit</small></h3>
+                          <h3 className="text-sm font-black text-slate-900 leading-none">{units.length - laporan.length} <small className="text-[8px] text-slate-300 font-bold uppercase">Unit</small></h3>
                         </div>
+                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
-                    </div>
+                    </button>
 
                     <button 
                       onClick={() => router.push('/korwil/audit-porsi')}
-                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-emerald-200 hover:shadow-md hover:scale-[1.02] text-left"
+                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-emerald-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all">
@@ -776,8 +784,8 @@ export default function SuperKorwilPage() {
                     </button>
 
                     <button 
-                      onClick={() => router.push('/korwil/audit-porsi')}
-                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-blue-200 hover:shadow-md hover:scale-[1.02] text-left"
+                      onClick={() => router.push('/korwil/audit-porsi?highlight=zero-target')}
+                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-blue-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-all">
@@ -1081,170 +1089,6 @@ export default function SuperKorwilPage() {
                 </div>
               </div>
             </>
-          ) : activeView === 'audit' ? (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
-              {/* CEK KEAKTIFAN HEADER */}
-              <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
-                <div className="space-y-2">
-                  <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">CEK KEAKTIFAN SPPG 🛡️</h2>
-                  <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Sistem Pengawasan Performa & Aktivasi Unit Wilayah</p>
-                </div>
-                
-                <div className="bg-white p-1.5 rounded-[1.5rem] border border-slate-100 shadow-xl shadow-slate-200/20 flex items-center gap-1">
-                  {[
-                    { id: 'all', label: 'Semua', icon: Layout },
-                    { id: 'active', label: 'Aktif', icon: ClipboardCheck },
-                    { id: 'rare', label: 'Jarang', icon: AlertTriangle },
-                    { id: 'never', label: 'Tidak Aktif', icon: Shield }
-                  ].map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setAuditFilter(tab.id as any)}
-                      className={`px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
-                        auditFilter === tab.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-50'
-                      }`}
-                    >
-                      <tab.icon size={12} /> {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </header>
-
-              {/* SUMMARY CARDS */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white p-6 rounded-[2rem] border border-emerald-100 shadow-lg shadow-emerald-500/5 flex items-center gap-5 group">
-                  <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-500">
-                    <CheckCircle2 size={28} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unit Aktif</p>
-                    <h4 className="text-3xl font-black text-slate-800 tracking-tight">{auditSummary.aktif} <small className="text-xs text-slate-300">Unit</small></h4>
-                  </div>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-amber-100 shadow-lg shadow-amber-500/5 flex items-center gap-5 group">
-                  <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-500">
-                    <AlertTriangle size={28} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Perlu Perhatian</p>
-                    <h4 className="text-3xl font-black text-slate-800 tracking-tight">{auditSummary.rare} <small className="text-xs text-slate-300">Unit</small></h4>
-                  </div>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-rose-100 shadow-lg shadow-rose-500/5 flex items-center gap-5 group">
-                  <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-500">
-                    <Shield size={28} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Belum Aktivasi</p>
-                    <h4 className="text-3xl font-black text-slate-800 tracking-tight">{auditSummary.never} <small className="text-xs text-slate-300">Unit</small></h4>
-                  </div>
-                </div>
-              </div>
-
-              {complianceLoading ? (
-                <div className="flex flex-col items-center justify-center py-32 space-y-4">
-                  <Loader2 size={48} className="text-indigo-500 animate-spin" />
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Memuat Data Keaktifan...</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {Object.entries(groupedByKecamatan).map(([kecamatan, unitsInKec]) => (
-                    <div key={kecamatan} className="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm">
-                      {/* STICKY KECAMATAN HEADER */}
-                      <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-md px-8 py-5 border-b border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-[#0F172A] text-white rounded-xl flex items-center justify-center font-black italic shadow-lg">
-                            {kecamatan.charAt(0)}
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-black text-slate-800 tracking-tight uppercase italic">Kecamatan {kecamatan}</h3>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{unitsInKec.length} Unit Terdaftar</p>
-                          </div>
-                        </div>
-                        
-                        <button
-                          onClick={() => {
-                            const waMsg = `*INFO KORWIL: CEK KEAKTIFAN SPPG*\n\nHalo rekan-rekan SPPG di Kecamatan ${kecamatan}, kami dari Korwil mengingatkan kembali untuk rutin melakukan penginputan laporan harian MBG. Mohon kerja samanya untuk menjaga kedisiplinan pelaporan. Terima kasih.`
-                            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(waMsg)}`, '_blank')
-                          }}
-                          className="px-5 py-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 group"
-                        >
-                          <Megaphone size={12} className="group-hover:animate-bounce" /> Broadcast ({kecamatan})
-                        </button>
-                      </div>
-
-                      {/* MINIMALIST ROW LIST */}
-                      <div className="divide-y divide-slate-50">
-                        {unitsInKec.map(u => {
-                          const statusColor = u.hasNeverReported ? 'rose' : u.complianceScore >= 80 ? 'emerald' : 'amber';
-                          const statusIcon = u.hasNeverReported ? '🔴' : u.complianceScore >= 80 ? '🟢' : '🟡';
-                          const statusLabel = u.hasNeverReported ? 'Tidak Aktif' : u.complianceScore >= 80 ? 'Aktif' : 'Jarang';
-                          
-                          const waMsg = u.hasNeverReported 
-                            ? `Halo ${u.nama_unit}, sistem mendeteksi bahwa unit Anda *BELUM PERNAH* melakukan penginputan laporan harian MBG. Mohon segera melakukan aktivasi laporan atau hubungi Korwil jika ada kendala teknis.`
-                            : `Halo ${u.nama_unit}, tingkat keaktifan pelaporan Anda saat ini *${u.complianceScore}%*. Mohon ditingkatkan kedisiplinan laporannya demi akurasi data wilayah. Terima kasih.`;
-
-                          return (
-                            <div key={u.id} className="px-6 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors group">
-                              <div className="flex items-center gap-8 flex-1 min-w-0">
-                                {/* Visual Status Dot */}
-                                <div className="flex items-center gap-3 w-20 shrink-0">
-                                  <div className={`w-2 h-2 rounded-full bg-${statusColor}-500 shadow-sm`} />
-                                  <span className={`text-[8px] font-black uppercase tracking-widest text-${statusColor}-600`}>{statusLabel}</span>
-                                </div>
-                                
-                                <div className="flex-1 min-w-0 flex items-center gap-8">
-                                  <h4 className="text-[11px] font-black text-slate-700 truncate w-40 uppercase">
-                                    {u.parsedDesa}
-                                  </h4>
-                                  
-                                  <div className="flex items-center gap-6">
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-32">
-                                      Last: <span className="text-slate-500">{u.lastReport ? (new Date(u.lastReport).toLocaleDateString('id-ID', {day:'2-digit', month:'short'})) : '—'}</span>
-                                    </p>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-16 text-right">
-                                      {u.complianceScore}%
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <a 
-                                  href={`https://wa.me/${u.no_hp_ka_sppg?.replace(/\D/g, '')}?text=${encodeURIComponent(waMsg)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                                    u.hasNeverReported ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
-                                  } hover:scale-110`}
-                                >
-                                  <Megaphone size={12} />
-                                </a>
-                                <button 
-                                  onClick={() => router.push(`/korwil/detail/${u.id}`)}
-                                  className="w-8 h-8 bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white rounded-lg flex items-center justify-center transition-all"
-                                >
-                                  <ChevronRight size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {Object.keys(groupedByKecamatan).length === 0 && (
-                    <div className="py-32 text-center space-y-4 bg-white rounded-[3rem] border border-dashed border-slate-200">
-                      <div className="w-20 h-20 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto">
-                        <Shield size={40} />
-                      </div>
-                      <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Data tidak ditemukan untuk kategori ini</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
           ) : (
             <>
               {/* GALERI VIEW — JOBIE STYLE */}

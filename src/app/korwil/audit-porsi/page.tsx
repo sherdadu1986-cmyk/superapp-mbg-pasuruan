@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLocalToday } from '@/lib/date'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { 
   ArrowLeft, FileSpreadsheet, FileText, Search, ChevronLeft, ChevronRight, 
@@ -156,6 +156,9 @@ export default function AuditPorsiPage() {
     })
   }
 
+  const searchParams = useSearchParams()
+  const highlightParam = searchParams.get('highlight')
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans p-5 lg:p-8">
       <style jsx global>{`
@@ -203,7 +206,7 @@ export default function AuditPorsiPage() {
         </header>
 
         {/* SUMMARY CARDS (no print) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 no-print">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 no-print">
           <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Target</p>
             <h3 className="text-xl font-black text-slate-900 leading-none">
@@ -228,7 +231,7 @@ export default function AuditPorsiPage() {
               {laporan.length} / {units.length}
             </h3>
           </div>
-          <div className="bg-white p-4 rounded-2xl border border-rose-100 shadow-sm">
+          <div className={`bg-white p-4 rounded-2xl border shadow-sm transition-all ${highlightParam === 'zero-target' ? 'ring-4 ring-rose-500/20 border-rose-300' : 'border-rose-100'}`}>
             <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Belum Input PM</p>
             <h3 className="text-xl font-black text-rose-600 leading-none">
               {auditData.filter(i => i.isBelumInputPM).length} <small className="text-[10px] text-rose-300 font-bold uppercase">Unit</small>
@@ -248,7 +251,7 @@ export default function AuditPorsiPage() {
           />
         </div>
 
-        {/* MAIN TABLE */}
+        {/* MAIN LIST (GRID INSTEAD OF TABLE) */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/20 overflow-hidden card-print">
           {loading ? (
             <div className="p-20 text-center flex flex-col items-center gap-4">
@@ -256,37 +259,40 @@ export default function AuditPorsiPage() {
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Sinkronisasi Data Audit...</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Kecamatan</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Desa / Unit SPPG</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Target Resmi</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Realisasi Harian</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Selisih</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {Object.entries(groupedData).map(([kecamatan, items]) => (
-                    <Fragment key={kecamatan}>
-                      {/* Kecamatan Group Header */}
-                      <tr className="bg-slate-50/30">
-                        <td colSpan={6} className="px-6 py-2">
-                          <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
-                            KECAMATAN: {kecamatan}
-                          </span>
-                        </td>
-                      </tr>
-                      {items.map((item, idx) => (
-                        <tr 
+            <div className="min-w-[800px]">
+              {/* Header Grid */}
+              <div className="grid grid-cols-12 bg-slate-50/80 border-b border-slate-100 px-6 py-4">
+                <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Kecamatan</div>
+                <div className="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Desa / Unit SPPG</div>
+                <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Target Resmi</div>
+                <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Realisasi Harian</div>
+                <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Selisih</div>
+                <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</div>
+              </div>
+
+              {/* Body Grid */}
+              <div className="divide-y divide-slate-50">
+                {Object.entries(groupedData).map(([kecamatan, items]) => (
+                  <div key={kecamatan}>
+                    {/* Kecamatan Group Header */}
+                    <div className="bg-slate-50/30 px-6 py-2 border-y border-slate-50">
+                      <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                        KECAMATAN: {kecamatan}
+                      </span>
+                    </div>
+
+                    {items.map((item) => {
+                      const isHighlighted = highlightParam === 'zero-target' && item.isBelumInputPM;
+                      return (
+                        <div 
                           key={item.id} 
-                          className={`hover:bg-slate-50/50 transition-colors ${item.isAnomali ? 'bg-rose-50/30' : item.isBelumInputPM ? 'bg-rose-100/40' : ''}`}
+                          className={`grid grid-cols-12 px-6 py-4 items-center hover:bg-slate-50/50 transition-colors ${
+                            item.isAnomali ? 'bg-rose-50/30' : item.isBelumInputPM ? 'bg-rose-100/40' : ''
+                          } ${isHighlighted ? 'ring-2 ring-inset ring-rose-500' : ''}`}
                         >
-                          <td className="px-6 py-3 text-[10px] font-bold text-slate-400">{item.kecamatan}</td>
-                          <td className="px-6 py-3">
+                          <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase">{item.kecamatan}</div>
+                          <div className="col-span-4">
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{item.desa}</span>
@@ -302,41 +308,39 @@ export default function AuditPorsiPage() {
                                   </a>
                                 )}
                               </div>
-                              <span className="text-[9px] text-slate-400 font-medium">ID SPPG: {item.id_sppg || '-'}</span>
+                              <span className="text-[9px] text-slate-400 font-medium tracking-widest uppercase">ID SPPG: {item.id_sppg || '-'}</span>
                             </div>
-                          </td>
-                          <td className="px-6 py-3 text-center text-xs font-bold text-slate-600">{item.target.toLocaleString()}</td>
-                          <td className={`px-6 py-3 text-center text-xs ${item.isAnomali ? 'text-rose-600 font-black' : 'font-bold text-slate-600'}`}>
+                          </div>
+                          <div className="col-span-2 text-center text-xs font-black text-slate-700">{item.target.toLocaleString()}</div>
+                          <div className={`col-span-2 text-center text-xs ${item.isAnomali ? 'text-rose-600 font-black animate-pulse' : 'font-black text-slate-700'}`}>
                             {item.realisasi.toLocaleString()}
-                          </td>
-                          <td className={`px-6 py-3 text-center text-xs font-bold ${item.isAnomali ? 'text-rose-600' : item.selisih < 0 ? 'text-blue-600' : 'text-slate-300'}`}>
+                          </div>
+                          <div className={`col-span-1 text-center text-[11px] font-black ${item.isAnomali ? 'text-rose-600' : item.selisih < 0 ? 'text-blue-600' : 'text-slate-200'}`}>
                             {item.selisih > 0 ? `+${item.selisih}` : item.selisih}
-                          </td>
-                          <td className="px-6 py-3 text-center">
-                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md ${
+                          </div>
+                          <div className="col-span-1 text-center">
+                            <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-md ${
                               item.isBelumInputPM
-                                ? 'bg-rose-100 text-rose-700 animate-pulse'
+                                ? 'bg-rose-100 text-rose-700'
                                 : item.status === 'Sudah Lapor' 
                                   ? 'bg-emerald-100 text-emerald-700' 
                                   : 'bg-slate-100 text-slate-400'
                             }`}>
                               {item.status}
                             </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </Fragment>
-                  ))}
-                  {Object.keys(groupedData).length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-20 text-center">
-                        <Search size={32} className="mx-auto text-slate-200 mb-3" />
-                        <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Tidak ada data ditemukan</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+                {Object.keys(groupedData).length === 0 && (
+                  <div className="px-6 py-32 text-center">
+                    <Search size={48} className="mx-auto text-slate-100 mb-4" />
+                    <p className="text-sm font-black text-slate-300 uppercase tracking-widest italic">Tidak ada data ditemukan</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
