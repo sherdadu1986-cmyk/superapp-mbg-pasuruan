@@ -13,7 +13,8 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell
 } from 'recharts'
 
 export default function SuperKorwilPage() {
@@ -393,6 +394,59 @@ export default function SuperKorwilPage() {
     return units.length > 0 ? Math.round((laporan.length / units.length) * 100) : 0
   }, [units.length, laporan.length])
 
+  // --- PIE DATA ---
+  const pieData = useMemo(() => [
+    { name: 'Sudah Lapor', value: laporan.length, color: '#10B981' },
+    { name: 'Pending', value: units.length - laporan.length, color: '#F43F5E' }
+  ], [laporan.length, units.length])
+
+  // --- LIVE ACTIVITIES ---
+  const recentActivities = useMemo(() => {
+    const list: { id: string, text: string, time: string, type: 'success' | 'warning' | 'info' }[] = []
+    
+    // 1. Last reports
+    const sortedReports = [...laporan].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 3)
+    sortedReports.forEach(r => {
+      const total = Object.values(r.realisasi_sekolah || {}).reduce((acc: number, v: any) => acc + (parseInt(v) || 0), 0)
+      list.push({
+        id: `rep-${r.id}`,
+        text: `**${r.nama_unit}** baru saja mengirim laporan (**${total.toLocaleString()}** porsi).`,
+        time: 'Baru saja',
+        type: 'success'
+      })
+    })
+
+    // 2. Anomali
+    const anomalies = units.filter(u => {
+      const report = laporan.find(l => l.unit_id === u.id)
+      if (!report || !report.is_operasional) return false
+      const real = Object.values(report.realisasi_sekolah || {}).reduce((acc: number, v: any) => acc + (parseInt(v) || 0), 0)
+      const target = unitTargetMap[u.id] || 0
+      return real > target
+    }).slice(0, 2)
+    anomalies.forEach(u => {
+      list.push({
+        id: `ano-${u.id}`,
+        text: `**${u.nama_unit}** masuk dalam zona anomali input porsi.`,
+        time: 'Cek Data',
+        type: 'info'
+      })
+    })
+
+    // 3. Zero Target
+    const zeroTargets = units.filter(u => (unitTargetMap[u.id] || 0) === 0).slice(0, 2)
+    zeroTargets.forEach(u => {
+      list.push({
+        id: `zero-${u.id}`,
+        text: `**${u.nama_unit}** terdeteksi belum input data PM (Target 0).`,
+        time: 'Perhatian',
+        type: 'warning'
+      })
+    })
+
+    return list.slice(0, 5)
+  }, [laporan, units, unitTargetMap])
+
   // --- EFFECTS ---
   useEffect(() => { fetchData() }, [monitoringDate, fetchData])
   useEffect(() => { fetchMonthlyData() }, [fetchMonthlyData])
@@ -731,9 +785,9 @@ export default function SuperKorwilPage() {
                   <>
                     <button 
                       onClick={() => router.push('/korwil/cek-keaktifan')}
-                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-indigo-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
+                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-indigo-200 hover:shadow-md hover:scale-105 active:scale-95 text-left flex items-center justify-between"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-all">
                           <TrendingUp size={16} />
                         </div>
@@ -741,10 +795,18 @@ export default function SuperKorwilPage() {
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Progres</p>
                           <div className="flex items-baseline gap-2">
                             <h3 className="text-sm font-black text-slate-900 leading-none">{progres}%</h3>
-                            <p className="text-[10px] text-slate-500 font-bold leading-none">{laporan.length} / {units.length} Unit</p>
+                            <p className="text-[10px] text-slate-500 font-bold leading-none truncate">{laporan.length} / {units.length} Unit</p>
                           </div>
                         </div>
-                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+                      </div>
+                      <div className="w-10 h-10 shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={pieData} innerRadius={14} outerRadius={18} paddingAngle={2} dataKey="value" stroke="none">
+                              {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
                       </div>
                     </button>
 
@@ -802,54 +864,99 @@ export default function SuperKorwilPage() {
                 )}
               </div>
 
-              {/* MONTHLY CHART */}
-              <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                  <div className="space-y-0.5">
-                    <h3 className="text-base font-black text-slate-900 tracking-tight italic">TREN DISTRIBUSI BULANAN</h3>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Analisis Perbandingan Target vs Realisasi</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">Realisasi</span>
+               {/* CHART & ACTIVITY FEED */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                {/* MONTHLY CHART */}
+                <div className="xl:col-span-2 bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <div className="space-y-0.5">
+                      <h3 className="text-base font-black text-slate-900 tracking-tight italic">TREN DISTRIBUSI BULANAN</h3>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Analisis Perbandingan Target vs Realisasi</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">Target</span>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Realisasi</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Target</span>
+                      </div>
                     </div>
                   </div>
+
+                  {chartLoading ? (
+                    <div className="h-[250px] flex flex-col items-center justify-center space-y-3">
+                      <Loader2 size={32} className="text-indigo-500 animate-spin" />
+                      <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Memuat Grafik...</p>
+                    </div>
+                  ) : (
+                    <div className="h-[250px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2} />
+                              <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F8FAFC" />
+                          <XAxis dataKey="tgl" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '10px' }}
+                            labelStyle={{ fontWeight: 900, fontSize: '10px', marginBottom: '4px', color: '#1E293B' }}
+                            itemStyle={{ fontSize: '10px', padding: '0' }}
+                          />
+                          <Area type="monotone" dataKey="target" stroke="#E2E8F0" strokeWidth={1} fill="transparent" />
+                          <Area type="monotone" dataKey="realisasi" stroke="#4F46E5" strokeWidth={2} fillOpacity={1} fill="url(#colorReal)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </div>
 
-                {chartLoading ? (
-                  <div className="h-[250px] flex flex-col items-center justify-center space-y-3">
-                    <Loader2 size={32} className="text-indigo-500 animate-spin" />
-                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Memuat Grafik...</p>
+                {/* LIVE ACTIVITY FEED */}
+                <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col">
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="space-y-0.5">
+                      <h3 className="text-sm font-black text-slate-900 tracking-tight italic">AKTIVITAS UNIT TERKINI</h3>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Real-time Activity Stream</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 rounded-lg animate-pulse">
+                      <div className="w-1 h-1 bg-rose-500 rounded-full" />
+                      <span className="text-[7px] font-black text-rose-600 uppercase">Live</span>
+                    </div>
                   </div>
-                ) : (
-                  <div className="h-[250px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2} />
-                            <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F8FAFC" />
-                        <XAxis dataKey="tgl" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} />
-                        <Tooltip
-                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '10px' }}
-                          labelStyle={{ fontWeight: 900, fontSize: '10px', marginBottom: '4px', color: '#1E293B' }}
-                          itemStyle={{ fontSize: '10px', padding: '0' }}
-                        />
-                        <Area type="monotone" dataKey="target" stroke="#E2E8F0" strokeWidth={1} fill="transparent" />
-                        <Area type="monotone" dataKey="realisasi" stroke="#4F46E5" strokeWidth={2} fillOpacity={1} fill="url(#colorReal)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
+
+                  <div className="flex-1 space-y-4 overflow-y-auto max-h-[250px] pr-2 scrollbar-hide">
+                    {recentActivities.map((act, i) => (
+                      <div key={act.id} className="flex gap-3 group animate-in fade-in slide-in-from-right-4 duration-500" style={{ animationDelay: `${i * 100}ms` }}>
+                        <div className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${act.type === 'success' ? 'bg-emerald-500' : act.type === 'warning' ? 'bg-rose-500' : 'bg-blue-500 shadow-lg shadow-blue-500/20'}`} />
+                        <div className="space-y-1">
+                          <p 
+                            className="text-[10px] text-slate-600 leading-relaxed font-medium"
+                            dangerouslySetInnerHTML={{ __html: act.text.replace(/\*\*(.*?)\*\*/g, '<b class="text-slate-900">$1</b>') }}
+                          />
+                          <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">{act.time}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {recentActivities.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center text-center py-10 opacity-30">
+                        <Activity size={24} className="mb-2" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest">Belum ada aktivitas</p>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  <button 
+                    onClick={() => setActiveView('monitoring')}
+                    className="mt-5 w-full py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                  >
+                    Lihat Monitoring <ArrowRight size={10} />
+                  </button>
+                </div>
               </div>
 
               {/* DISTRIBUTION PER CATEGORY — JOBIE STYLE CARDS */}
