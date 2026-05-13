@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-const supabase = createClient(supabaseUrl, supabaseKey)
+const supabase = createClient(supabaseUrl ?? '', supabaseKey ?? '')
 
 async function checkSchema() {
   const { data: sppg, error: err1 } = await supabase.from('daftar_sppg').select('*').limit(1)
