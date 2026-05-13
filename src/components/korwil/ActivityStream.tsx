@@ -27,7 +27,7 @@ export default function ActivityStream({ activities, onViewAll }: ActivityStream
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto max-h-[250px] pr-2 scrollbar-hide">
+      <div className="flex-1 space-y-4 overflow-y-auto max-h-[320px] pr-2 scrollbar-hide">
         {activities.map((act, i) => (
           <div 
             key={act.id} 

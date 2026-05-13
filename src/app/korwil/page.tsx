@@ -794,25 +794,25 @@ export default function SuperKorwilPage() {
                 </div>
               </header>
 
-              {/* STAT CARDS — ONE ROW COMPACT */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* STAT CARDS */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {dataLoading ? (
                   <><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
                 ) : (
                   <>
                     <button 
                       onClick={() => router.push('/korwil/cek-keaktifan')}
-                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-indigo-200 hover:shadow-md hover:scale-105 active:scale-95 text-left flex items-center justify-between"
+                      className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-indigo-200 hover:shadow-md hover:scale-105 active:scale-95 text-left flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                          <TrendingUp size={16} />
+                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                          <TrendingUp size={18} />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Progres</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Progres</p>
                           <div className="flex items-baseline gap-2">
-                            <h3 className="text-sm font-black text-slate-900 leading-none">{progres}%</h3>
-                            <p className="text-[10px] text-slate-500 font-bold leading-none truncate">{laporan.length} / {units.length} Unit</p>
+                            <h3 className="text-base font-black text-slate-900 leading-none">{progres}%</h3>
+                            <p className="text-[10px] text-slate-500 font-bold leading-none truncate">{laporan.length}/{units.length}</p>
                           </div>
                         </div>
                       </div>
@@ -821,83 +821,89 @@ export default function SuperKorwilPage() {
 
                     <button 
                       onClick={() => router.push('/korwil/cek-keaktifan?filter=pending')}
-                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-rose-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
+                      className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-rose-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-all">
-                          <AlertTriangle size={16} />
+                        <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-all">
+                          <AlertTriangle size={18} />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Pending</p>
-                          <h3 className="text-sm font-black text-slate-900 leading-none">{units.length - laporan.length} <small className="text-[8px] text-slate-300 font-bold uppercase">Unit</small></h3>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Pending</p>
+                          <h3 className="text-base font-black text-slate-900 leading-none">{units.length - laporan.length} <small className="text-[9px] text-slate-300 font-bold uppercase tracking-tight">Unit</small></h3>
                         </div>
-                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+                        <ArrowRight size={14} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
                     </button>
 
                     <button 
                       onClick={() => router.push('/korwil/audit-porsi')}
-                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-emerald-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
+                      className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-emerald-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                          <CheckCircle2 size={16} />
+                        <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                          <CheckCircle2 size={18} />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Realisasi</p>
-                          <h3 className="text-sm font-black text-slate-900 leading-none">{totalPorsiHarian.toLocaleString()}</h3>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Realisasi</p>
+                          <h3 className="text-base font-black text-slate-900 leading-none">{totalPorsiHarian.toLocaleString()}</h3>
                         </div>
                         {totalPorsiHarian > totalTargetPorsi && (
                           <AlertTriangle size={12} className="text-rose-500 animate-pulse ml-auto" />
                         )}
-                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+                        <ArrowRight size={14} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
                     </button>
 
                     <button 
                       onClick={() => router.push('/korwil/audit-porsi?highlight=zero-target')}
-                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-blue-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
+                      className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-blue-200 hover:shadow-md hover:scale-105 active:scale-95 text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                          <Users size={16} />
+                        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                          <Users size={18} />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Target</p>
-                          <h3 className="text-sm font-black text-slate-900 leading-none">{totalTargetPorsi.toLocaleString()}</h3>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Target</p>
+                          <h3 className="text-base font-black text-slate-900 leading-none">{totalTargetPorsi.toLocaleString()}</h3>
                         </div>
-                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
+                        <ArrowRight size={14} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
                     </button>
                   </>
                 )}
-                    {/* CHART & ACTIVITY FEED */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div className="xl:col-span-2 bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+              </div>
+
+              {/* CHART & ACTIVITY FEED — 70/30 SPLIT */}
+              <div className="grid grid-cols-1 xl:grid-cols-10 gap-6">
+                <div className="xl:col-span-7 bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                     <div className="space-y-0.5">
-                      <h3 className="text-base font-black text-slate-900 tracking-tight italic">TREN DISTRIBUSI BULANAN</h3>
+                      <h3 className="text-base font-black text-slate-900 tracking-tight italic uppercase">Tren Distribusi Bulanan</h3>
                       <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Analisis Perbandingan Target vs Realisasi</p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 bg-slate-50 px-4 py-2 rounded-xl">
                       <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">Realisasi</span>
+                        <div className="w-2 h-2 bg-indigo-600 rounded-full shadow-sm" />
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Realisasi</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">Target</span>
+                        <div className="w-2 h-2 bg-slate-200 rounded-full shadow-sm" />
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Target</span>
                       </div>
                     </div>
                   </div>
-                  <DistributionChart data={chartData} loading={chartLoading} />
+                  <div className="flex-1">
+                    <DistributionChart data={chartData} loading={chartLoading} />
+                  </div>
                 </div>
 
-                <ActivityStream 
-                  activities={recentActivities} 
-                  onViewAll={() => setActiveView('monitoring')} 
-                />
-              </div>           </div>
+                <div className="xl:col-span-3">
+                  <ActivityStream 
+                    activities={recentActivities} 
+                    onViewAll={() => setActiveView('monitoring')} 
+                  />
+                </div>
+              </div>
 
               {/* DISTRIBUTION PER CATEGORY — JOBIE STYLE CARDS */}
               <div className="space-y-4">

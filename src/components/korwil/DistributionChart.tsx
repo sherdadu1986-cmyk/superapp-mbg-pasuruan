@@ -10,7 +10,7 @@ interface DistributionChartProps {
 export default function DistributionChart({ data, loading }: DistributionChartProps) {
   if (loading) {
     return (
-      <div className="h-[250px] flex flex-col items-center justify-center space-y-3">
+      <div className="h-[300px] flex flex-col items-center justify-center space-y-3">
         <Loader2 size={32} className="text-indigo-500 animate-spin" />
         <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Memuat Grafik...</p>
       </div>
@@ -18,7 +18,7 @@ export default function DistributionChart({ data, loading }: DistributionChartPr
   }
 
   return (
-    <div className="h-[250px] w-full">
+    <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
           <defs>
