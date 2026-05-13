@@ -89,9 +89,17 @@ export default function SuperKorwilPage() {
         .gte('tanggal_ops', firstDay)
         .lte('tanggal_ops', lastDay)
 
-      // Fetch all schools for target calculation
-      const { data: schools } = await supabase.from('daftar_sekolah').select('target_porsi').limit(10000)
-      const totalTargetPerDay = (schools || []).reduce((acc, s) => acc + (s.target_porsi || 0), 0)
+      // Fetch all schools with pagination for target calculation
+      let allSch: any[] = []
+      let from = 0
+      while (true) {
+        const { data: batch } = await supabase.from('daftar_sekolah').select('target_porsi').range(from, from + 999)
+        if (!batch || batch.length === 0) break
+        allSch = [...allSch, ...batch]
+        if (batch.length < 1000) break
+        from += 1000
+      }
+      const totalTargetPerDay = allSch.reduce((acc, s) => acc + (s.target_porsi || 0), 0)
 
       const dailyMap: Record<string, { tgl: string, realisasi: number, target: number }> = {}
 
@@ -230,13 +238,20 @@ export default function SuperKorwilPage() {
       
       if (reportsToday) setLaporan(reportsToday)
 
-      // 3. Ambil SELURUH sekolah dengan limit tinggi (10,000) agar Target akurat
-      const { data: schoolsData } = await supabase
-        .from('daftar_sekolah')
-        .select('id, sppg_id, jenjang, target_porsi')
-        .limit(10000)
-      
-      if (schoolsData) setAllSchools(schoolsData)
+      // 3. Ambil SELURUH sekolah dengan pagination (agar Target > 1000 record akurat)
+      let allSch: any[] = []
+      let from = 0
+      while (true) {
+        const { data: batch } = await supabase
+          .from('daftar_sekolah')
+          .select('id, sppg_id, jenjang, target_porsi')
+          .range(from, from + 999)
+        if (!batch || batch.length === 0) break
+        allSch = [...allSch, ...batch]
+        if (batch.length < 1000) break
+        from += 1000
+      }
+      setAllSchools(allSch)
 
       // 4. COMPLIANCE AUDIT CALCULATION (Keep separate or integrated)
       const { data: allLaporan } = await supabase.from('laporan_harian_final').select('unit_id, tanggal_ops')
