@@ -27,6 +27,7 @@ export default function SuperKorwilPage() {
   const [today, setToday] = useState(getLocalToday())
   const [monitoringDate, setMonitoringDate] = useState(getLocalToday())
   const [units, setUnits] = useState<any[]>([])
+  const [allSchools, setAllSchools] = useState<any[]>([]) // Master list of all schools
   const [laporan, setLaporan] = useState<any[]>([])
   const [dataLoading, setDataLoading] = useState(true)
   const KATEGORI_PM = ["PAUD/KB", "TK/RA", "SD/MI", "SMP/MTS", "SMA/SMK", "SLB", "SANTRI", "BALITA", "BUMIL", "BUSUI"]
@@ -34,8 +35,7 @@ export default function SuperKorwilPage() {
   const [statsTargetPorsi, setStatsTargetPorsi] = useState<Record<string, number>>({})
   const [totalPorsiHarian, setTotalPorsiHarian] = useState(0)
   const [totalTargetPorsi, setTotalTargetPorsi] = useState(0)
-  
-  // Compliance Audit States
+  const [unitTargetMap, setUnitTargetMap] = useState<Record<string, number>>({})
   const [complianceUnits, setComplianceUnits] = useState<any[]>([])
   const [auditFilter, setAuditFilter] = useState<'active' | 'rare' | 'never' | 'all'>('all')
   const [complianceLoading, setComplianceLoading] = useState(true)
@@ -90,7 +90,7 @@ export default function SuperKorwilPage() {
         .lte('tanggal_ops', lastDay)
 
       // Fetch all schools for target calculation
-      const { data: schools } = await supabase.from('daftar_sekolah').select('target_porsi')
+      const { data: schools } = await supabase.from('daftar_sekolah').select('target_porsi').limit(10000)
       const totalTargetPerDay = (schools || []).reduce((acc, s) => acc + (s.target_porsi || 0), 0)
 
       const dailyMap: Record<string, { tgl: string, realisasi: number, target: number }> = {}
@@ -210,105 +210,51 @@ export default function SuperKorwilPage() {
   // --- FETCH MONITORING ---
   const fetchData = useCallback(async () => {
     setDataLoading(true)
-
-    // Bypass cache with a timestamp parameter
-    const ts = new Date().getTime()
-
-    // 1. Ambil daftar users yang sudah di-ACC (hanya role === 'sppg')
-    const { data: usersApp } = await supabase.from('users_app').select('sppg_unit_id').eq('role', 'sppg')
-    const validUnitIds = (usersApp || []).map(u => u.sppg_unit_id).filter(Boolean)
-
-    // 2. Ambil daftar SPPG yang ID-nya masih ada di users_app
-    let u: any[] = []
-    if (validUnitIds.length > 0) {
-      const { data } = await supabase
+    
+    try {
+      // 1. Ambil SELURUH daftar SPPG (112 unit) tanpa terkecuali
+      const { data: allUnits } = await supabase
         .from('daftar_sppg')
         .select('*, id, nama_unit, no_hp_ka_sppg')
-        .in('id', validUnitIds)
         .order('nama_unit')
         .gte('created_at', '2000-01-01')
-      u = data || []
-    }
-
-    const { data: l } = await supabase.from('laporan_harian_final').select('*').eq('tanggal_ops', monitoringDate).gte('created_at', '2000-01-01')
-    const { data: s } = await supabase.from('daftar_sekolah').select('id, jenjang, target_porsi')
-
-    if (u) setUnits(u)
-    if (l && s) {
-      // 3. CLEANUP: Filter laporan agar hanya menampilkan laporan dari Unit yang masih eksis di daftar_sppg
-      const validLaporan = l.filter(lap => u.some(unit => unit.id === lap.unit_id))
-      setLaporan(validLaporan)
-
-      let mapping: Record<string, number> = {}
-      KATEGORI_PM.forEach(k => mapping[k] = 0)
-      let total = 0
-
-      validLaporan.forEach(lap => {
-        const realisasi = lap.realisasi_sekolah || {}
-        Object.entries(realisasi).forEach(([sekolahId, porsi]) => {
-          const porsiNum = Number(porsi) || 0
-          total += porsiNum
-
-          const sekolahInfo = s.find(item => item.id === sekolahId)
-          if (sekolahInfo) {
-            const jenjang = sekolahInfo.jenjang?.toUpperCase() || ''
-            // Check for match in KATEGORI_PM
-            const targetKat = KATEGORI_PM.find(k => {
-              const base = k.split('/')[0].toUpperCase();
-              return jenjang === k.toUpperCase() || jenjang.includes(base);
-            })
-            
-            if (targetKat) {
-              mapping[targetKat] += porsiNum
-            } else {
-              mapping["SD/MI"] += porsiNum
-            }
-          }
-        })
-      })
-
-      setStatsPorsi(mapping)
       
-      // 4. Calculate TARGET per Category
-      let targetMapping: Record<string, number> = {}
-      KATEGORI_PM.forEach(k => targetMapping[k] = 0)
-      
-      s.forEach(sch => {
-        const jenjang = sch.jenjang?.toUpperCase() || ''
-        const targetKat = KATEGORI_PM.find(k => {
-          const base = k.split('/')[0].toUpperCase();
-          return jenjang === k.toUpperCase() || jenjang.includes(base);
-        })
-        
-        if (targetKat) {
-          targetMapping[targetKat] += (sch.target_porsi || 0)
-        } else {
-          targetMapping["SD/MI"] += (sch.target_porsi || 0)
-        }
-      })
-      setStatsTargetPorsi(targetMapping)
-      setTotalPorsiHarian(total)
-      const totalTarget = (s || []).reduce((acc, item) => acc + (item.target_porsi || 0), 0)
-      setTotalTargetPorsi(totalTarget)
+      if (allUnits) setUnits(allUnits)
 
-      // 5. COMPLIANCE AUDIT CALCULATION
-      setComplianceLoading(true)
-      try {
-        const { data: allLaporan } = await supabase.from('laporan_harian_final').select('unit_id, tanggal_ops')
-        const today = new Date()
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-        
-        let businessDays = 0;
-        let tempDate = new Date(monthStart);
-        while (tempDate <= today) {
-          const day = tempDate.getDay();
-          if (day !== 0) businessDays++; // Exclude ONLY Sunday (0) for 6-day work week
-          tempDate.setDate(tempDate.getDate() + 1);
-        }
-        if (businessDays === 0) businessDays = 1;
-        
-        const processed = u.map(unit => {
-          const unitReports = allLaporan?.filter(l => l.unit_id === unit.id) || []
+      // 2. Ambil Laporan hari ini
+      const { data: reportsToday } = await supabase
+        .from('laporan_harian_final')
+        .select('*')
+        .eq('tanggal_ops', monitoringDate)
+        .gte('created_at', '2000-01-01')
+      
+      if (reportsToday) setLaporan(reportsToday)
+
+      // 3. Ambil SELURUH sekolah dengan limit tinggi (10,000) agar Target akurat
+      const { data: schoolsData } = await supabase
+        .from('daftar_sekolah')
+        .select('id, sppg_id, jenjang, target_porsi')
+        .limit(10000)
+      
+      if (schoolsData) setAllSchools(schoolsData)
+
+      // 4. COMPLIANCE AUDIT CALCULATION (Keep separate or integrated)
+      const { data: allLaporan } = await supabase.from('laporan_harian_final').select('unit_id, tanggal_ops')
+      const today = new Date()
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+      
+      let businessDays = 0;
+      let tempDate = new Date(monthStart);
+      while (tempDate <= today) {
+        const day = tempDate.getDay();
+        if (day !== 0) businessDays++;
+        tempDate.setDate(tempDate.getDate() + 1);
+      }
+      if (businessDays === 0) businessDays = 1;
+      
+      if (allUnits && allLaporan) {
+        const processed = allUnits.map(unit => {
+          const unitReports = allLaporan.filter(l => l.unit_id === unit.id)
           const monthReports = unitReports.filter(l => new Date(l.tanggal_ops) >= monthStart)
           const totalMonth = monthReports.length
           const lastReport = unitReports.length > 0 
@@ -316,8 +262,6 @@ export default function SuperKorwilPage() {
             : null
           
           const complianceScore = Math.min(Math.round((totalMonth / businessDays) * 100), 100)
-          
-          // Categorization Logic based on 60% and 40% thresholds
           const status = complianceScore >= 60 ? 'active' : complianceScore >= 40 ? 'rare' : 'never';
           
           return {
@@ -330,26 +274,74 @@ export default function SuperKorwilPage() {
           }
         })
         setComplianceUnits(processed)
-      } catch (err) {
-        console.error("Failed to fetch compliance data:", err)
-      } finally {
-        setComplianceLoading(false)
       }
 
-      // Calculate Target Porsi per Unit for Anomaly Detection
-      const { data: schoolsWithSppg } = await supabase.from('daftar_sekolah').select('sppg_id, target_porsi')
-      const targetMap: Record<string, number> = {}
-      schoolsWithSppg?.forEach(sch => {
-        if (sch.sppg_id) {
-          targetMap[sch.sppg_id] = (targetMap[sch.sppg_id] || 0) + (sch.target_porsi || 0)
-        }
-      })
-      setUnitTargetMap(targetMap)
+    } catch (err) {
+      console.error("Fetch Data Error:", err)
+    } finally {
+      setDataLoading(false)
     }
-    setDataLoading(false)
   }, [monitoringDate])
 
-  const [unitTargetMap, setUnitTargetMap] = useState<Record<string, number>>({})
+  // --- SYNC CALCULATION EFFECT ---
+  useEffect(() => {
+    if (!allSchools.length) return
+
+    // 1. Calculate Realisasi & Stats
+    let totalReal = 0
+    let mappingReal: Record<string, number> = {}
+    KATEGORI_PM.forEach(k => mappingReal[k] = 0)
+
+    laporan.forEach(lap => {
+      const realisasi = lap.realisasi_sekolah || {}
+      Object.entries(realisasi).forEach(([sekolahId, porsi]) => {
+        const porsiNum = Number(porsi) || 0
+        totalReal += porsiNum
+
+        const sekolahInfo = allSchools.find(s => s.id === sekolahId)
+        if (sekolahInfo) {
+          const jenjang = sekolahInfo.jenjang?.toUpperCase() || ''
+          const targetKat = KATEGORI_PM.find(k => {
+            const base = k.split('/')[0].toUpperCase();
+            return jenjang === k.toUpperCase() || jenjang.includes(base);
+          })
+          if (targetKat) mappingReal[targetKat] += porsiNum
+          else mappingReal["SD/MI"] += porsiNum
+        }
+      })
+    })
+
+    setTotalPorsiHarian(totalReal)
+    setStatsPorsi(mappingReal)
+
+    // 2. Calculate Target & Stats
+    let totalTarget = 0
+    let mappingTarget: Record<string, number> = {}
+    KATEGORI_PM.forEach(k => mappingTarget[k] = 0)
+    let unitMap: Record<string, number> = {}
+
+    allSchools.forEach(sch => {
+      const targetVal = sch.target_porsi || 0
+      totalTarget += targetVal
+      
+      if (sch.sppg_id) {
+        unitMap[sch.sppg_id] = (unitMap[sch.sppg_id] || 0) + targetVal
+      }
+
+      const jenjang = sch.jenjang?.toUpperCase() || ''
+      const targetKat = KATEGORI_PM.find(k => {
+        const base = k.split('/')[0].toUpperCase();
+        return jenjang === k.toUpperCase() || jenjang.includes(base);
+      })
+      if (targetKat) mappingTarget[targetKat] += targetVal
+      else mappingTarget["SD/MI"] += targetVal
+    })
+
+    setTotalTargetPorsi(totalTarget)
+    setStatsTargetPorsi(mappingTarget)
+    setUnitTargetMap(unitMap)
+
+  }, [laporan, allSchools])
 
   // --- MODAL CATATAN STATE ---
   const [showNoteModal, setShowNoteModal] = useState(false)
@@ -749,9 +741,12 @@ export default function SuperKorwilPage() {
                       </div>
                     </div>
 
-                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                    <button 
+                      onClick={() => router.push('/korwil/audit-porsi')}
+                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-emerald-200 hover:shadow-md hover:scale-[1.02] text-left"
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all">
                           <CheckCircle2 size={16} />
                         </div>
                         <div className="min-w-0">
@@ -761,20 +756,25 @@ export default function SuperKorwilPage() {
                         {totalPorsiHarian > totalTargetPorsi && (
                           <AlertTriangle size={12} className="text-rose-500 animate-pulse ml-auto" />
                         )}
+                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300">
+                    <button 
+                      onClick={() => router.push('/korwil/audit-porsi')}
+                      className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm group transition-all duration-300 hover:border-blue-200 hover:shadow-md hover:scale-[1.02] text-left"
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-all">
                           <Users size={16} />
                         </div>
                         <div className="min-w-0">
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Target</p>
                           <h3 className="text-sm font-black text-slate-900 leading-none">{totalTargetPorsi.toLocaleString()}</h3>
                         </div>
+                        <ArrowRight size={12} className="text-slate-300 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
-                    </div>
+                    </button>
                   </>
                 )}
               </div>
