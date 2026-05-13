@@ -5,6 +5,8 @@ import { getLocalToday } from '@/lib/date'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
+import dynamic from 'next/dynamic'
+import useSWR from 'swr'
 import {
   BarChart3, LogOut, CheckCircle2, ChevronRight, ChevronLeft, Settings,
   Utensils, School, Box, Activity, Users, Baby, GraduationCap,
@@ -12,10 +14,26 @@ import {
   Search, Filter, Megaphone, Copy, ClipboardCheck, Database, TrendingUp, Trash2, Layout, ArrowRight, RotateCcw, ShieldCheck, Shield, AlertCircle
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts'
+
+// Dynamic Imports for Heavy Components
+const DonutChart = dynamic(() => import('@/components/korwil/DonutChart'), { ssr: false, loading: () => <div className="w-10 h-10 bg-slate-50 rounded-full animate-pulse" /> })
+const ActivityStream = dynamic(() => import('@/components/korwil/ActivityStream'), { ssr: false, loading: () => <div className="h-[300px] w-full bg-slate-50 rounded-2xl animate-pulse" /> })
+const DistributionChart = dynamic(() => import('@/components/korwil/DistributionChart'), { ssr: false, loading: () => <div className="h-[250px] w-full bg-slate-50 rounded-2xl animate-pulse" /> })
+
+const fetcher = async (url: string) => {
+  const parts = url.split('/')
+  const type = parts[parts.length - 1]
+  
+  if (type === 'units') {
+    const { data } = await supabase.from('daftar_sppg').select('*').order('nama_unit')
+    return data || []
+  }
+  if (type === 'schools') {
+    const { data } = await supabase.from('master_sekolah_sppg').select('*')
+    return data || []
+  }
+  return []
+}
 
 export default function SuperKorwilPage() {
   const router = useRouter()
@@ -299,21 +317,24 @@ export default function SuperKorwilPage() {
     }
   }, [monitoringDate])
 
-  // --- SYNC CALCULATION EFFECT ---
-  useEffect(() => {
-    if (!allSchools.length) return
+  // --- OPTIMIZED ANALYTICS (useMemo) ---
+  const analytics = useMemo(() => {
+    if (!allSchools.length) return { totalReal: 0, totalTarget: 0, mappingReal: {}, mappingTarget: {}, unitMap: {} }
 
-    // 1. Calculate Realisasi & Stats
+    const mappingReal: Record<string, number> = {}
+    const mappingTarget: Record<string, number> = {}
+    KATEGORI_PM.forEach(k => {
+      mappingReal[k] = 0
+      mappingTarget[k] = 0
+    })
+
+    // 1. Calculate Realisasi
     let totalReal = 0
-    let mappingReal: Record<string, number> = {}
-    KATEGORI_PM.forEach(k => mappingReal[k] = 0)
-
     laporan.forEach(lap => {
       const realisasi = lap.realisasi_sekolah || {}
       Object.entries(realisasi).forEach(([sekolahId, porsi]) => {
         const porsiNum = Number(porsi) || 0
         totalReal += porsiNum
-
         const sekolahInfo = allSchools.find(s => s.id === sekolahId)
         if (sekolahInfo) {
           const jenjang = sekolahInfo.jenjang?.toUpperCase() || ''
@@ -327,23 +348,13 @@ export default function SuperKorwilPage() {
       })
     })
 
-    setTotalPorsiHarian(totalReal)
-    setStatsPorsi(mappingReal)
-
-    // 2. Calculate Target & Stats
+    // 2. Calculate Target
     let totalTarget = 0
-    let mappingTarget: Record<string, number> = {}
-    KATEGORI_PM.forEach(k => mappingTarget[k] = 0)
-    let unitMap: Record<string, number> = {}
-
+    const unitMap: Record<string, number> = {}
     allSchools.forEach(sch => {
       const targetVal = sch.target_porsi || 0
       totalTarget += targetVal
-      
-      if (sch.sppg_id) {
-        unitMap[sch.sppg_id] = (unitMap[sch.sppg_id] || 0) + targetVal
-      }
-
+      if (sch.sppg_id) unitMap[sch.sppg_id] = (unitMap[sch.sppg_id] || 0) + targetVal
       const jenjang = sch.jenjang?.toUpperCase() || ''
       const targetKat = KATEGORI_PM.find(k => {
         const base = k.split('/')[0].toUpperCase();
@@ -353,11 +364,17 @@ export default function SuperKorwilPage() {
       else mappingTarget["SD/MI"] += targetVal
     })
 
-    setTotalTargetPorsi(totalTarget)
-    setStatsTargetPorsi(mappingTarget)
-    setUnitTargetMap(unitMap)
-
+    return { totalReal, totalTarget, mappingReal, mappingTarget, unitMap }
   }, [laporan, allSchools])
+
+  // Sync state with memoized values for backward compatibility or simple usage
+  useEffect(() => {
+    setTotalPorsiHarian(analytics.totalReal)
+    setStatsPorsi(analytics.mappingReal)
+    setTotalTargetPorsi(analytics.totalTarget)
+    setStatsTargetPorsi(analytics.mappingTarget)
+    setUnitTargetMap(analytics.unitMap)
+  }, [analytics])
 
   // --- MODAL CATATAN STATE ---
   const [showNoteModal, setShowNoteModal] = useState(false)
@@ -799,15 +816,7 @@ export default function SuperKorwilPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="w-10 h-10 shrink-0">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={pieData} innerRadius={14} outerRadius={18} paddingAngle={2} dataKey="value" stroke="none">
-                              {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                            </Pie>
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
+                      <DonutChart data={pieData} />
                     </button>
 
                     <button 
@@ -862,11 +871,8 @@ export default function SuperKorwilPage() {
                     </button>
                   </>
                 )}
-              </div>
-
-               {/* CHART & ACTIVITY FEED */}
+                    {/* CHART & ACTIVITY FEED */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                {/* MONTHLY CHART */}
                 <div className="xl:col-span-2 bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <div className="space-y-0.5">
@@ -884,80 +890,14 @@ export default function SuperKorwilPage() {
                       </div>
                     </div>
                   </div>
-
-                  {chartLoading ? (
-                    <div className="h-[250px] flex flex-col items-center justify-center space-y-3">
-                      <Loader2 size={32} className="text-indigo-500 animate-spin" />
-                      <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Memuat Grafik...</p>
-                    </div>
-                  ) : (
-                    <div className="h-[250px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2} />
-                              <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F8FAFC" />
-                          <XAxis dataKey="tgl" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} dy={10} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#CBD5E1' }} />
-                          <Tooltip
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '10px' }}
-                            labelStyle={{ fontWeight: 900, fontSize: '10px', marginBottom: '4px', color: '#1E293B' }}
-                            itemStyle={{ fontSize: '10px', padding: '0' }}
-                          />
-                          <Area type="monotone" dataKey="target" stroke="#E2E8F0" strokeWidth={1} fill="transparent" />
-                          <Area type="monotone" dataKey="realisasi" stroke="#4F46E5" strokeWidth={2} fillOpacity={1} fill="url(#colorReal)" />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+                  <DistributionChart data={chartData} loading={chartLoading} />
                 </div>
 
-                {/* LIVE ACTIVITY FEED */}
-                <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col">
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="space-y-0.5">
-                      <h3 className="text-sm font-black text-slate-900 tracking-tight italic">AKTIVITAS UNIT TERKINI</h3>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Real-time Activity Stream</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 rounded-lg animate-pulse">
-                      <div className="w-1 h-1 bg-rose-500 rounded-full" />
-                      <span className="text-[7px] font-black text-rose-600 uppercase">Live</span>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 space-y-4 overflow-y-auto max-h-[250px] pr-2 scrollbar-hide">
-                    {recentActivities.map((act, i) => (
-                      <div key={act.id} className="flex gap-3 group animate-in fade-in slide-in-from-right-4 duration-500" style={{ animationDelay: `${i * 100}ms` }}>
-                        <div className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${act.type === 'success' ? 'bg-emerald-500' : act.type === 'warning' ? 'bg-rose-500' : 'bg-blue-500 shadow-lg shadow-blue-500/20'}`} />
-                        <div className="space-y-1">
-                          <p 
-                            className="text-[10px] text-slate-600 leading-relaxed font-medium"
-                            dangerouslySetInnerHTML={{ __html: act.text.replace(/\*\*(.*?)\*\*/g, '<b class="text-slate-900">$1</b>') }}
-                          />
-                          <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">{act.time}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {recentActivities.length === 0 && (
-                      <div className="h-full flex flex-col items-center justify-center text-center py-10 opacity-30">
-                        <Activity size={24} className="mb-2" />
-                        <p className="text-[10px] font-bold uppercase tracking-widest">Belum ada aktivitas</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <button 
-                    onClick={() => setActiveView('monitoring')}
-                    className="mt-5 w-full py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                  >
-                    Lihat Monitoring <ArrowRight size={10} />
-                  </button>
-                </div>
-              </div>
+                <ActivityStream 
+                  activities={recentActivities} 
+                  onViewAll={() => setActiveView('monitoring')} 
+                />
+              </div>           </div>
 
               {/* DISTRIBUTION PER CATEGORY — JOBIE STYLE CARDS */}
               <div className="space-y-4">

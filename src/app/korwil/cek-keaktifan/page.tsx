@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 
-export default function CekKeaktifanPage() {
+function CekKeaktifanContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const filterParam = searchParams.get('filter')
@@ -308,5 +308,20 @@ export default function CekKeaktifanPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function CekKeaktifanPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Memuat Data Keaktifan...</p>
+        </div>
+      </div>
+    }>
+      <CekKeaktifanContent />
+    </Suspense>
   )
 }

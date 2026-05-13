@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getLocalToday } from '@/lib/date'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/toast'
 
-export default function AuditPorsiPage() {
+function AuditPorsiContent() {
   const router = useRouter()
   const { toast } = useToast()
 
@@ -361,5 +361,20 @@ export default function AuditPorsiPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AuditPorsiPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Memuat Audit...</p>
+        </div>
+      </div>
+    }>
+      <AuditPorsiContent />
+    </Suspense>
   )
 }
