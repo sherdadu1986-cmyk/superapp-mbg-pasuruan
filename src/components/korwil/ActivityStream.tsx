@@ -1,4 +1,5 @@
 "use client"
+import { useEffect, useRef } from 'react'
 import { Activity, ArrowRight } from 'lucide-react'
 
 interface ActivityItem {
@@ -14,6 +15,14 @@ interface ActivityStreamProps {
 }
 
 export default function ActivityStream({ activities, onViewAll }: ActivityStreamProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [activities])
+
   return (
     <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col h-full">
       <div className="flex items-center justify-between mb-5">
@@ -27,7 +36,10 @@ export default function ActivityStream({ activities, onViewAll }: ActivityStream
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto max-h-[320px] pr-2 scrollbar-hide">
+      <div 
+        ref={scrollRef}
+        className="flex-1 space-y-4 overflow-y-auto max-h-[320px] pr-2 scrollbar-hide"
+      >
         {activities.map((act, i) => (
           <div 
             key={act.id} 
@@ -59,7 +71,7 @@ export default function ActivityStream({ activities, onViewAll }: ActivityStream
       {onViewAll && (
         <button 
           onClick={onViewAll}
-          className="mt-5 w-full py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+          className="mt-5 w-full py-2 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 relative z-10 pointer-events-auto"
         >
           Lihat Monitoring <ArrowRight size={10} />
         </button>

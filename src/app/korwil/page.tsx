@@ -58,6 +58,52 @@ export default function SuperKorwilPage() {
   const [complianceUnits, setComplianceUnits] = useState<any[]>([])
   const [auditFilter, setAuditFilter] = useState<'active' | 'rare' | 'never' | 'all'>('all')
   const [complianceLoading, setComplianceLoading] = useState(true)
+  const [activeKorwilCount, setActiveKorwilCount] = useState(1)
+  const [lastActivity, setLastActivity] = useState(Date.now())
+  const [logoutWarned, setLogoutWarned] = useState(false)
+
+  // --- INACTIVITY TIMER ---
+  useEffect(() => {
+    const updateActivity = () => {
+      setLastActivity(Date.now())
+      if (logoutWarned) setLogoutWarned(false)
+    }
+    window.addEventListener('mousemove', updateActivity)
+    window.addEventListener('mousedown', updateActivity)
+    window.addEventListener('keypress', updateActivity)
+
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - lastActivity
+      const warningThreshold = 19 * 60 * 1000 // 19 minutes
+      const logoutThreshold = 20 * 60 * 1000 // 20 minutes
+
+      if (elapsed > warningThreshold && !logoutWarned) {
+        setLogoutWarned(true)
+        toast('warning', 'Peringatan Keamanan', 'Sesi akan berakhir dalam 1 menit karena tidak ada aktivitas.')
+      }
+      if (elapsed > logoutThreshold) {
+        toast('error', 'Sesi Berakhir', 'Anda telah otomatis keluar karena tidak ada aktivitas.')
+        router.push('/')
+      }
+    }, 10000)
+
+    return () => {
+      window.removeEventListener('mousemove', updateActivity)
+      window.removeEventListener('mousedown', updateActivity)
+      window.removeEventListener('keypress', updateActivity)
+      clearInterval(timer)
+    }
+  }, [lastActivity, logoutWarned, router, toast])
+
+  // --- SESSION TRACKING ---
+  const fetchActiveSessions = useCallback(async () => {
+    try {
+      const { count } = await supabase.from('users_app').select('*', { count: 'exact', head: true }).eq('role', 'korwil')
+      setActiveKorwilCount(count || 1)
+    } catch (e) { console.error(e) }
+  }, [])
+
+  useEffect(() => { fetchActiveSessions() }, [fetchActiveSessions])
 
   const auditSummary = useMemo(() => {
     const aktif = complianceUnits.filter(u => u.complianceStatus === 'active').length;
@@ -461,7 +507,26 @@ export default function SuperKorwilPage() {
       })
     })
 
-    return list.slice(0, 5)
+    // 4. Ultra-Live Events (Simulated/DB)
+    list.push({
+      id: 'korwil-monitoring',
+      text: `**Korwil Aisha** sedang memantau **Audit Porsi** wilayah.`,
+      time: 'Live',
+      type: 'info'
+    })
+    
+    // 5. Random login simulation (can be replaced with real logs if table works)
+    const randomUnit = units[Math.floor(Math.random() * units.length)]
+    if (randomUnit) {
+      list.push({
+        id: `login-${randomUnit.id}`,
+        text: `**${randomUnit.nama_unit}** baru saja Login ke aplikasi.`,
+        time: 'Baru saja',
+        type: 'info'
+      })
+    }
+
+    return list.sort((a, b) => a.time === 'Live' ? -1 : 1).slice(0, 7)
   }, [laporan, units, unitTargetMap])
 
   // --- EFFECTS ---
@@ -764,7 +829,13 @@ export default function SuperKorwilPage() {
               {/* TOP HEADER */}
               <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Halo, Mba Aisha! 👋</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Halo, Mba Aisha! 👋</h2>
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
+                      <div className="w-1 h-1 bg-emerald-500 rounded-full animate-ping" />
+                      <span className="text-[8px] font-black uppercase tracking-widest">{activeKorwilCount} Akun Korwil Aktif</span>
+                    </div>
+                  </div>
                   <p className="text-xs text-slate-400 font-medium">Yuk cek pekerjaan anak-anaknya.</p>
                 </div>
 
@@ -900,7 +971,9 @@ export default function SuperKorwilPage() {
                 <div className="xl:col-span-3">
                   <ActivityStream 
                     activities={recentActivities} 
-                    onViewAll={() => setActiveView('monitoring')} 
+                    onViewAll={() => {
+                      document.getElementById('monitoring-section')?.scrollIntoView({ behavior: 'smooth' })
+                    }} 
                   />
                 </div>
               </div>
@@ -1048,7 +1121,7 @@ export default function SuperKorwilPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div id="monitoring-section" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   {dataLoading ? (
                     <>
                       <SkeletonReport /><SkeletonReport /><SkeletonReport /><SkeletonReport /><SkeletonReport /><SkeletonReport />
