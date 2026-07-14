@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import {
-  Users, CheckCircle2, Clock, Plus, Search, History, ChevronDown, UserCheck
+  Users, CheckCircle2, Clock, Plus, Search, History, ChevronDown, UserCheck, Download
 } from 'lucide-react'
 
 interface CheckInRecord {
@@ -20,42 +20,85 @@ export default function KeamananWorkspace() {
   const [selectedMinute, setSelectedMinute] = useState('')
   
   const [history, setHistory] = useState<CheckInRecord[]>([])
-
-  // Volunteers sample list
-  const volunteersList = [
-    'Andi Wijaya', 'Budi Santoso', 'Citra Kirana', 'Dedi Hermawan', 'Eka Saputra',
-    'Fitri Handayani', 'Galih Pratama', 'Hadi Sucipto', 'Indah Lestari', 'Joko Susilo'
-  ]
+  const [currentTime, setCurrentTime] = useState<string>('')
+  
+  // Centralized volunteer list loaded from localStorage
+  const [volunteersList, setVolunteersList] = useState<string[]>([])
 
   useEffect(() => {
-    // Initialize scrolling select options to current time
+    // 1. Initialize scrolling select options to current time
     const now = new Date()
     const hh = String(now.getHours()).padStart(2, '0')
     const mm = String(now.getMinutes()).padStart(2, '0')
     setSelectedHour(hh)
     setSelectedMinute(mm)
 
-    // Load initial attendance history from localStorage
+    // 2. Initialize centralized volunteer list database in localStorage if not exists
+    const storedVolunteers = localStorage.getItem('sppg_volunteers')
+    if (storedVolunteers) {
+      setVolunteersList(JSON.parse(storedVolunteers))
+    } else {
+      const defaultList = [
+        'Andi Wijaya', 'Budi Santoso', 'Citra Kirana', 'Dedi Hermawan', 'Eka Saputra',
+        'Fitri Handayani', 'Galih Pratama', 'Hadi Sucipto', 'Indah Lestari', 'Joko Susilo'
+      ]
+      localStorage.setItem('sppg_volunteers', JSON.stringify(defaultList))
+      setVolunteersList(defaultList)
+    }
+
+    // 3. Load initial attendance history from localStorage
     const savedLogs = localStorage.getItem('sppg_kehadiran_logs')
     if (savedLogs) {
       try {
         const parsed = JSON.parse(savedLogs)
-        // Ensure backward compatibility or clean start with the new schema
         if (parsed.length > 0 && ('masuk' in parsed[0] || 'pulang' in parsed[0])) {
           setHistory(parsed)
-        } else {
-          setHistory([])
         }
       } catch {
         setHistory([])
       }
     }
+
+    // 4. Start Live Clock
+    const updateTime = () => {
+      const date = new Date()
+      const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+      const dateStr = date.toLocaleDateString('id-ID', options)
+      const timeStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      setCurrentTime(`${dateStr} | ${timeStr} WIB`)
+    }
+
+    updateTime()
+    const timerId = setInterval(updateTime, 1000)
+
+    return () => clearInterval(timerId)
   }, [])
 
   const handleSelectVolunteer = (name: string) => {
     setSelectedVolunteer(name)
     setShowDropdown(false)
     setStatus(null)
+  }
+
+  // Calculate total work duration dynamically
+  const calculateTotalHours = (masuk: string, pulang: string): string => {
+    if (masuk === '-' || pulang === '-') return '-'
+    try {
+      const [h1, m1] = masuk.split(':').map(Number)
+      const [h2, m2] = pulang.split(':').map(Number)
+      let diffMinutes = (h2 * 60 + m2) - (h1 * 60 + m1)
+      if (diffMinutes < 0) {
+        // Handle overnight wrap-around just in case
+        diffMinutes += 24 * 60
+      }
+      const hrs = Math.floor(diffMinutes / 60)
+      const mins = diffMinutes % 60
+      
+      if (mins === 0) return `${hrs} Jam`
+      return `${hrs} Jam ${mins} Menit`
+    } catch {
+      return '-'
+    }
   }
 
   const handleSaveKehadiran = (e: React.FormEvent) => {
@@ -66,7 +109,6 @@ export default function KeamananWorkspace() {
     const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
     const timeStr = `${selectedHour}:${selectedMinute}`
 
-    // Check if there is an existing record for the same volunteer and date
     const existingIndex = history.findIndex(
       (rec) => rec.name === selectedVolunteer && rec.date === dateStr
     )
@@ -74,14 +116,12 @@ export default function KeamananWorkspace() {
     let updatedHistory = [...history]
 
     if (existingIndex !== -1) {
-      // Update existing record
       if (status === 'MASUK') {
         updatedHistory[existingIndex].masuk = timeStr
       } else {
         updatedHistory[existingIndex].pulang = timeStr
       }
     } else {
-      // Create a new record
       const newRecord: CheckInRecord = {
         name: selectedVolunteer,
         masuk: status === 'MASUK' ? timeStr : '-',
@@ -94,7 +134,6 @@ export default function KeamananWorkspace() {
     setHistory(updatedHistory)
     localStorage.setItem('sppg_kehadiran_logs', JSON.stringify(updatedHistory))
 
-    // Manage active checked-in volunteers in localStorage
     const activeVolunteersSaved = localStorage.getItem('sppg_active_volunteers')
     let activeVolunteers: string[] = activeVolunteersSaved ? JSON.parse(activeVolunteersSaved) : []
 
@@ -108,17 +147,40 @@ export default function KeamananWorkspace() {
 
     localStorage.setItem('sppg_active_volunteers', JSON.stringify(activeVolunteers))
 
-    // Clear / Reset form steps
     setSelectedVolunteer('')
     setStatus(null)
 
-    // Reset clock to current time
     const updatedNow = new Date()
     setSelectedHour(String(updatedNow.getHours()).padStart(2, '0'))
     setSelectedMinute(String(updatedNow.getMinutes()).padStart(2, '0'))
   }
 
-  // Generate options for jam (00-23) & menit (00-59)
+  // Export Table Data to Excel (CSV format)
+  const handleExportExcel = () => {
+    if (history.length === 0) return
+
+    const headers = ['NO', 'NAMA RELAWAN', 'JAM MASUK', 'JAM PULANG', 'TOTAL JAM KERJA', 'TANGGAL']
+    const rows = history.map((rec, i) => [
+      `"${i + 1}"`,
+      `"${rec.name}"`,
+      `"${rec.masuk}"`,
+      `"${rec.pulang}"`,
+      `"${calculateTotalHours(rec.masuk, rec.pulang)}"`,
+      `"${rec.date}"`
+    ])
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n')
+
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `log_kehadiran_relawan_${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const hours = Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0'))
   const minutes = Array.from({ length: 60 }).map((_, i) => String(i).padStart(2, '0'))
 
@@ -135,9 +197,14 @@ export default function KeamananWorkspace() {
             <span className="text-xs text-gray-500 font-medium">Wonorejo · Lembar Kerja</span>
           </div>
           <h1 className="text-xl font-bold text-emerald-950">Pencatatan Kehadiran Relawan Harian</h1>
-          <p className="text-gray-500 text-xs font-medium">
-            Alur absensi relawan masuk dan pulang tanpa ketik, terintegrasi reaktif dengan Dapur Wonorejo.
-          </p>
+          
+          {/* Live Clock Component */}
+          {currentTime && (
+            <p className="text-xs font-bold text-emerald-800 flex items-center gap-1.5 animate-fadeIn">
+              <Clock size={13} className="text-emerald-900 animate-pulse" />
+              {currentTime}
+            </p>
+          )}
         </div>
       </div>
 
@@ -268,6 +335,17 @@ export default function KeamananWorkspace() {
               <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                 <History size={16} className="text-emerald-950" /> Log Kehadiran Hari Ini
               </h2>
+              
+              {/* Export to Excel Button */}
+              {history.length > 0 && (
+                <button
+                  onClick={handleExportExcel}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 hover:bg-slate-50 text-slate-700 hover:text-emerald-900 font-bold text-[10px] uppercase rounded transition cursor-pointer"
+                >
+                  <Download size={12} className="text-emerald-900" />
+                  Ekspor Excel
+                </button>
+              )}
             </div>
             
             {history.length === 0 ? (
@@ -281,21 +359,27 @@ export default function KeamananWorkspace() {
                 <table className="w-full text-xs text-left">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-gray-200">
+                      <th className="px-4 py-2.5 text-center w-12">No</th>
                       <th className="px-4 py-2.5">Nama Relawan</th>
                       <th className="px-4 py-2.5 text-center">Jam Masuk</th>
                       <th className="px-4 py-2.5 text-center">Jam Pulang</th>
+                      <th className="px-4 py-2.5 text-center">Total Jam Kerja</th>
                       <th className="px-4 py-2.5 text-center">Tanggal</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-150 font-semibold text-gray-700">
                     {history.map((rec, i) => (
                       <tr key={i} className="hover:bg-slate-50/40">
+                        <td className="px-4 py-3 text-center text-slate-400 font-bold">{i + 1}</td>
                         <td className="px-4 py-3 font-bold text-slate-800">{rec.name}</td>
                         <td className="px-4 py-3 text-center text-slate-800 font-medium">
                           {rec.masuk}
                         </td>
                         <td className="px-4 py-3 text-center text-slate-800 font-medium">
                           {rec.pulang}
+                        </td>
+                        <td className="px-4 py-3 text-center text-emerald-950 font-bold">
+                          {calculateTotalHours(rec.masuk, rec.pulang)}
                         </td>
                         <td className="px-4 py-3 text-center text-slate-500">{rec.date}</td>
                       </tr>

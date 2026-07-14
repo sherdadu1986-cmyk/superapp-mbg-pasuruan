@@ -167,8 +167,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
         { name: 'Supplier', icon: <Boxes size={18} />, path: '/gudang/supplier' },
         { name: 'Pengeluaran', icon: <BarChart3 size={18} />, path: '/' },
         { name: 'Invoice', icon: <Folder size={18} />, path: '/dokumen' },
-        { name: 'Riwayat', icon: <Folder size={18} />, path: '/dokumen' },
-        { name: 'Profil', icon: <Users size={18} />, path: '/' }
+        { name: 'Riwayat', icon: <Folder size={18} />, path: '/dokumen' }
       ]
     }
 
@@ -177,8 +176,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
         { name: 'Menu Hari Ini', icon: <ChefHat size={18} />, path: '/' },
         { name: 'Resep', icon: <ChefHat size={18} />, path: '/operasional/menu-harian' },
         { name: 'Nilai Gizi', icon: <ChefHat size={18} />, path: '/operasional/kalkulator-bahan' },
-        { name: 'Riwayat', icon: <Folder size={18} />, path: '/laporan' },
-        { name: 'Profil', icon: <Users size={18} />, path: '/' }
+        { name: 'Riwayat', icon: <Folder size={18} />, path: '/laporan' }
       ]
     }
 
@@ -188,15 +186,13 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
         { name: 'Packing', icon: <ChefHat size={18} />, path: '/operasional/packing' },
         { name: 'Distribusi', icon: <Truck size={18} />, path: '/' },
         { name: 'Dokumentasi', icon: <Folder size={18} />, path: '/dokumen' },
-        { name: 'Riwayat', icon: <Folder size={18} />, path: '/laporan' },
-        { name: 'Profil', icon: <Users size={18} />, path: '/' }
+        { name: 'Riwayat', icon: <Folder size={18} />, path: '/laporan' }
       ]
     }
 
     if (role === 'Keamanan') {
       return [
-        { name: 'Absensi Relawan', icon: <Users size={18} />, path: '/' },
-        { name: 'Profil', icon: <Users size={18} />, path: '/' }
+        { name: 'Absensi Relawan', icon: <Users size={18} />, path: '/' }
       ]
     }
 
