@@ -1,23 +1,25 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import {
-  Users, CheckCircle2, LogOut, Clock, Plus, Search, HelpCircle, History
+  Users, CheckCircle2, Clock, Plus, Search, History, ChevronDown, UserCheck
 } from 'lucide-react'
 
 interface CheckInRecord {
   name: string;
-  type: 'MASUK' | 'PULANG';
-  time: string;
+  masuk: string;  // "HH:MM" or "-"
+  pulang: string; // "HH:MM" or "-"
   date: string;
 }
 
 export default function KeamananWorkspace() {
-  const [search, setSearch] = useState('')
   const [selectedVolunteer, setSelectedVolunteer] = useState('')
-  const [status, setStatus] = useState<'MASUK' | 'PULANG'>('MASUK')
-  const [timeInput, setTimeInput] = useState('')
-  const [history, setHistory] = useState<CheckInRecord[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
+  const [status, setStatus] = useState<'MASUK' | 'PULANG' | null>(null)
+  
+  const [selectedHour, setSelectedHour] = useState('')
+  const [selectedMinute, setSelectedMinute] = useState('')
+  
+  const [history, setHistory] = useState<CheckInRecord[]>([])
 
   // Volunteers sample list
   const volunteersList = [
@@ -25,46 +27,70 @@ export default function KeamananWorkspace() {
     'Fitri Handayani', 'Galih Pratama', 'Hadi Sucipto', 'Indah Lestari', 'Joko Susilo'
   ]
 
-  // Filter volunteers based on search query
-  const filteredVolunteers = volunteersList.filter(v =>
-    v.toLowerCase().includes(search.toLowerCase())
-  )
-
   useEffect(() => {
-    // Initialize time input to current time HH:MM
+    // Initialize scrolling select options to current time
     const now = new Date()
     const hh = String(now.getHours()).padStart(2, '0')
     const mm = String(now.getMinutes()).padStart(2, '0')
-    setTimeInput(`${hh}:${mm}`)
+    setSelectedHour(hh)
+    setSelectedMinute(mm)
 
     // Load initial attendance history from localStorage
     const savedLogs = localStorage.getItem('sppg_kehadiran_logs')
     if (savedLogs) {
-      setHistory(JSON.parse(savedLogs))
+      try {
+        const parsed = JSON.parse(savedLogs)
+        // Ensure backward compatibility or clean start with the new schema
+        if (parsed.length > 0 && ('masuk' in parsed[0] || 'pulang' in parsed[0])) {
+          setHistory(parsed)
+        } else {
+          setHistory([])
+        }
+      } catch {
+        setHistory([])
+      }
     }
   }, [])
 
   const handleSelectVolunteer = (name: string) => {
     setSelectedVolunteer(name)
-    setSearch(name)
     setShowDropdown(false)
+    setStatus(null)
   }
 
   const handleSaveKehadiran = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedVolunteer) return
+    if (!selectedVolunteer || !status || !selectedHour || !selectedMinute) return
 
     const now = new Date()
     const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+    const timeStr = `${selectedHour}:${selectedMinute}`
 
-    const newRecord: CheckInRecord = {
-      name: selectedVolunteer,
-      type: status,
-      time: timeInput,
-      date: dateStr
+    // Check if there is an existing record for the same volunteer and date
+    const existingIndex = history.findIndex(
+      (rec) => rec.name === selectedVolunteer && rec.date === dateStr
+    )
+
+    let updatedHistory = [...history]
+
+    if (existingIndex !== -1) {
+      // Update existing record
+      if (status === 'MASUK') {
+        updatedHistory[existingIndex].masuk = timeStr
+      } else {
+        updatedHistory[existingIndex].pulang = timeStr
+      }
+    } else {
+      // Create a new record
+      const newRecord: CheckInRecord = {
+        name: selectedVolunteer,
+        masuk: status === 'MASUK' ? timeStr : '-',
+        pulang: status === 'PULANG' ? timeStr : '-',
+        date: dateStr
+      }
+      updatedHistory = [newRecord, ...updatedHistory]
     }
 
-    const updatedHistory = [newRecord, ...history]
     setHistory(updatedHistory)
     localStorage.setItem('sppg_kehadiran_logs', JSON.stringify(updatedHistory))
 
@@ -82,16 +108,19 @@ export default function KeamananWorkspace() {
 
     localStorage.setItem('sppg_active_volunteers', JSON.stringify(activeVolunteers))
 
-    // Clear form
+    // Clear / Reset form steps
     setSelectedVolunteer('')
-    setSearch('')
-    
-    // Auto-update time
+    setStatus(null)
+
+    // Reset clock to current time
     const updatedNow = new Date()
-    const hh = String(updatedNow.getHours()).padStart(2, '0')
-    const mm = String(updatedNow.getMinutes()).padStart(2, '0')
-    setTimeInput(`${hh}:${mm}`)
+    setSelectedHour(String(updatedNow.getHours()).padStart(2, '0'))
+    setSelectedMinute(String(updatedNow.getMinutes()).padStart(2, '0'))
   }
+
+  // Generate options for jam (00-23) & menit (00-59)
+  const hours = Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0'))
+  const minutes = Array.from({ length: 60 }).map((_, i) => String(i).padStart(2, '0'))
 
   return (
     <div className="space-y-6 bg-[#F8FAFC] min-h-screen text-slate-800 font-sans">
@@ -107,121 +136,132 @@ export default function KeamananWorkspace() {
           </div>
           <h1 className="text-xl font-bold text-emerald-950">Pencatatan Kehadiran Relawan Harian</h1>
           <p className="text-gray-500 text-xs font-medium">
-            Catat jam masuk dan pulang relawan dapur secara real-time untuk audit operasional.
+            Alur absensi relawan masuk dan pulang tanpa ketik, terintegrasi reaktif dengan Dapur Wonorejo.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Form Kehadiran */}
+        {/* Left Column: Step-by-Step Absensi Kehadiran Card */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white border border-gray-200 p-5 rounded-lg space-y-4">
+          <div className="bg-white border border-gray-200 p-5 rounded-lg space-y-5">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-gray-150">
-              <Plus size={16} className="text-emerald-950" /> Log Kehadiran Baru
+              <Users size={16} className="text-emerald-950" /> Absensi Kehadiran Relawan
             </h2>
 
-            <form onSubmit={handleSaveKehadiran} className="space-y-4 text-xs font-semibold">
+            <form onSubmit={handleSaveKehadiran} className="space-y-5 text-xs font-semibold">
               
-              {/* Search Dropdown */}
-              <div className="space-y-1 relative">
-                <label className="text-gray-600">Cari Nama Relawan</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value)
-                      setShowDropdown(true)
-                      if (!e.target.value) setSelectedVolunteer('')
-                    }}
-                    onFocus={() => setShowDropdown(true)}
-                    placeholder="Ketik nama relawan..."
-                    className="w-full p-2 pl-8 border border-gray-200 rounded text-gray-755 outline-none font-medium"
-                  />
-                  <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
-                </div>
-                
-                {showDropdown && filteredVolunteers.length > 0 && (
-                  <div className="absolute z-10 w-full bg-white border border-gray-200 rounded mt-1 shadow-sm max-h-40 overflow-y-auto divide-y divide-gray-100">
-                    {filteredVolunteers.map((name) => (
+              {/* LANGKAH 1: Pilih Nama Relawan */}
+              <div className="space-y-1.5 relative">
+                <label className="text-gray-500 block">Langkah 1: Pilih Nama Relawan</label>
+                <button
+                  type="button"
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  className="w-full flex items-center justify-between p-2.5 border border-gray-200 rounded bg-white text-gray-700 hover:border-gray-300 transition text-left cursor-pointer"
+                >
+                  <span className="font-bold truncate">
+                    {selectedVolunteer ? selectedVolunteer : 'Pilih Nama Relawan'}
+                  </span>
+                  <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
+                </button>
+
+                {showDropdown && (
+                  <div className="absolute z-10 w-full bg-white border border-gray-200 rounded mt-1 shadow max-h-48 overflow-y-auto divide-y divide-gray-100">
+                    {volunteersList.map((name) => (
                       <button
                         key={name}
                         type="button"
                         onClick={() => handleSelectVolunteer(name)}
-                        className="w-full px-3 py-2 text-left hover:bg-slate-50 text-slate-700 font-medium transition cursor-pointer"
+                        className={`w-full px-3 py-2 text-left hover:bg-slate-50 font-bold transition cursor-pointer flex items-center justify-between ${
+                          selectedVolunteer === name ? 'text-emerald-900 bg-emerald-50/50' : 'text-slate-700'
+                        }`}
                       >
-                        {name}
+                        <span>{name}</span>
+                        {selectedVolunteer === name && <UserCheck size={12} className="text-emerald-900" />}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Status Radio */}
-              <div className="space-y-1">
-                <label className="text-gray-600 block mb-1">Status Kehadiran</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="radio"
-                      name="status"
-                      checked={status === 'MASUK'}
-                      onChange={() => setStatus('MASUK')}
-                      className="cursor-pointer"
-                    />
-                    <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded font-bold text-[10px]">
+              {/* LANGKAH 2: Pilih Status */}
+              {selectedVolunteer && (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <label className="text-gray-500 block">Langkah 2: Tentukan Status Kehadiran</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setStatus('MASUK')}
+                      className={`py-3 rounded-lg border font-bold text-center transition cursor-pointer ${
+                        status === 'MASUK'
+                          ? 'bg-emerald-900 border-emerald-950 text-white shadow-sm'
+                          : 'bg-white border-gray-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
                       MASUK
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="radio"
-                      name="status"
-                      checked={status === 'PULANG'}
-                      onChange={() => setStatus('PULANG')}
-                      className="cursor-pointer"
-                    />
-                    <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded font-bold text-[10px]">
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatus('PULANG')}
+                      className={`py-3 rounded-lg border font-bold text-center transition cursor-pointer ${
+                        status === 'PULANG'
+                          ? 'bg-amber-600 border-amber-700 text-white shadow-sm'
+                          : 'bg-white border-gray-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
                       PULANG
-                    </span>
-                  </label>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Time Input */}
-              <div className="space-y-1">
-                <label className="text-gray-600">Waktu / Jam (HH:MM)</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={timeInput}
-                    onChange={(e) => setTimeInput(e.target.value)}
-                    placeholder="Contoh: 07:30"
-                    className="w-full p-2 pl-8 border border-gray-200 rounded text-gray-755 outline-none font-medium"
-                  />
-                  <Clock size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+              {/* LANGKAH 3: Pilih Jam */}
+              {selectedVolunteer && status && (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <label className="text-gray-500 block">Langkah 3: Atur Waktu Absensi</label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <select
+                        value={selectedHour}
+                        onChange={(e) => setSelectedHour(e.target.value)}
+                        className="w-full p-2.5 border border-gray-200 rounded bg-white text-gray-700 font-bold outline-none cursor-pointer"
+                      >
+                        {hours.map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <span className="font-extrabold text-slate-400 text-sm">:</span>
+                    <div className="flex-1">
+                      <select
+                        value={selectedMinute}
+                        onChange={(e) => setSelectedMinute(e.target.value)}
+                        className="w-full p-2.5 border border-gray-200 rounded bg-white text-gray-700 font-bold outline-none cursor-pointer"
+                      >
+                        {minutes.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <button
-                type="submit"
-                disabled={!selectedVolunteer}
-                className={`w-full py-2.5 font-bold uppercase rounded border transition ${
-                  selectedVolunteer
-                    ? 'bg-emerald-900 hover:bg-emerald-950 text-white border-emerald-950 cursor-pointer'
-                    : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                }`}
-              >
-                Simpan Kehadiran
-              </button>
+              {/* Action Button */}
+              {selectedVolunteer && status && selectedHour && selectedMinute && (
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-emerald-900 hover:bg-emerald-950 text-white font-bold uppercase rounded border border-emerald-950 transition cursor-pointer animate-fadeIn"
+                >
+                  Simpan Kehadiran
+                </button>
+              )}
             </form>
           </div>
         </div>
 
-        {/* Right Column: Attendance History */}
+        {/* Right Column: Consolidated Attendance History Table */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
             <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
@@ -234,7 +274,7 @@ export default function KeamananWorkspace() {
               <div className="p-8 text-center text-gray-400 font-semibold text-xs space-y-1">
                 <Users className="mx-auto text-gray-300 mb-2" size={32} />
                 <p>Belum ada data kehadiran yang tercatat.</p>
-                <p className="text-[10px] text-gray-350 font-normal">Gunakan form di sebelah kiri untuk menambah record.</p>
+                <p className="text-[10px] text-gray-350 font-normal">Ikuti langkah-langkah di sebelah kiri untuk mengabsen.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -242,8 +282,8 @@ export default function KeamananWorkspace() {
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-gray-200">
                       <th className="px-4 py-2.5">Nama Relawan</th>
-                      <th className="px-4 py-2.5 text-center">Status</th>
-                      <th className="px-4 py-2.5 text-center">Jam</th>
+                      <th className="px-4 py-2.5 text-center">Jam Masuk</th>
+                      <th className="px-4 py-2.5 text-center">Jam Pulang</th>
                       <th className="px-4 py-2.5 text-center">Tanggal</th>
                     </tr>
                   </thead>
@@ -251,16 +291,12 @@ export default function KeamananWorkspace() {
                     {history.map((rec, i) => (
                       <tr key={i} className="hover:bg-slate-50/40">
                         <td className="px-4 py-3 font-bold text-slate-800">{rec.name}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`px-2 py-0.5 text-[9px] font-bold rounded border ${
-                            rec.type === 'MASUK' 
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
-                              : 'bg-amber-50 text-amber-800 border-amber-200'
-                          }`}>
-                            {rec.type}
-                          </span>
+                        <td className="px-4 py-3 text-center text-slate-800 font-medium">
+                          {rec.masuk}
                         </td>
-                        <td className="px-4 py-3 text-center text-slate-400 font-medium">Pukul {rec.time}</td>
+                        <td className="px-4 py-3 text-center text-slate-800 font-medium">
+                          {rec.pulang}
+                        </td>
                         <td className="px-4 py-3 text-center text-slate-500">{rec.date}</td>
                       </tr>
                     ))}
