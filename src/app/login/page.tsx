@@ -15,9 +15,7 @@ export default function LoginPage() {
 
   const accounts: UserAccount[] = [
     { name: 'Ahmad Sayyidani Haqiqi, S.Pd.', role: 'Kepala SPPG', initials: 'AH' },
-    { name: 'Kayan Nurmohamad', role: 'Akuntan', initials: 'KN' },
-    { name: 'Muhammad Indra', role: 'Ahli Gizi', initials: 'MI' },
-    { name: 'Moh. Sukron', role: 'Aslap', initials: 'MS' }
+    { name: 'Pos Keamanan Dapur',            role: 'Keamanan',    initials: 'KM' }
   ]
 
   const handleLogin = (e: React.FormEvent) => {

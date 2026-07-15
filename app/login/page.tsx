@@ -21,9 +21,6 @@ export default function LoginPage() {
 
   const accounts: UserAccount[] = [
     { name: 'Ahmad Sayyidani Haqiqi, S.Pd.', role: 'Kepala SPPG',  initials: 'AH', pin: '111111', roleSlug: 'kepalasppg' },
-    { name: 'Kayan Nurmohamad',              role: 'Akuntan',       initials: 'KN', pin: '222222', roleSlug: 'akuntan'    },
-    { name: 'Muhammad Indra',                role: 'Ahli Gizi',     initials: 'MI', pin: '333333', roleSlug: 'ahligizi'   },
-    { name: 'Moh. Sukron',                   role: 'Aslap',         initials: 'MS', pin: '444444', roleSlug: 'aslap'      },
     { name: 'Pos Keamanan Dapur',            role: 'Keamanan',      initials: 'KM', pin: '555555', roleSlug: 'keamanan'   },
   ]
 
@@ -227,6 +224,21 @@ export default function LoginPage() {
 
             <div className="pt-4 border-t border-gray-100 flex items-center justify-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
               <Shield size={12} /> Sistem Keamanan PIN Aktif
+              <button 
+                type="button" 
+                onClick={() => {
+                  if (confirm('Apakah Anda yakin ingin mereset database (localStorage)?')) {
+                    localStorage.clear();
+                    localStorage.setItem('sppg_reset_done_v3', 'true');
+                    alert('Database berhasil direset!');
+                    window.location.reload();
+                  }
+                }}
+                className="opacity-0 hover:opacity-20 transition ml-1 cursor-default text-[8px]"
+                title="Reset Database"
+              >
+                ⚙️
+              </button>
             </div>
           </div>
         </div>

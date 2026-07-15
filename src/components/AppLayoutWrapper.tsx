@@ -97,6 +97,15 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
 
   // Fetch active user on mount and every pathname change to keep it reactive
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    // One-time database reset for browser cleanup
+    if (typeof window !== 'undefined' && !localStorage.getItem('sppg_reset_done_v3')) {
+      localStorage.clear()
+      localStorage.setItem('sppg_reset_done_v3', 'true')
+      window.location.reload()
+      return
+    }
+
     const storedUser = localStorage.getItem('sppg_user')
     if (storedUser) {
       setCurrentUser(JSON.parse(storedUser))
@@ -334,6 +343,20 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
             <span className="text-[9px] text-emerald-400 font-bold uppercase">{currentUser?.role || 'Guest'}</span>
           </div>
         </div>
+        <button 
+          onClick={() => {
+            if (confirm('Apakah Anda yakin ingin mereset database (localStorage)?')) {
+              localStorage.clear();
+              localStorage.setItem('sppg_reset_done_v3', 'true');
+              alert('Database berhasil direset!');
+              window.location.reload();
+            }
+          }}
+          title="Reset Sistem (localStorage)"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition duration-150 cursor-pointer flex-shrink-0 opacity-10 hover:opacity-100"
+        >
+          <span className="text-[10px]">⚙️</span>
+        </button>
         <button 
           onClick={handleLogout}
           title="Keluar dari Sistem"

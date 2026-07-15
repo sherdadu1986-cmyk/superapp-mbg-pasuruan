@@ -28,15 +28,51 @@ interface UserAccount {
   initials: string;
 }
 
+interface CheckInRecord {
+  name: string;
+  masuk: string;
+  pulang: string;
+  date: string;
+}
+
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null)
   const [loading, setLoading] = useState(true)
+  const [volunteersCount, setVolunteersCount] = useState(0)
+  const [totalVolunteersCount, setTotalVolunteersCount] = useState(0)
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     const storedUser = localStorage.getItem('sppg_user')
     if (storedUser) {
       setCurrentUser(JSON.parse(storedUser))
     }
+
+    // 1. Get total registered volunteers
+    const storedVolunteers = localStorage.getItem('sppg_volunteers')
+    let totalCount = 0
+    if (storedVolunteers) {
+      try {
+        totalCount = JSON.parse(storedVolunteers).length
+      } catch {}
+    }
+    setTotalVolunteersCount(totalCount)
+
+    // 2. Count active present volunteers (masuk !== '-' and pulang === '-') from sppg_kehadiran_logs
+    const savedLogs = localStorage.getItem('sppg_kehadiran_logs')
+    let presentCount = 0
+    if (savedLogs) {
+      try {
+        const logs = JSON.parse(savedLogs)
+        if (Array.isArray(logs)) {
+          const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+          presentCount = logs.filter(
+            (rec: CheckInRecord) => rec.date === todayStr && rec.masuk && rec.masuk !== '-' && rec.pulang === '-'
+          ).length
+        }
+      } catch {}
+    }
+    setVolunteersCount(presentCount)
     setLoading(false)
   }, [])
 
@@ -58,17 +94,27 @@ export default function DashboardPage() {
     case 'Ahli Gizi':
       return <AhliGiziDashboard userName={userName} role={role} />
     case 'Aslap':
-      return <AslapDashboard userName={userName} role={role} />
+      return <AslapDashboard userName={userName} role={role} volunteersCount={volunteersCount} totalVolunteersCount={totalVolunteersCount} />
     case 'Kepala SPPG':
     default:
-      return <KepalaSPPGDashboard userName={userName} role={role} />
+      return <KepalaSPPGDashboard userName={userName} role={role} volunteersCount={volunteersCount} totalVolunteersCount={totalVolunteersCount} />
   }
 }
 
 // -------------------------------------------------------------
 // 1. KEPALA SPPG / GENERAL MONITORING DASHBOARD
 // -------------------------------------------------------------
-function KepalaSPPGDashboard({ userName, role }: { userName: string; role: string }) {
+function KepalaSPPGDashboard({ 
+  userName, 
+  role,
+  volunteersCount,
+  totalVolunteersCount
+}: { 
+  userName: string; 
+  role: string;
+  volunteersCount: number;
+  totalVolunteersCount: number;
+}) {
   const menuItems = [
     { name: 'Nasi Putih', category: 'Karbohidrat' },
     { name: 'Ayam Kecap', category: 'Protein Utama' },
@@ -96,7 +142,7 @@ function KepalaSPPGDashboard({ userName, role }: { userName: string; role: strin
         <MetricCard label="Total Penerima Manfaat" value="3.214 anak" icon={<Users size={18} />} />
         <MetricCard label="Jumlah Sekolah" value="17 Sekolah" icon={<School size={18} />} />
         <MetricCard label="Porsi Diproduksi" value="3.214 Porsi" icon={<CookingPot size={18} />} />
-        <MetricCard label="Relawan Hadir" value="46 / 48 Orang" icon={<UserCheck size={18} />} />
+        <MetricCard label="Relawan Hadir" value={`${volunteersCount} / ${totalVolunteersCount} Orang`} icon={<UserCheck size={18} />} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -263,7 +309,17 @@ function AhliGiziDashboard({ userName, role }: { userName: string; role: string 
 // -------------------------------------------------------------
 // 4. ASLAP / OPERATIONAL & LOGISTICS DASHBOARD
 // -------------------------------------------------------------
-function AslapDashboard({ userName, role }: { userName: string; role: string }) {
+function AslapDashboard({ 
+  userName, 
+  role,
+  volunteersCount,
+  totalVolunteersCount
+}: { 
+  userName: string; 
+  role: string;
+  volunteersCount: number;
+  totalVolunteersCount: number;
+}) {
   const routes = [
     { route: 'Rute 1 - Wonorejo Barat', driver: 'Budi Santoso', stops: 'SDN 1 Wonorejo, SDN 3 Wonorejo', time: '07:15', status: 'Tiba', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
     { route: 'Rute 2 - Wonorejo Timur', driver: 'Edi Wibowo', stops: 'SDN 2 Wonorejo, SMPN 1 Wonorejo', time: '07:30', status: 'Kirim', color: 'text-amber-600 bg-amber-50 border-amber-100' },
@@ -288,7 +344,7 @@ function AslapDashboard({ userName, role }: { userName: string; role: string }) 
         <MetricCard label="Porsi Ter-packing" value="2.730 / 3.214 Box" icon={<Package size={18} />} />
         <MetricCard label="Rute Terkirim" value="7 / 10 Selesai" icon={<Truck size={18} />} />
         <MetricCard label="Armada Aktif" value="3 Pick-up" icon={<Layers size={18} />} />
-        <MetricCard label="Relawan Hadir" value="46 / 48 Orang" icon={<UserCheck size={18} />} />
+        <MetricCard label="Relawan Hadir" value={`${volunteersCount} / ${totalVolunteersCount} Orang`} icon={<UserCheck size={18} />} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

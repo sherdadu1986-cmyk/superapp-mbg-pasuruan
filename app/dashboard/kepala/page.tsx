@@ -12,19 +12,37 @@ import {
 
 export default function DashboardKepala() {
   const [mounted, setMounted] = useState(false)
-  const [volunteersCount, setVolunteersCount] = useState(46)
+  const [volunteersCount, setVolunteersCount] = useState(0)
+  const [totalVolunteersCount, setTotalVolunteersCount] = useState(0)
 
   useEffect(() => { 
     setMounted(true) 
     
-    // Load active checked-in volunteers from Keamanan module
-    const activeVolunteersSaved = localStorage.getItem('sppg_active_volunteers')
-    if (activeVolunteersSaved) {
-      const activeList = JSON.parse(activeVolunteersSaved)
-      // Base is 46, increment by new checked-in volunteers, clamp to 48 max
-      const updatedCount = Math.min(48, 46 + activeList.length)
-      setVolunteersCount(updatedCount)
+    // 1. Get total registered volunteers
+    const storedVolunteers = localStorage.getItem('sppg_volunteers')
+    let totalCount = 0
+    if (storedVolunteers) {
+      try {
+        totalCount = JSON.parse(storedVolunteers).length
+      } catch {}
     }
+    setTotalVolunteersCount(totalCount)
+
+    // 2. Count active present volunteers (masuk !== '-' and pulang === '-') from sppg_kehadiran_logs
+    const savedLogs = localStorage.getItem('sppg_kehadiran_logs')
+    let presentCount = 0
+    if (savedLogs) {
+      try {
+        const logs = JSON.parse(savedLogs)
+        if (Array.isArray(logs)) {
+          const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+          presentCount = logs.filter(
+            (rec: any) => rec.date === todayStr && rec.masuk && rec.masuk !== '-' && rec.pulang === '-'
+          ).length
+        }
+      } catch {}
+    }
+    setVolunteersCount(presentCount)
   }, [])
 
   const chartData = [
@@ -37,12 +55,14 @@ export default function DashboardKepala() {
     { name: '14/07', Target: 3214, Realisasi: 2730 },
   ]
 
+  const percent = totalVolunteersCount > 0 ? Math.round((volunteersCount / totalVolunteersCount) * 100) : 0
+
   const metrics = [
     { label: 'Porsi Hari Ini',     value: '3.214',  sub: 'Target 100%',          icon: <CookingPot size={20} className="text-emerald-900" /> },
     { label: 'Sekolah Penerima',   value: '17',     sub: 'Zonasi Wonorejo',       icon: <School size={20} className="text-emerald-900" /> },
     { label: 'Efisiensi Produksi', value: '85%',    sub: 'Rata-rata 92%',        icon: <Gauge size={20} className="text-emerald-900" /> },
     { label: 'Rute Terdistribusi', value: '7 / 10', sub: '3 Rute Berjalan',       icon: <Truck size={20} className="text-emerald-900" /> },
-    { label: 'Relawan Hadir',      value: `${volunteersCount}/48`, sub: `${Math.round((volunteersCount/48)*100)}% Kehadiran`, icon: <Users size={20} className="text-emerald-900" /> },
+    { label: 'Relawan Hadir',      value: `${volunteersCount} / ${totalVolunteersCount}`, sub: `${percent}% Kehadiran`, icon: <Users size={20} className="text-emerald-900" /> },
   ]
 
   const criticalStock = [

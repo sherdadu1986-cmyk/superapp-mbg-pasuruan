@@ -33,17 +33,17 @@ export default function KeamananWorkspace() {
     setSelectedHour(hh)
     setSelectedMinute(mm)
 
-    // 2. Initialize centralized volunteer list database in localStorage if not exists
+    // 2. Initialize centralized volunteer list database in localStorage if not exists (empty array by default)
     const storedVolunteers = localStorage.getItem('sppg_volunteers')
     if (storedVolunteers) {
-      setVolunteersList(JSON.parse(storedVolunteers))
+      try {
+        setVolunteersList(JSON.parse(storedVolunteers))
+      } catch {
+        setVolunteersList([])
+      }
     } else {
-      const defaultList = [
-        'Andi Wijaya', 'Budi Santoso', 'Citra Kirana', 'Dedi Hermawan', 'Eka Saputra',
-        'Fitri Handayani', 'Galih Pratama', 'Hadi Sucipto', 'Indah Lestari', 'Joko Susilo'
-      ]
-      localStorage.setItem('sppg_volunteers', JSON.stringify(defaultList))
-      setVolunteersList(defaultList)
+      localStorage.setItem('sppg_volunteers', JSON.stringify([]))
+      setVolunteersList([])
     }
 
     // 3. Load initial attendance history from localStorage
