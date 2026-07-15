@@ -121,52 +121,13 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
       return [
         { name: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/' },
         {
-          name: 'Operasional',
-          icon: <ChefHat size={18} />,
-          submenus: [
-            { name: 'Produksi', path: '/operasional/jadwal-produksi' },
-            { name: 'Distribusi', path: '/operasional/distribusi' }
-          ]
-        },
-        {
-          name: 'Gudang',
-          icon: <Boxes size={18} />,
-          submenus: [
-            { name: 'Stok', path: '/gudang/stok' },
-            { name: 'Pembelian', path: '/gudang/pembelian' },
-            { name: 'Supplier', path: '/gudang/supplier' }
-          ]
-        },
-        {
-          name: 'SDM',
+          name: 'SDM / Relawan',
           icon: <Users size={18} />,
           submenus: [
-            { name: 'Relawan', path: '/sdm/relawan' },
-            { name: 'Absensi', path: '/sdm/absensi' },
-            { name: 'Shift', path: '/sdm/shift' }
+            { name: 'Data Relawan', path: '/sdm/relawan' },
+            { name: 'Laporan Absensi', path: '/sdm/absensi' }
           ]
-        },
-        {
-          name: 'Sekolah',
-          icon: <School size={18} />,
-          submenus: [
-            { name: 'Data Sekolah', path: '/sekolah/data-sekolah' },
-            { name: 'Rute', path: '/sekolah/rute' }
-          ]
-        },
-        {
-          name: 'Quality',
-          icon: <ShieldCheck size={18} />,
-          submenus: [
-            { name: 'Checklist', path: '/quality/checklist' },
-            { name: 'Food Safety', path: '/quality/food-safety' },
-            { name: 'QC', path: '/quality/qc' }
-          ]
-        },
-        { name: 'Keuangan', icon: <BarChart3 size={18} />, path: '/laporan' },
-        { name: 'Laporan', icon: <BarChart3 size={18} />, path: '/laporan' },
-        { name: 'Dokumen', icon: <Folder size={18} />, path: '/dokumen' },
-        { name: 'Pengaturan', icon: <Users size={18} />, path: '/sdm/shift' }
+        }
       ]
     }
     
