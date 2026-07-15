@@ -9,6 +9,11 @@ interface CheckInRecord {
   date: string;
 }
 
+function getIndonesianDateStr(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+  return `${date.getDate()} ${months[date.getMonth()]}`
+}
+
 export default function AbsensiPage() {
   const [records, setRecords] = useState<CheckInRecord[]>([])
   const [mounted, setMounted] = useState(false)
@@ -20,9 +25,9 @@ export default function AbsensiPage() {
       try {
         const parsed = JSON.parse(savedLogs)
         if (Array.isArray(parsed)) {
-          const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+          const todayStr = getIndonesianDateStr(new Date())
           // Filter logs for today
-          const todayLogs = parsed.filter((rec: any) => rec.date === todayStr)
+          const todayLogs = parsed.filter((rec: CheckInRecord) => rec.date === todayStr)
           setRecords(todayLogs)
         }
       } catch {

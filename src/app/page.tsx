@@ -35,6 +35,11 @@ interface CheckInRecord {
   date: string;
 }
 
+function getIndonesianDateStr(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+  return `${date.getDate()} ${months[date.getMonth()]}`
+}
+
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null)
   const [loading, setLoading] = useState(true)
@@ -65,7 +70,7 @@ export default function DashboardPage() {
       try {
         const logs = JSON.parse(savedLogs)
         if (Array.isArray(logs)) {
-          const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+          const todayStr = getIndonesianDateStr(new Date())
           presentCount = logs.filter(
             (rec: CheckInRecord) => rec.date === todayStr && rec.masuk && rec.masuk !== '-' && rec.pulang === '-'
           ).length

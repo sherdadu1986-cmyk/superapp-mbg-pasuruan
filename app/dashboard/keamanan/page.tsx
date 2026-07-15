@@ -11,6 +11,11 @@ interface CheckInRecord {
   date: string;
 }
 
+function getIndonesianDateStr(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+  return `${date.getDate()} ${months[date.getMonth()]}`
+}
+
 export default function KeamananWorkspace() {
   const [selectedVolunteer, setSelectedVolunteer] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
@@ -106,7 +111,7 @@ export default function KeamananWorkspace() {
     if (!selectedVolunteer || !status || !selectedHour || !selectedMinute) return
 
     const now = new Date()
-    const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+    const dateStr = getIndonesianDateStr(now)
     const timeStr = `${selectedHour}:${selectedMinute}`
 
     const existingIndex = history.findIndex(

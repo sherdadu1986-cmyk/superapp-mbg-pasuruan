@@ -22,15 +22,44 @@ interface ActiveVolunteer {
   jabatan: string;
 }
 
+interface CheckInRecord {
+  name: string;
+  masuk: string;
+  pulang: string;
+  date: string;
+}
+
+// 1. Standardized Date Formatter (locale-independent)
+export function getIndonesianDateStr(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+  return `${date.getDate()} ${months[date.getMonth()]}`
+}
+
+// 2. Live Clock Date & Time Formatter
+export function getIndonesianDateTimeStr(date: Date): string {
+  const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+  const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+  
+  const dayName = days[date.getDay()]
+  const day = date.getDate()
+  const monthName = months[date.getMonth()]
+  const year = date.getFullYear()
+  
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  const ss = String(date.getSeconds()).padStart(2, '0')
+  
+  return `${dayName}, ${day} ${monthName} ${year} | ${hh}:${mm}:${ss} WIB`
+}
+
 export default function DashboardKepala() {
   const [mounted, setMounted] = useState(false)
   const [volunteersCount, setVolunteersCount] = useState(0)
   const [totalVolunteersCount, setTotalVolunteersCount] = useState(0)
   const [activeVolunteers, setActiveVolunteers] = useState<ActiveVolunteer[]>([])
+  const [timeStr, setTimeStr] = useState('')
 
-  useEffect(() => { 
-    setMounted(true) 
-    
+  const updateStats = () => {
     // 1. Get total registered volunteers
     const storedVolunteers = localStorage.getItem('sppg_volunteers')
     let totalCount = 0
@@ -60,11 +89,11 @@ export default function DashboardKepala() {
 
     if (savedLogs) {
       try {
-        const logs = JSON.parse(savedLogs)
+        const logs: CheckInRecord[] = JSON.parse(savedLogs)
         if (Array.isArray(logs)) {
-          const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+          const todayStr = getIndonesianDateStr(new Date())
           
-          logs.forEach((rec: any) => {
+          logs.forEach((rec: CheckInRecord) => {
             if (rec.date === todayStr && rec.masuk && rec.masuk !== '-' && rec.pulang === '-') {
               presentCount++
               const detail = detailsMap[rec.name]
@@ -82,6 +111,35 @@ export default function DashboardKepala() {
     
     setVolunteersCount(presentCount)
     setActiveVolunteers(activeList)
+  }
+
+  useEffect(() => { 
+    setMounted(true) 
+    updateStats()
+
+    // 1. Storage Event Listener (cross-tab sync)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'sppg_kehadiran_logs' || e.key === 'sppg_volunteers' || e.key === 'sppg_volunteers_details') {
+        updateStats()
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+
+    // 2. Short Polling fallback (same-tab updates)
+    const pollId = setInterval(updateStats, 2000)
+
+    // 3. Live Clock ticking every second
+    const tickClock = () => {
+      setTimeStr(getIndonesianDateTimeStr(new Date()))
+    }
+    tickClock()
+    const clockId = setInterval(tickClock, 1000)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(pollId)
+      clearInterval(clockId)
+    }
   }, [])
 
   const percent = totalVolunteersCount > 0 ? Math.round((volunteersCount / totalVolunteersCount) * 100) : 0
@@ -109,8 +167,8 @@ export default function DashboardKepala() {
             <span className="text-xs text-gray-500 font-medium">Wonorejo · Live Monitoring Kehadiran</span>
           </div>
           <h1 className="text-xl font-bold text-emerald-950">Dashboard Monitoring Kehadiran Relawan</h1>
-          <p className="text-gray-500 text-xs font-medium">
-            Sugeng Rawuh, Ahmad Sayyidani Haqiqi, S.Pd. Berikut adalah data riil absensi relawan hari ini.
+          <p className="text-gray-600 text-xs font-semibold mt-1">
+            Sugeng Rawuh, Ahmad Sayyidani Haqiqi, S.Pd. | <span className="text-emerald-750 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 font-bold ml-1">{timeStr || 'Memuat waktu...'}</span>
           </p>
         </div>
       </div>
