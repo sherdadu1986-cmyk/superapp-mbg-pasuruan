@@ -88,11 +88,14 @@ export default function BerandaOperasionalPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  const [isRealtimeActive, setIsRealtimeActive] = useState(false)
+  const [realtimeStatus, setRealtimeStatus] = useState<'SUBSCRIBED' | 'REST' | 'CONNECTING'>('CONNECTING')
   
   // Dynamic Supabase state
   const [kpmList, setKpmList] = useState<KelompokPenerimaManfaat[]>([])
   const [bnbaList, setBnbaList] = useState<PenerimaManfaatBnba[]>([])
+  const [totalBnba, setTotalBnba] = useState<number | null>(null)
+  const [totalKpm, setTotalKpm] = useState<number | null>(null)
+  const [targetPenerima, setTargetPenerima] = useState<number | null>(null)
   const [menuDb, setMenuDb] = useState<MenuHarianDB | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -111,16 +114,46 @@ export default function BerandaOperasionalPage() {
   // Load Real-Time Supabase Data
   const loadDashboardData = async () => {
     try {
-      const [kpmRes, bnbaRes, menuRes] = await Promise.all([
-        fetchKelompokPenerimaManfaatList(),
-        fetchBnbaList(),
-        fetchMenuHariIniDB()
-      ])
-      setKpmList(kpmRes || [])
-      setBnbaList(bnbaRes || [])
-      setMenuDb(menuRes)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
+      // Ambil KPM langsung via REST API
+      const { data: kpmData, error: kpmErr } = await supabase
+        .from('kelompok_penerima_manfaat')
+        .select('*')
+        
+      // Ambil BNBA riil langsung via REST API
+      const { data: bnbaData, count, error: bnbaErr } = await supabase
+        .from('penerima_manfaat_bnba')
+        .select('*', { count: 'exact' })
+
+      console.log('Direct Fetch BNBA Count:', count ?? bnbaData?.length)
+
+      let fetchedKpm = kpmData
+      if (kpmErr || !fetchedKpm) {
+        fetchedKpm = await fetchKelompokPenerimaManfaatList()
+      }
+
+      let fetchedBnba = bnbaData
+      if (bnbaErr || !fetchedBnba) {
+        fetchedBnba = await fetchBnbaList()
+      }
+
+      const menuRes = await fetchMenuHariIniDB()
+
+      // Update state langsung tanpa menunggu socket
+      if (fetchedBnba) {
+        setBnbaList(fetchedBnba)
+        setTotalBnba(count ?? fetchedBnba.length)
+      }
+      if (fetchedKpm) {
+        setKpmList(fetchedKpm)
+        setTotalKpm(fetchedKpm.length)
+        const totalTarget = fetchedKpm.reduce((acc, curr) => acc + (Number(curr.jumlah_penerima) || 0), 0)
+        setTargetPenerima(totalTarget)
+      }
+      if (menuRes) {
+        setMenuDb(menuRes)
+      }
+    } catch (err) {
+      console.error('Fetch error:', err)
     } finally {
       setLoading(false)
     }
@@ -149,17 +182,24 @@ export default function BerandaOperasionalPage() {
         }
       )
       .subscribe((status) => {
+        console.log('Supabase Realtime Status:', status)
         if (status === 'SUBSCRIBED') {
-          setIsRealtimeActive(true)
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          setIsRealtimeActive(false)
+          setRealtimeStatus('SUBSCRIBED')
+        } else if (status === 'TIMED_OUT' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setRealtimeStatus('REST')
         }
       })
+
+    // Timeout safety fallback: if socket stays pending for 3s, show '● Terhubung (REST)'
+    const timeoutId = setTimeout(() => {
+      setRealtimeStatus((prev) => (prev === 'CONNECTING' ? 'REST' : prev))
+    }, 3000)
 
     const handleStorage = () => loadDashboardData()
     window.addEventListener('storage', handleStorage)
 
     return () => {
+      clearTimeout(timeoutId)
       window.removeEventListener('storage', handleStorage)
       supabase.removeChannel(channel)
     }
@@ -202,8 +242,10 @@ export default function BerandaOperasionalPage() {
   }
 
   // ─── Dynamic KPI Calculations ──────────────────────────────────────────
-  const totalKelompok = kpmList.length
-  const totalTargetPenerima = kpmList.reduce((acc, item) => acc + (item.jumlah_penerima || 0), 0)
+  const totalKelompok = totalKpm !== null ? totalKpm : kpmList.length
+  const totalTargetPenerima = targetPenerima !== null 
+    ? targetPenerima 
+    : kpmList.reduce((acc, item) => acc + (item.jumlah_penerima || 0), 0)
 
   // Sanitize BNBA count: exclude orphan records not connected to an active KPM
   const activeKpmIdSet = new Set<string>()
@@ -212,8 +254,8 @@ export default function BerandaOperasionalPage() {
     if (kpm.kode) activeKpmIdSet.add(kpm.kode)
   })
 
-  const validBnbaList = bnbaList.filter(item => activeKpmIdSet.has(item.kelompok_id))
-  const realisasiTotal = validBnbaList.length
+  const validBnbaList = bnbaList.filter(item => activeKpmIdSet.size === 0 || activeKpmIdSet.has(item.kelompok_id))
+  const realisasiTotal = totalBnba !== null ? totalBnba : validBnbaList.length
   const isOverAllocated = realisasiTotal > totalTargetPenerima && totalTargetPenerima > 0
 
   const persentase = totalTargetPenerima > 0 
@@ -360,12 +402,26 @@ export default function BerandaOperasionalPage() {
               BGN SuperApp
             </span>
             <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
-              isRealtimeActive 
+              realtimeStatus === 'SUBSCRIBED' 
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                : realtimeStatus === 'REST'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-amber-50 text-amber-700 border-amber-200'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${isRealtimeActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-              <span>{isRealtimeActive ? '● Sinkron Realtime' : '○ Menghubungkan'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                realtimeStatus === 'SUBSCRIBED' 
+                  ? 'bg-emerald-500 animate-pulse' 
+                  : realtimeStatus === 'REST'
+                  ? 'bg-emerald-500'
+                  : 'bg-amber-500 animate-ping'
+              }`} />
+              <span>
+                {realtimeStatus === 'SUBSCRIBED' 
+                  ? '● Sinkron Realtime' 
+                  : realtimeStatus === 'REST'
+                  ? '● Terhubung (REST)'
+                  : '○ Menghubungkan'}
+              </span>
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1">

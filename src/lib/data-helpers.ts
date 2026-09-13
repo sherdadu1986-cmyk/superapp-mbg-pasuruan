@@ -407,9 +407,12 @@ export interface MenuHarianDB {
   tanggal: string
   nama_menu: string
   foto_url: string
-  komposisi_gizi: string[]
+  komposisi_gizi?: string[]
   kalori: string
-  target_porsi: number
+  target_porsi?: number
+  porsi_kecil?: number
+  porsi_besar?: number
+  catatan?: string
   status: string
   created_at?: string
 }
@@ -526,6 +529,65 @@ export async function deleteKelompokPenerimaManfaat(idOrKode: string): Promise<b
 }
 
 // ─── Menu Harian Helpers ───
+export const INITIAL_MENU_HISTORY: MenuHarianDB[] = [
+  {
+    id: 'menu-1',
+    tanggal: '2026-09-14',
+    nama_menu: 'Nasi Ayam Teriyaki, Tumis Brokoli & Buah Pisang',
+    foto_url: '/menu-today.png',
+    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah', 'Susu'],
+    kalori: '~680 kkal',
+    target_porsi: 4850,
+    porsi_kecil: 1820,
+    porsi_besar: 3030,
+    catatan: 'Menu standar gizi tinggi protein BGN Pasuruan',
+    status: 'Siap Distribusi',
+    created_at: '2026-09-14T06:00:00.000Z'
+  },
+  {
+    id: 'menu-2',
+    tanggal: '2026-09-13',
+    nama_menu: 'Nasi Kuning Bento, Telur Balado, Buncis & Melon',
+    foto_url: '/menu-today.png',
+    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah'],
+    kalori: '~640 kkal',
+    target_porsi: 4850,
+    porsi_kecil: 1820,
+    porsi_besar: 3030,
+    catatan: 'Variasi bento box nusantara untuk membangkitkan selera siswa',
+    status: 'Selesai Distribusi',
+    created_at: '2026-09-13T06:00:00.000Z'
+  },
+  {
+    id: 'menu-3',
+    tanggal: '2026-09-12',
+    nama_menu: 'Nasi Uduk Ayam Goreng Kremes, Capcay & Jeruk',
+    foto_url: '/menu-today.png',
+    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah', 'Susu'],
+    kalori: '~670 kkal',
+    target_porsi: 4700,
+    porsi_kecil: 1750,
+    porsi_besar: 2950,
+    catatan: 'Tambahan vitamin C jeruk manis lokal Pasuruan',
+    status: 'Selesai Distribusi',
+    created_at: '2026-09-12T06:00:00.000Z'
+  },
+  {
+    id: 'menu-4',
+    tanggal: '2026-09-11',
+    nama_menu: 'Nasi Semur Daging Sapi, Sup Bayam Wortel & Buah Apel',
+    foto_url: '/menu-today.png',
+    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah'],
+    kalori: '~700 kkal',
+    target_porsi: 4800,
+    porsi_kecil: 1800,
+    porsi_besar: 3000,
+    catatan: 'Menu kaya zat besi dan serat tinggi',
+    status: 'Selesai Distribusi',
+    created_at: '2026-09-11T06:00:00.000Z'
+  }
+]
+
 export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
   try {
     const { data, error } = await supabase.from('menu_harian').select('*').order('created_at', { ascending: false }).limit(1).single()
@@ -553,28 +615,60 @@ export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
   }
 }
 
+export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {
+  try {
+    const { data, error } = await supabase
+      .from('menu_harian')
+      .select('*')
+      .order('tanggal', { ascending: false })
+    if (error || !data || data.length === 0) throw error
+    return data
+  } catch {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_menu_history_list') : null
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      } catch { /* use initial */ }
+    }
+    return INITIAL_MENU_HISTORY
+  }
+}
+
 export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianDB> {
+  const newRecord: MenuHarianDB = {
+    ...menu,
+    id: menu.id || `menu-${Date.now()}`,
+    created_at: menu.created_at || new Date().toISOString()
+  }
+
   const localFormat = {
     namaMenu: menu.nama_menu,
     tanggal: menu.tanggal,
-    targetPorsi: `${menu.target_porsi.toLocaleString('id-ID')} Porsi`,
+    targetPorsi: `${(menu.target_porsi || 4850).toLocaleString('id-ID')} Porsi`,
     kalori: menu.kalori,
     status: menu.status,
-    tags: menu.komposisi_gizi,
+    tags: menu.komposisi_gizi || [],
     fotoUrl: menu.foto_url
   }
   if (typeof window !== 'undefined') {
     localStorage.setItem('sppg_menu_hari_ini', JSON.stringify(localFormat))
+    
+    // Save to history list in localStorage
+    const currentHistory = await fetchMenuHistoryDB()
+    const updatedHistory = [newRecord, ...currentHistory.filter(h => h.id !== newRecord.id && h.tanggal !== menu.tanggal)]
+    localStorage.setItem('sppg_menu_history_list', JSON.stringify(updatedHistory))
+
     window.dispatchEvent(new Event('storage'))
   }
 
   try {
-    const { data, error } = await supabase.from('menu_harian').insert(menu).select().single()
+    const { data, error } = await supabase.from('menu_harian').insert(newRecord).select().single()
     if (!error && data) return data
   } catch {
     // fallback
   }
-  return menu
+  return newRecord
 }
 
 // ─── BNBA (By Name By Address) Types & Helpers ───────────────────────
@@ -622,7 +716,7 @@ export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaa
     let query = supabase.from('penerima_manfaat_bnba').select('*').order('created_at', { ascending: false })
     if (kelompokId) query = query.eq('kelompok_id', kelompokId)
     const { data, error } = await query
-    if (error || !data || data.length === 0) throw error
+    if (error || !data) throw error
     return data
   } catch {
     const stored = typeof window !== 'undefined' ? localStorage.getItem(LS_BNBA) : null

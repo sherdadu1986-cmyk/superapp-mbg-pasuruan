@@ -81,3 +81,24 @@ VALUES
 ('kpm-6', 'KB MELATI DESA WONOSARI', 'KB/PAUD', NULL, '69880987', 'JAWA TIMUR · PASURUAN · WONOREJO · WONOSARI', 'Swasta', 'WONOREJO', 'WONOSARI', 'Wonosari Wonorejo Pasuruan', 4, 2, 0, 3, 9, 'Susi yusniasari', '085233112233', 'kbmelati.wonosari@gmail.com', 'Aktif'),
 ('kpm-7', 'TK PKK IV DESA WONOSARI', 'TK/RA', NULL, '20552433', 'JAWA TIMUR · PASURUAN · WONOREJO · WONOSARI', 'Swasta', 'WONOREJO', 'WONOSARI', 'Wonosari Wonorejo Pasuruan', 11, 14, 0, 3, 28, 'NUR AFIFAH, S.Pd', '081399887766', 'tkpkk4wonosari@gmail.com', 'Aktif')
 ON CONFLICT (kode) DO NOTHING;
+
+-- 3. Table: menu_harian
+CREATE TABLE IF NOT EXISTS public.menu_harian (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tanggal DATE NOT NULL,
+    nama_menu VARCHAR(255) NOT NULL,
+    foto_url TEXT,
+    komposisi_gizi TEXT[],
+    kalori VARCHAR(50),
+    target_porsi INT DEFAULT 4850,
+    porsi_kecil INT DEFAULT 0,
+    porsi_besar INT DEFAULT 0,
+    catatan TEXT,
+    status VARCHAR(50) DEFAULT 'Siap Distribusi',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.menu_harian ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public all access on menu_harian" 
+    ON public.menu_harian FOR ALL USING (true) WITH CHECK (true);
+
