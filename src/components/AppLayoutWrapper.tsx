@@ -57,7 +57,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
       title: 'REFERENSI',
       items: [
         { 
-          name: 'SPPG', 
+          name: 'Profil SPPG', 
           icon: <MapPin size={17} />, 
           path: '/sppg',
           active: pathname === '/sppg'
@@ -78,10 +78,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           icon: <UtensilsCrossed size={17} className="text-amber-600" />,
           path: '/kelola-menu-harian',
           active: pathname === '/kelola-menu-harian' || pathname === '/kelola-menu'
-        },
-        { name: 'Penilaian Organoleptik', icon: <ClipboardCheck size={17} />, path: '#', disabled: true },
-        { name: 'Laporan VA Harian SPPG', icon: <FileText size={17} />, path: '#', disabled: true },
-        { name: 'Profil SPPG', icon: <User size={17} />, path: '/sppg', active: pathname === '/sppg' },
+        }
       ]
     }
   ]
