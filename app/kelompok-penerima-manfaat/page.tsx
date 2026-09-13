@@ -19,6 +19,7 @@ import {
   type KelompokPenerimaManfaat,
   type PenerimaManfaatBnba
 } from '@/lib/data-helpers'
+import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 
 export interface DetailKpmItem {
   id: string
@@ -58,6 +59,7 @@ export default function KelompokPenerimaManfaatPage() {
   const [loading, setLoading] = useState(true)
   const [showAlert, setShowAlert] = useState(true)
   const [activeFilter, setActiveFilter] = useState<'Semua' | 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih'>('Semua')
+  const [showPrintModal, setShowPrintModal] = useState(false)
 
   // Toast Notification
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -1465,7 +1467,11 @@ export default function KelompokPenerimaManfaatPage() {
           <button title="Ekspor PDF" className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-md transition cursor-pointer">
             <FileText size={15} />
           </button>
-          <button title="Cetak Data" className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-md transition cursor-pointer">
+          <button 
+            title="Cetak Lembar Kendali Distribusi BGN" 
+            onClick={() => setShowPrintModal(true)}
+            className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-md transition cursor-pointer flex items-center gap-1"
+          >
             <Printer size={15} />
           </button>
         </div>
@@ -2416,6 +2422,12 @@ export default function KelompokPenerimaManfaatPage() {
           </div>
         </div>
       )}
+
+      {/* Official BGN Distribution Control Sheet Print Modal */}
+      <LembarDistribusiPrint
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+      />
     </div>
   )
 }

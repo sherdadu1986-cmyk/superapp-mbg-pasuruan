@@ -11,6 +11,7 @@ import {
   type KelompokPenerimaManfaat, type PenerimaManfaatBnba, type MenuHarianDB 
 } from '@/lib/data-helpers'
 import { supabase } from '@/lib/supabase'
+import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 
 export const dynamic = 'force-dynamic'
 
@@ -216,10 +217,10 @@ export default function BerandaOperasionalPage() {
     }
   }
 
+  const [showPrintModal, setShowPrintModal] = useState(false)
+
   const handlePrintDistribution = () => {
-    if (typeof window !== 'undefined') {
-      window.print()
-    }
+    setShowPrintModal(true)
   }
 
   // Indonesian Date Formatter
@@ -892,6 +893,13 @@ export default function BerandaOperasionalPage() {
           </table>
         </div>
       </div>
+
+      {/* Official BGN Distribution Control Sheet Print Modal */}
+      <LembarDistribusiPrint
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        initialKpmList={kpmList}
+      />
     </div>
   )
 }
