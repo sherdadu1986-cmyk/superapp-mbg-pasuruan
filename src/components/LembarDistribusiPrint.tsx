@@ -287,7 +287,7 @@ export default function LembarDistribusiPrint({
     <div className="fixed inset-0 z-[9999] bg-slate-900/85 backdrop-blur-xs flex flex-col items-center justify-start overflow-y-auto p-2 sm:p-4 print:p-0 print:bg-white print:static print:inset-auto">
       
       {/* ─── MODAL TOOLBAR (HIDDEN IN PRINT) ─── */}
-      <div className="no-print w-full max-w-7xl bg-[#0f2e5a] text-white rounded-t-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg border-b border-blue-900">
+      <div className="no-print print:hidden w-full max-w-7xl bg-[#0f2e5a] text-white rounded-t-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg border-b border-blue-900">
         <div className="flex items-center gap-2.5">
           <div className="p-2 bg-blue-600 rounded-lg text-white">
             <Printer size={18} />
@@ -333,29 +333,55 @@ export default function LembarDistribusiPrint({
       </div>
 
       {/* ─── OFFICIAL EXCLUSIVE DISTRIBUTION PRINT DOCUMENT CONTAINER ─── */}
-      <div className="w-full max-w-7xl bg-white text-slate-900 rounded-b-xl shadow-2xl p-2.5 sm:p-3.5 print:p-0 print:shadow-none print:w-full print:max-w-none print:rounded-none print:m-0">
+      <div 
+        id="print-lembar-distribusi"
+        className="w-full max-w-7xl bg-white text-slate-900 rounded-b-xl shadow-2xl p-2.5 sm:p-3.5 print:p-0 print:shadow-none print:w-full print:max-w-none print:rounded-none print:m-0"
+      >
         
         {/* CSS @media print layout tweaks for perfect 1-page A4 landscape print */}
         <style jsx global>{`
           @media print {
-            body {
+            /* Sembunyikan seluruh body dan elemen aplikasi beranda / background */
+            body * {
+              visibility: hidden !important;
+            }
+
+            /* Tampilkan HANYA kontainer lembar distribusi dan isinya */
+            #print-lembar-distribusi,
+            #print-lembar-distribusi * {
+              visibility: visible !important;
+            }
+
+            /* Posisikan lembar distribusi pas di pojok kiri atas kertas */
+            #print-lembar-distribusi {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              margin: 0 !important;
+              padding: 2mm !important;
               background: #ffffff !important;
-              color: #000000 !important;
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
+              z-index: 99999 !important;
             }
-            .no-print {
+
+            /* Sembunyikan toolbar modal dan elemen ber-class no-print */
+            .no-print,
+            .no-print * {
               display: none !important;
+              visibility: hidden !important;
             }
+
+            /* Konfigurasi orientasi A4 Landscape pas 1 lembar */
             @page {
               size: A4 landscape;
               margin: 4mm 5mm 4mm 5mm;
             }
-            html, body {
-              width: 100%;
-              height: auto;
-              overflow: visible !important;
+
+            /* Pastikan warna latar navy header dan border tabel tetap tercetak */
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
           }
         `}</style>
