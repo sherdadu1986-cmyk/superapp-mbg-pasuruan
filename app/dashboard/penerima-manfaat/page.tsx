@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   Building2, Users, CheckCircle2, RotateCw, GraduationCap, Heart, ArrowRight,
   Clock, Utensils, UtensilsCrossed, Calendar, Edit3, Plus, Printer,
-  FileCheck, ShieldCheck, Database, Award, Activity
+  FileCheck, ShieldCheck, Database, Award, Activity, Truck, MapPin, Sparkles, Package
 } from 'lucide-react'
 import {
   fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB,
@@ -419,6 +419,79 @@ export default function BerandaOperasionalPage() {
     get3BRowStats('busui', 'Ibu Menyusui (Busui)', 'busui'),
   ]
 
+  // ─── Status Jadwal & Rute Distribusi Harian SPPG ─────────────────────────────────
+  const gelombangStats = React.useMemo(() => {
+    // Gelombang 1: 06.00 - 07.00 WIB (Sasaran 3B - Balita, Bumil, Busui di Posyandu)
+    const g1Kpms = kpmList.filter(i => {
+      const k = (i.kategori || '').toUpperCase()
+      const sub = (i.sub_kategori || '').toLowerCase()
+      return k.includes('POSYANDU') || k.includes('3B') || sub.includes('balita') || sub.includes('bumil') || sub.includes('busui')
+    })
+    const g1Titik = g1Kpms.length
+    const g1Porsi = g1Kpms.reduce((acc, item) => acc + (item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0)), 0)
+
+    // Gelombang 2: 08.30 - 09.30 WIB (Jenjang KB, TK, RA, PAUD, dan SD Porsi Kecil & Besar)
+    const g2Kpms = kpmList.filter(i => {
+      const k = (i.kategori || '').toUpperCase()
+      return k.includes('KB') || k.includes('TK') || k.includes('RA') || k.includes('PAUD') || k.includes('SD') || k.includes('MI')
+    })
+    const g2Titik = g2Kpms.length
+    const g2Porsi = g2Kpms.reduce((acc, item) => acc + (item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0)), 0)
+
+    // Gelombang 3: 09.30 - 10.30 WIB (Jenjang SMP & MTs)
+    const g3Kpms = kpmList.filter(i => {
+      const k = (i.kategori || '').toUpperCase()
+      return k.includes('SMP') || k.includes('MTS')
+    })
+    const g3Titik = g3Kpms.length
+    const g3Porsi = g3Kpms.reduce((acc, item) => acc + (item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0)), 0)
+
+    return [
+      {
+        id: 'g1',
+        gelombang: 'Gelombang 1',
+        waktu: '06.00 - 07.00 WIB',
+        sasaran: 'Sasaran 3B (Balita, Bumil, Busui di 5 Posyandu)',
+        rincian: 'Diberangkatkan subuh untuk pemenuhan gizi balita & ibu hamil/menyusui posyandu.',
+        armada: 'Motor Roda 3 & Mobil Logistik Pasuruan',
+        rute: 'Rute Posyandu Mawar, Melati, Anggrek, Dahlia, Kamboja',
+        titik: g1Titik,
+        porsi: g1Porsi,
+        status: 'Siap Berangkat',
+        statusColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+        badgeBg: 'bg-pink-50 text-pink-700 border-pink-200'
+      },
+      {
+        id: 'g2',
+        gelombang: 'Gelombang 2',
+        waktu: '08.30 - 09.30 WIB',
+        sasaran: 'Jenjang KB, TK, RA, PAUD, dan SD (Porsi Kecil & Porsi Besar)',
+        rincian: 'Distribusi utama waktu makan pagi / istirahat siswa pendidikan dasar.',
+        armada: 'Armada L300 Box BGN Pasuruan',
+        rute: 'Rute Sekolah Wonorejo I - V, SDN Wonosari, TK PKK, KB Melati',
+        titik: g2Titik,
+        porsi: g2Porsi,
+        status: 'Sesuai Jadwal',
+        statusColor: 'bg-sky-50 text-sky-800 border-sky-200',
+        badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+      },
+      {
+        id: 'g3',
+        gelombang: 'Gelombang 3',
+        waktu: '09.30 - 10.30 WIB',
+        sasaran: 'Jenjang SMP & MTs',
+        rincian: 'Distribusi makanan bergizi waktu istirahat siang siswa SMP & MTs.',
+        armada: 'Armada Kendaraan Operasional BGN',
+        rute: 'Rute SMPN 1 Wonorejo & SMPN 2 Wonorejo',
+        titik: g3Titik,
+        porsi: g3Porsi,
+        status: 'Sesuai Jadwal',
+        statusColor: 'bg-sky-50 text-sky-800 border-sky-200',
+        badgeBg: 'bg-purple-50 text-purple-700 border-purple-200'
+      }
+    ]
+  }, [kpmList])
+
   // ─── Real-Time BNBA Fulfillment Recap Dataset ─────────────────────────────
   const sortedBnbaRecapList = React.useMemo(() => {
     const mapped = kpmList.map(kpm => {
@@ -639,12 +712,12 @@ export default function BerandaOperasionalPage() {
               </div>
 
               {menuDb.foto_url && (
-                <div className="relative aspect-video w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs group">
+                <div className="relative aspect-[1080/1350] max-w-sm mx-auto w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs group">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={menuDb.foto_url}
                     alt={menuDb.nama_menu || 'Foto Menu'}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                    className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition duration-300"
                   />
                   {menuDb.kalori && (
                     <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
@@ -930,172 +1003,105 @@ export default function BerandaOperasionalPage() {
         </div>
       </div>
 
-      {/* 5. Real-Time BNBA Fulfillment Recap Widget (Menggantikan Log Aktivitas Dummy) */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 hover:shadow-md transition duration-200">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+      {/* 5. Status Jadwal & Rute Distribusi Harian SPPG (Pengganti Widget BNBA) */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-5 hover:shadow-md transition duration-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
-            <h3 className="font-bold text-slate-900 text-sm sm:text-base tracking-tight flex items-center gap-2">
-              <Activity size={18} className="text-slate-800" />
-              <span>Monitoring & Rekapitulasi Kelengkapan Data BNBA</span>
+            <div className="flex items-center gap-2">
+              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider flex items-center gap-1">
+                <Sparkles size={11} /> Standard Operational Procedure
+              </span>
+              <span className="text-xs text-slate-400 font-medium">| SPPG Pasuruan</span>
+            </div>
+            <h3 className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight flex items-center gap-2 mt-1">
+              <Truck size={20} className="text-emerald-700" />
+              <span>Status Jadwal & Rute Distribusi Harian SPPG</span>
             </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Daftar sekolah dan sasaran 3B yang belum melengkapi atau masih memiliki kekurangan data BNBA riil.
+            <p className="text-xs text-slate-500 mt-0.5">
+              Jadwal keberangkatan armada, alokasi porsi per gelombang, dan titik rute penerima manfaat MBG.
             </p>
           </div>
 
-          {/* Quick Filter Pills */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setBnbaFilter('perlu')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'perlu' ? 'bg-slate-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              <span>Semua Perlu Tindakan</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'perlu' ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'}`}>
-                {sortedBnbaRecapList.filter(i => i.terisi < i.target).length}
+          <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shrink-0">
+            <div className="text-right">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Operasional</span>
+              <span className="text-sm font-black text-slate-900 font-mono">
+                {gelombangStats.reduce((a, b) => a + b.porsi, 0).toLocaleString('id-ID')} <span className="text-[10px] font-semibold text-slate-500">Porsi</span>
               </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setBnbaFilter('belum')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'belum' ? 'bg-rose-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              <span>Belum Ada Detail (0)</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'belum' ? 'bg-white text-rose-700' : 'bg-slate-800 text-white'}`}>
-                {sortedBnbaRecapList.filter(i => i.terisi === 0).length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setBnbaFilter('kurang')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'kurang' ? 'bg-amber-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              <span>Kurang dari Kuota</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'kurang' ? 'bg-white text-amber-800' : 'bg-slate-800 text-white'}`}>
-                {sortedBnbaRecapList.filter(i => i.terisi > 0 && i.terisi < i.target).length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setBnbaFilter('lengkap')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'lengkap' ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              <span>Sudah Lengkap</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'lengkap' ? 'bg-white text-emerald-800' : 'bg-slate-800 text-white'}`}>
-                {sortedBnbaRecapList.filter(i => i.terisi >= i.target).length}
-              </span>
-            </button>
+            </div>
+            <div className="p-2 bg-slate-900 text-white rounded-lg">
+              <Package size={18} />
+            </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                <th className="py-2.5 px-3 text-center w-10">#</th>
-                <th className="py-2.5 px-3 min-w-[200px]">NAMA LEMBAGA / KPM & KATEGORI</th>
-                <th className="py-2.5 px-3 text-right min-w-[110px]">TARGET ALOKASI</th>
-                <th className="py-2.5 px-3 text-right min-w-[110px]">REALISASI BNBA</th>
-                <th className="py-2.5 px-3 min-w-[140px]">PROGRESS BNBA</th>
-                <th className="py-2.5 px-3 text-right min-w-[100px]">SELISIH</th>
-                <th className="py-2.5 px-3 text-center min-w-[130px]">STATUS</th>
-                <th className="py-2.5 px-3 text-center min-w-[110px]">AKSI</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-              {filteredBnbaRecap.length > 0 ? (
-                filteredBnbaRecap.map((row, idx) => {
-                  const isZero = row.terisi === 0
-                  const isShortage = row.terisi < row.target
-                  const isOver = row.terisi > row.target
+        {/* 3 Wave Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {gelombangStats.map((item) => (
+            <div
+              key={item.id}
+              className="bg-gradient-to-b from-slate-50/80 to-white rounded-xl border border-slate-200/90 p-4 space-y-3 shadow-2xs hover:border-slate-300 hover:shadow-md transition duration-200 flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                {/* Header Card: Gelombang & Status */}
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-md border ${item.badgeBg}`}>
+                    {item.gelombang}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${item.statusColor}`}>
+                    ● {item.status}
+                  </span>
+                </div>
 
-                  return (
-                    <tr key={row.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3 text-center font-bold text-slate-400 font-mono">
-                        {idx + 1}
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2">
-                          <div>
-                            <span className="font-bold text-slate-900 block">{row.nama}</span>
-                            <span className="text-[10px] text-slate-500 font-mono block">
-                              [{row.identitas_npsn_tmp || row.kode || row.id}]
-                            </span>
-                          </div>
-                          <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-700 rounded border border-slate-200 shrink-0">
-                            {row.kategori}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-right font-bold text-slate-900 font-mono">
-                        {row.target.toLocaleString('id-ID')} Penerima Manfaat
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold">
-                        <span className={isZero ? 'text-rose-600' : isShortage ? 'text-amber-600' : 'text-emerald-700'}>
-                          {row.terisi.toLocaleString('id-ID')} Penerima Manfaat
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center text-[10px] font-bold">
-                            <span className="text-slate-500 font-mono">{isZero ? 0 : isShortage ? row.pct : 100}%</span>
-                          </div>
-                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${isZero ? 'bg-slate-300' : isShortage ? 'bg-amber-500' : 'bg-emerald-600'}`}
-                              style={{ width: `${isZero ? 0 : isShortage ? Math.min(row.pct, 100) : 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold">
-                        {isZero ? (
-                          <span className="text-rose-600 font-extrabold">-{row.target} Penerima Manfaat</span>
-                        ) : isShortage ? (
-                          <span className="text-amber-600 font-bold">-{row.target - row.terisi} Penerima Manfaat</span>
-                        ) : (
-                          <span className="text-emerald-600 font-bold">Terpenuhi</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {isZero ? (
-                          <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">
-                            Belum Diisi
-                          </span>
-                        ) : isShortage ? (
-                          <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">
-                            Kurang {row.target - row.terisi} Penerima Manfaat
-                          </span>
-                        ) : (
-                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">
-                            ✓ Lengkap
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <Link
-                          href="/kelompok-penerima-manfaat"
-                          className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded transition cursor-pointer shadow-2xs"
-                        >
-                          <span>Isi BNBA</span>
-                          <ArrowRight size={11} />
-                        </Link>
-                      </td>
-                    </tr>
-                  )
-                })
-              ) : (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
-                    Tidak ada data kelompok penerima manfaat yang sesuai dengan filter ini.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                {/* Jam Waktu & Target Sasaran */}
+                <div>
+                  <div className="flex items-center gap-1.5 text-slate-900 font-black text-lg tracking-tight font-mono">
+                    <Clock size={16} className="text-slate-500" />
+                    <span>{item.waktu}</span>
+                  </div>
+                  <h4 className="font-bold text-xs text-slate-800 mt-1 leading-snug">
+                    {item.sasaran}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    {item.rincian}
+                  </p>
+                </div>
+
+                {/* Box Ringkasan Porsi & Titik Lokasi */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-2 shadow-2xs">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500 font-medium">Total Porsi:</span>
+                    <span className="font-mono font-black text-slate-900 text-sm">
+                      {item.porsi.toLocaleString('id-ID')} <span className="text-[10px] font-normal text-slate-500">Porsi</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-100">
+                    <span className="text-slate-500 font-medium">Titik Tujuan:</span>
+                    <span className="font-bold text-slate-800 font-mono">
+                      {item.titik} <span className="text-[10px] font-normal text-slate-500">Lokasi KPM</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Armada & Rute Info */}
+                <div className="space-y-1.5 text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 font-medium">
+                  <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
+                    <Truck size={13} className="text-slate-500 shrink-0" />
+                    <span className="truncate">{item.armada}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-500">
+                    <MapPin size={13} className="text-slate-400 shrink-0" />
+                    <span className="truncate">{item.rute}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                <span>Standardized BGN Wave</span>
+                <span className="text-emerald-700 font-bold">✓ Active Route</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

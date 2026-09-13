@@ -530,9 +530,9 @@ export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
       .from('menu_harian')
       .select('*')
       .order('tanggal', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1)
-      .single()
-    if (!error && data) return data
+    if (!error && data && data.length > 0) return data[0]
   } catch {
     // fallback
   }
@@ -546,6 +546,7 @@ export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {
       .from('menu_harian')
       .select('*')
       .order('tanggal', { ascending: false })
+      .order('created_at', { ascending: false })
     if (error || !data) return []
     return data
   } catch {

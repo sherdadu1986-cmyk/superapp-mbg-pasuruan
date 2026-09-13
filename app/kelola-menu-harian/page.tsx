@@ -115,31 +115,46 @@ export default function KelolaMenuHarianPage() {
       // 3. Nama file unik berbasis timestamp agar tidak bentrok
       const fileName = `menu_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt || 'png'}`
 
-      // 4. Unggah ke Supabase Storage (Bucket public 'menu-images')
-      const { data: uploadData, error: uploadError } = await supabase
-        .storage
-        .from('menu-images')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
+      // 4. Unggah ke Supabase Storage (Bucket public 'menu_photos' atau 'menu-images')
+      let publicUrl = ''
+      let uploadError: any = null
 
-      if (uploadError) {
-        console.warn('Storage upload notice:', uploadError.message)
-        // Fallback jika storage bucket belum disetting di Supabase console
+      // Try 'menu_photos' bucket first
+      const { data: upload1, error: err1 } = await supabase
+        .storage
+        .from('menu_photos')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true })
+
+      if (!err1 && upload1) {
+        const { data: urlData } = supabase.storage.from('menu_photos').getPublicUrl(fileName)
+        publicUrl = urlData?.publicUrl || ''
+      } else {
+        // Fallback to 'menu-images' bucket
+        const { data: upload2, error: err2 } = await supabase
+          .storage
+          .from('menu-images')
+          .upload(fileName, file, { cacheControl: '3600', upsert: true })
+
+        if (!err2 && upload2) {
+          const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(fileName)
+          publicUrl = urlData?.publicUrl || ''
+        } else {
+          uploadError = err1 || err2
+        }
+      }
+
+      if (publicUrl) {
+        setFotoUrl(publicUrl)
+        triggerToast('Foto menu berhasil diunggah ke Supabase Storage!', 'success')
+      } else {
+        console.warn('Storage upload notice:', uploadError?.message || 'Fallback to base64')
         const reader = new FileReader()
         reader.onloadend = () => {
           const base64 = reader.result as string
           setFotoUrl(base64)
-          triggerToast('Foto dimuat via lokal fallback. Klik simpan untuk memperbarui.', 'info')
+          triggerToast('Foto dimuat via lokal fallback (Base64). Klik simpan untuk memperbarui.', 'info')
         }
         reader.readAsDataURL(file)
-      } else {
-        const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(fileName)
-        if (urlData?.publicUrl) {
-          setFotoUrl(urlData.publicUrl)
-          triggerToast('Foto menu berhasil diunggah ke Supabase Storage!', 'success')
-        }
       }
     } catch (err: any) {
       console.error('Error uploading image:', err)
@@ -421,17 +436,17 @@ export default function KelolaMenuHarianPage() {
               Foto Preview Makanan Hari Ini
             </label>
             
-            <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-gray-300 bg-gray-50 shadow-2xs flex items-center justify-center group">
+            <div className="relative aspect-[1080/1350] max-w-xs sm:max-w-sm mx-auto w-full rounded-xl overflow-hidden border border-gray-300 bg-gray-50 shadow-2xs flex items-center justify-center group">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={fotoUrl || '/menu-today.png'}
                 alt="Preview Menu Makanan"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover rounded-xl"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/menu-today.png'
                 }}
               />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-xl">
                 <span className="text-xs text-white font-semibold flex items-center gap-1.5">
                   <ImageIcon size={16} /> Ganti Foto Makanan
                 </span>
@@ -470,7 +485,7 @@ export default function KelolaMenuHarianPage() {
               </div>
             </div>
             <p className="text-[11px] text-gray-400">
-              Maksimal 3MB. Disarankan rasio foto 16:9 dengan pencahayaan terang.
+              Maksimal 3MB. Rasio foto proporsional 4:5 / 1350x1080 (1080x1350) dengan tampilan jernih.
             </p>
           </div>
         </div>
@@ -586,7 +601,7 @@ export default function KelolaMenuHarianPage() {
                     <td className="py-3 px-3 text-center">
                       <button
                         onClick={() => setPreviewModalMenu(item)}
-                        className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-200 shadow-2xs group inline-block cursor-pointer"
+                        className="relative w-12 h-[60px] aspect-[1080/1350] rounded-xl overflow-hidden border border-gray-200 shadow-2xs group inline-block cursor-pointer shrink-0"
                         title="Klik untuk zoom foto"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -680,12 +695,12 @@ export default function KelolaMenuHarianPage() {
             </div>
 
             <div className="p-4 space-y-4">
-              <div className="relative aspect-video w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-100 shadow-2xs">
+              <div className="relative aspect-[1080/1350] max-h-[420px] max-w-sm mx-auto w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-100 shadow-2xs">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={previewModalMenu.foto_url || '/menu-today.png'}
                   alt={previewModalMenu.nama_menu}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-xl"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = '/menu-today.png'
                   }}
