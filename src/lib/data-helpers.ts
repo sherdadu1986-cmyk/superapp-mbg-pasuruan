@@ -563,61 +563,114 @@ export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {
 export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianDB> {
   const isValidUuid = (id?: string) => Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
 
-  const insertRecord: Record<string, any> = {
-    tanggal: menu.tanggal,
-    nama_menu: menu.nama_menu,
-    foto_url: menu.foto_url || null,
-    komposisi_gizi: menu.komposisi_gizi || [],
-    kalori: menu.kalori || null,
-    target_porsi: menu.target_porsi || 4850,
-    status: menu.status || 'Siap Distribusi',
-    catatan: menu.catatan || null
+  const cleanNama = menu.nama_menu || (menu as any).nama || ''
+  const cleanTanggal = menu.tanggal || (menu as any).tanggal_berlaku || new Date().toISOString().split('T')[0]
+  const cleanKalori = menu.kalori || (menu as any).estimasi_kalori || (menu as any).estimasiKalori || '~650 kkal'
+  const cleanPorsi = Number(menu.target_porsi || (menu as any).porsi || (menu as any).targetPorsi) || 3196
+  const cleanStatus = menu.status || (menu as any).status_distribusi || (menu as any).statusDistribusi || 'Siap Distribusi'
+  const cleanTags = menu.komposisi_gizi || (menu as any).tags || (menu as any).selectedTags || []
+  const cleanCatatan = menu.catatan || ''
+  const cleanFoto = menu.foto_url || (menu as any).foto || (menu as any).publicUploadedUrl || ''
+
+  // Standardized Dual-Key Payload Object
+  const menuPayload: Record<string, any> = {
+    nama_menu: cleanNama,
+    nama: cleanNama,
+    tanggal: cleanTanggal,
+    tanggal_berlaku: cleanTanggal,
+    kalori: cleanKalori,
+    estimasi_kalori: cleanKalori,
+    porsi: cleanPorsi,
+    target_porsi: cleanPorsi,
+    status: cleanStatus,
+    status_distribusi: cleanStatus,
+    komposisi_gizi: cleanTags,
+    tags: cleanTags,
+    catatan: cleanCatatan,
+    foto_url: cleanFoto,
+    foto: cleanFoto
   }
 
   if (isValidUuid(menu.id)) {
-    insertRecord.id = menu.id
+    menuPayload.id = menu.id
   } else if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    insertRecord.id = crypto.randomUUID()
+    menuPayload.id = crypto.randomUUID()
   }
 
   const newRecord: MenuHarianDB = {
-    id: insertRecord.id || `menu-${Date.now()}`,
-    ...insertRecord as any,
+    id: menuPayload.id || `menu-${Date.now()}`,
+    nama_menu: cleanNama,
+    tanggal: cleanTanggal,
+    kalori: cleanKalori,
+    target_porsi: cleanPorsi,
+    status: cleanStatus,
+    komposisi_gizi: cleanTags,
+    catatan: cleanCatatan,
+    foto_url: cleanFoto,
     created_at: menu.created_at || new Date().toISOString()
   }
 
   if (typeof window !== 'undefined') {
     const localFormat = {
-      namaMenu: menu.nama_menu,
-      tanggal: menu.tanggal,
-      targetPorsi: `${(menu.target_porsi || 4850).toLocaleString('id-ID')} Porsi`,
-      kalori: menu.kalori,
-      status: menu.status,
-      tags: menu.komposisi_gizi || [],
-      fotoUrl: menu.foto_url
+      namaMenu: cleanNama,
+      tanggal: cleanTanggal,
+      targetPorsi: `${cleanPorsi.toLocaleString('id-ID')} Porsi`,
+      kalori: cleanKalori,
+      status: cleanStatus,
+      tags: cleanTags,
+      fotoUrl: cleanFoto
     }
     localStorage.setItem('sppg_menu_hari_ini', JSON.stringify(localFormat))
     
     // Save to history list in localStorage
     const currentHistory = await fetchMenuHistoryDB()
-    const updatedHistory = [newRecord, ...currentHistory.filter(h => h.id !== newRecord.id && h.tanggal !== menu.tanggal)]
+    const updatedHistory = [newRecord, ...currentHistory.filter(h => h.id !== newRecord.id && h.tanggal !== cleanTanggal)]
     localStorage.setItem('sppg_menu_history_list', JSON.stringify(updatedHistory))
 
     window.dispatchEvent(new Event('storage'))
   }
 
-  const { data, error } = await supabase
-    .from('menu_harian')
-    .insert(insertRecord)
-    .select()
-    .single()
+  // Resilient Supabase Insert with automatic missing-column stripping retry loop
+  let currentPayload = { ...menuPayload }
+  let lastError: any = null
 
-  if (error) {
-    console.error('Supabase menu_harian insert error:', error.message, error)
-    throw new Error(`Gagal menyimpan ke Supabase: ${error.message} (${error.code || 'DB_ERROR'})`)
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { data, error } = await supabase
+      .from('menu_harian')
+      .insert([currentPayload])
+      .select()
+
+    if (!error && data && data.length > 0) {
+      return data[0]
+    }
+
+    if (!error && data) {
+      return newRecord
+    }
+
+    lastError = error
+    console.warn(`Supabase menu_harian insert attempt ${attempt + 1} notice:`, error.message)
+
+    // Check if error is missing column error: "Could not find the 'xyz' column of 'menu_harian'"
+    const match = error.message.match(/Could not find the '([^']+)' column/i) ||
+                  error.message.match(/column "([^"]+)" of relation "menu_harian" does not exist/i) ||
+                  error.message.match(/column ([^\s]+) does not exist/i)
+
+    if (match && match[1]) {
+      const badCol = match[1]
+      console.log(`Column '${badCol}' does not exist on menu_harian table. Stripping '${badCol}' and retrying...`)
+      delete currentPayload[badCol]
+    } else {
+      break
+    }
   }
 
-  return data || newRecord
+  if (lastError) {
+    console.error('Final Supabase menu_harian insert error:', lastError.message, lastError)
+    throw new Error(`Gagal menyimpan ke Supabase: ${lastError.message} (${lastError.code || 'DB_ERROR'})`)
+  }
+
+  return newRecord
 }
 
 // ─── BNBA (By Name By Address) Types & Helpers ───────────────────────

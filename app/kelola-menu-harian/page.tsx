@@ -204,18 +204,25 @@ export default function KelolaMenuHarianPage() {
     setSaving(true)
 
     try {
-      const payload: MenuHarianDB = {
-        tanggal: tanggal.trim(),
+      const menuPayload: any = {
         nama_menu: namaMenu.trim(),
-        foto_url: fotoUrl || '',
-        komposisi_gizi: tags || [],
+        nama: namaMenu.trim(),
+        tanggal: tanggal.trim(),
+        tanggal_berlaku: tanggal.trim(),
         kalori: kalori || '~650 kkal',
-        target_porsi: Number(targetPorsi) || 4850,
+        estimasi_kalori: kalori || '~650 kkal',
+        porsi: Number(targetPorsi) || 3196,
+        target_porsi: Number(targetPorsi) || 3196,
         status: status || 'Siap Distribusi',
-        catatan: catatanMenu || ''
+        status_distribusi: status || 'Siap Distribusi',
+        komposisi_gizi: tags || [],
+        tags: tags || [],
+        catatan: catatanMenu || '',
+        foto_url: fotoUrl || '',
+        foto: fotoUrl || ''
       }
 
-      await saveMenuHariIniDB(payload)
+      await saveMenuHariIniDB(menuPayload)
       setSavedSuccess(true)
       triggerToast('Menu berhasil dipublikasikan!', 'success')
 
