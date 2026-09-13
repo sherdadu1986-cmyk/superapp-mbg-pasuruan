@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { 
   Search, RotateCw, Plus, X, Check, Building2, Info, Eye, Edit, Trash2, 
   Bookmark, FileSpreadsheet, FileText, Printer, ChevronLeft, 
-  ChevronRight, UserPlus, ShieldAlert, HeartHandshake, FileDown, Upload
+  ChevronRight, UserPlus, ShieldAlert, HeartHandshake, FileDown, Upload,
+  ChevronUp, ChevronDown
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +23,7 @@ import {
 export interface DetailKpmItem {
   id: string
   no: number
+  urutan?: number
   jenis: string
   nama: string
   npsnReg: string
@@ -191,7 +193,7 @@ export default function KelompokPenerimaManfaatPage() {
     setLoading(true)
     try {
       const [supabaseRes, bnbaRes] = await Promise.all([
-        supabase.from('kelompok_penerima_manfaat').select('*').order('created_at', { ascending: true }),
+        supabase.from('kelompok_penerima_manfaat').select('*').order('urutan', { ascending: true }),
         fetchBnbaList()
       ])
 
@@ -204,10 +206,17 @@ export default function KelompokPenerimaManfaatPage() {
 
       // Map Supabase rows to DetailKpmItem format
       const mappedItems: DetailKpmItem[] = (data || []).map((kpm: any, idx: number) => {
-        const is3B = kpm.kategori === 'POSYANDU_3B' || kpm.kategori === 'POSYANDU 3B' || kpm.kategori === 'POSYANDU'
-        const jenisLabel = is3B 
-          ? (kpm.sub_kategori === 'Bumil' ? 'Ibu Hamil' : kpm.sub_kategori === 'Busui' ? 'Ibu Menyusui' : 'Bayi Dibawah Lima Tahun')
-          : kpm.kategori
+        const is3B = kpm.kategori === 'POSYANDU_3B' || kpm.kategori === 'POSYANDU 3B' || kpm.kategori === 'POSYANDU' || kpm.kategori === '3B (balita,busui,bumil)'
+        let jenisLabel = kpm.kategori
+        if (is3B) {
+          jenisLabel = kpm.sub_kategori === 'Bumil' 
+            ? 'Ibu Hamil' 
+            : kpm.sub_kategori === 'Busui' 
+            ? 'Ibu Menyusui' 
+            : '3B (balita,busui,bumil)'
+        } else if (kpm.kategori === 'SMP' || kpm.kategori === 'SMP/MTS' || kpm.kategori === 'SMP_MTS' || kpm.kategori === 'SMP / MTs') {
+          jenisLabel = 'SMP / MTs'
+        }
 
         const bnbaCount = (bnbaRes || []).filter(b => b.kelompok_id === kpm.kode || b.kelompok_id === kpm.id).length
         const totalTarget = kpm.jumlah_penerima || (kpm.target_pria || 0) + (kpm.target_wanita || 0) + (kpm.target_guru || 0) + (kpm.target_tendik || 0) || 100
@@ -244,6 +253,7 @@ export default function KelompokPenerimaManfaatPage() {
         return {
           id: kpm.id || kpm.kode || `kpm-${idx + 1}`,
           no: idx + 1,
+          urutan: kpm.urutan ?? (idx + 1),
           jenis: jenisLabel,
           nama: kpm.nama,
           npsnReg: kpm.identitas_npsn_tmp || kpm.kode,
@@ -407,6 +417,74 @@ export default function KelompokPenerimaManfaatPage() {
     })
   }, [fullDataList, searchQuery, activeFilter])
 
+  // Reorder row position handler (Swaps urutan property & updates Supabase)
+  const [isReordering, setIsReordering] = useState(false)
+
+  const handleMoveRow = async (currentIndex: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    if (targetIndex < 0 || targetIndex >= filteredRows.length) return
+
+    const itemA = filteredRows[currentIndex]
+    const itemB = filteredRows[targetIndex]
+
+    const indexInKpmA = kpmItems.findIndex(i => i.id === itemA.id)
+    const indexInKpmB = kpmItems.findIndex(i => i.id === itemB.id)
+
+    if (indexInKpmA === -1 || indexInKpmB === -1) return
+
+    setIsReordering(true)
+
+    let urutanA = itemA.urutan ?? (indexInKpmA + 1)
+    let urutanB = itemB.urutan ?? (indexInKpmB + 1)
+
+    if (urutanA === urutanB) {
+      urutanA = indexInKpmA + 1
+      urutanB = indexInKpmB + 1
+    }
+
+    const newUrutanA = urutanB
+    const newUrutanB = urutanA
+
+    // Optimistically update local state for instant UI response
+    const updatedKpmItems = [...kpmItems]
+    updatedKpmItems[indexInKpmA] = { ...itemA, urutan: newUrutanA }
+    updatedKpmItems[indexInKpmB] = { ...itemB, urutan: newUrutanB }
+
+    updatedKpmItems.sort((a, b) => (a.urutan ?? 0) - (b.urutan ?? 0))
+    setKpmItems(updatedKpmItems)
+
+    const buildUpdateQuery = (item: DetailKpmItem, targetUrutan: number) => {
+      const targetId = item.id
+      let query = supabase.from('kelompok_penerima_manfaat').update({ urutan: targetUrutan })
+      if (targetId.length > 20 && targetId.includes('-') && !targetId.startsWith('kpm-') && !targetId.startsWith('K')) {
+        return query.eq('id', targetId)
+      } else {
+        return query.eq('kode', item.npsnReg || item.id)
+      }
+    }
+
+    try {
+      const [resA, resB] = await Promise.all([
+        buildUpdateQuery(itemA, newUrutanA),
+        buildUpdateQuery(itemB, newUrutanB)
+      ])
+
+      if (resA.error || resB.error) {
+        console.error('Error updating urutan in Supabase:', resA.error || resB.error)
+        triggerToast('Gagal memperbarui urutan di Supabase')
+        await loadData()
+      } else {
+        triggerToast('Urutan baris KPM berhasil diubah')
+      }
+    } catch (err) {
+      console.error('Exception updating urutan:', err)
+      triggerToast('Terjadi kesalahan saat memindahkan baris')
+      await loadData()
+    } finally {
+      setIsReordering(false)
+    }
+  }
+
   // Open Add Modal with Default Reset Values
   const handleOpenAddModal = () => {
     setEditingItem(null)
@@ -448,9 +526,10 @@ export default function KelompokPenerimaManfaatPage() {
   const handleEditClick = (item: DetailKpmItem) => {
     setEditingItem(item)
     setFormNama(item.nama)
-    const is3BGroup = item.jenis.includes('Ibu') || item.jenis.includes('Bayi') || item.jenis.includes('POSYANDU')
+    const is3BGroup = item.jenis.includes('Ibu') || item.jenis.includes('Bayi') || item.jenis.includes('3B') || item.jenis.includes('POSYANDU')
     const isSdGroup = item.jenis.toUpperCase().includes('SD') || item.jenis.toUpperCase().includes('MI')
-    setFormKategori(is3BGroup ? 'POSYANDU 3B' : (isSdGroup ? 'SD' : item.jenis))
+    const isSmpGroup = item.jenis.toUpperCase().includes('SMP') || item.jenis.toUpperCase().includes('MTS')
+    setFormKategori(is3BGroup ? 'POSYANDU 3B' : (isSdGroup ? 'SD' : isSmpGroup ? 'SMP' : item.jenis))
     setFormSubKategori(item.jenis.includes('Hamil') ? 'Bumil' : item.jenis.includes('Menyusui') ? 'Busui' : 'Balita')
     setFormIdentitas(item.npsnReg)
     setFormKepemilikan(item.kepemilikan)
@@ -1422,8 +1501,32 @@ export default function KelompokPenerimaManfaatPage() {
               {filteredRows.length > 0 ? (
                 filteredRows.slice(0, perPage).map((row, idx) => (
                   <tr key={row.id} className={`hover:bg-slate-50 transition duration-150 whitespace-nowrap ${row.status === 'Non-Aktif' ? 'opacity-60 bg-slate-50' : ''}`}>
-                    <td className="py-3 px-3 text-center font-bold text-slate-400">
-                      {idx + 1}
+                    <td className="py-2.5 px-2 text-center font-bold text-slate-700">
+                      <div className="flex items-center justify-center gap-1">
+                        <div className="flex flex-col items-center justify-center -my-1">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveRow(idx, 'up')}
+                            disabled={idx === 0 || isReordering}
+                            title="Pindah urutan ke atas (▲)"
+                            className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer disabled:cursor-not-allowed transition hover:bg-slate-200 rounded"
+                          >
+                            <ChevronUp size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveRow(idx, 'down')}
+                            disabled={idx === filteredRows.length - 1 || isReordering}
+                            title="Pindah urutan ke bawah (▼)"
+                            className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer disabled:cursor-not-allowed transition hover:bg-slate-200 rounded"
+                          >
+                            <ChevronDown size={13} />
+                          </button>
+                        </div>
+                        <span className="w-5 text-center text-xs text-slate-800 font-mono font-bold">
+                          {idx + 1}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Flat Minimal Action Bar */}
@@ -1655,7 +1758,7 @@ export default function KelompokPenerimaManfaatPage() {
                     <option value="SD">SD / MI</option>
                     <option value="SMP">SMP / MTs</option>
                     <option value="SMA">SMA / SMK / MA</option>
-                    <option value="POSYANDU 3B">POSYANDU 3B / KOMUNITAS</option>
+                    <option value="POSYANDU 3B">3B (balita,busui,bumil)</option>
                   </select>
                 </div>
               </div>

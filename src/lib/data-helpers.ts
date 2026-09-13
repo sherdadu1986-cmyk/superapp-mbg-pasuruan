@@ -387,6 +387,7 @@ export interface SppgProfile {
 
 export interface KelompokPenerimaManfaat {
   id?: string
+  urutan?: number
   nama: string
   kategori: string // 'KB/PAUD' | 'TK/RA' | 'SD/MI' | 'SMP/MTS' | 'SMA/SMK/MA' | 'POSYANDU_3B'
   sub_kategori?: string // 'Balita' | 'Bumil' | 'Busui'
@@ -463,22 +464,22 @@ export async function saveSppgProfile(profile: SppgProfile): Promise<SppgProfile
 
 // ─── Kelompok Penerima Manfaat Helpers ───
 export const INITIAL_KPM_DATA: KelompokPenerimaManfaat[] = [
-  { id: '1', nama: '3B POSYANDU UTAMA', kategori: 'POSYANDU_3B', sub_kategori: 'Balita', identitas_npsn_tmp: 'tmp: TMP-K8395745266', kode: 'K8395745266', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 640, status: 'Aktif' },
-  { id: '2', nama: 'RA USWATUN HASANAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69746343 NSM: 101235140356', kode: 'K9282069580', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
-  { id: '3', nama: 'KB HARAPAN', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873373', kode: 'K4829104821', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
-  { id: '4', nama: 'MTSN 4 PASURUAN', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20582152', kode: 'K5920194812', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 480, status: 'Aktif' },
-  { id: '5', nama: 'TK AL-ALAWIYAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69812401', kode: 'K1029481920', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
-  { id: '6', nama: 'SDN WONOREJO V WONOREJO', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518921', kode: 'K9281048291', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 390, status: 'Aktif' },
-  { id: '7', nama: 'SD NEGERI WONOREJO I', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518925', kode: 'K8291048292', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 420, status: 'Aktif' },
-  { id: '8', nama: 'KB AN-NUR', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873374', kode: 'K7291048293', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
-  { id: '9', nama: 'POSYANDU MAWAR', kategori: 'POSYANDU_3B', sub_kategori: 'Bumil', identitas_npsn_tmp: 'tmp: TMP-K3819203819', kode: 'K6291048294', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 145, status: 'Aktif' },
-  { id: '10', nama: 'SMPN 1 WONOREJO', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20518900', kode: 'K5291048295', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 500, status: 'Aktif' },
-  { id: '11', nama: 'SMAN 1 WONOREJO', kategori: 'SMA/SMK/MA', identitas_npsn_tmp: 'NPSN: 20518901', kode: 'K4291048296', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 780, status: 'Aktif' }
+  { id: '1', urutan: 1, nama: '3B POSYANDU UTAMA', kategori: 'POSYANDU_3B', sub_kategori: 'Balita', identitas_npsn_tmp: 'tmp: TMP-K8395745266', kode: 'K8395745266', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 640, status: 'Aktif' },
+  { id: '2', urutan: 2, nama: 'RA USWATUN HASANAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69746343 NSM: 101235140356', kode: 'K9282069580', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
+  { id: '3', urutan: 3, nama: 'KB HARAPAN', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873373', kode: 'K4829104821', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
+  { id: '4', urutan: 4, nama: 'MTSN 4 PASURUAN', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20582152', kode: 'K5920194812', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 480, status: 'Aktif' },
+  { id: '5', urutan: 5, nama: 'TK AL-ALAWIYAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69812401', kode: 'K1029481920', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
+  { id: '6', urutan: 6, nama: 'SDN WONOREJO V WONOREJO', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518921', kode: 'K9281048291', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 390, status: 'Aktif' },
+  { id: '7', urutan: 7, nama: 'SD NEGERI WONOREJO I', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518925', kode: 'K8291048292', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 420, status: 'Aktif' },
+  { id: '8', urutan: 8, nama: 'KB AN-NUR', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873374', kode: 'K7291048293', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
+  { id: '9', urutan: 9, nama: 'POSYANDU MAWAR', kategori: 'POSYANDU_3B', sub_kategori: 'Bumil', identitas_npsn_tmp: 'tmp: TMP-K3819203819', kode: 'K6291048294', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 145, status: 'Aktif' },
+  { id: '10', urutan: 10, nama: 'SMPN 1 WONOREJO', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20518900', kode: 'K5291048295', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 500, status: 'Aktif' },
+  { id: '11', urutan: 11, nama: 'SMAN 1 WONOREJO', kategori: 'SMA/SMK/MA', identitas_npsn_tmp: 'NPSN: 20518901', kode: 'K4291048296', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 780, status: 'Aktif' }
 ]
 
 export async function fetchKelompokPenerimaManfaatList(): Promise<KelompokPenerimaManfaat[]> {
   try {
-    const { data, error } = await supabase.from('kelompok_penerima_manfaat').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('kelompok_penerima_manfaat').select('*').order('urutan', { ascending: true })
     if (error || !data || data.length === 0) throw error
     return data
   } catch {
