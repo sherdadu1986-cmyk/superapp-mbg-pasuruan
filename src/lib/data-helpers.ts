@@ -465,46 +465,38 @@ export async function saveSppgProfile(profile: SppgProfile): Promise<SppgProfile
 // ─── Kelompok Penerima Manfaat Helpers ───
 export const INITIAL_KPM_DATA: KelompokPenerimaManfaat[] = []
 
-export function sortKpmList<T extends {
-  urutan?: number | null
-  kategori?: string | null
-  sub_kategori?: string | null
-  jenis_kelompok?: string | null
-  nama_kelompok?: string | null
-  nama?: string | null
-}>(list: T[]): T[] {
-  return [...list].sort((a, b) => {
-    const urutanA = a.urutan !== null && a.urutan !== undefined ? Number(a.urutan) : null
-    const urutanB = b.urutan !== null && b.urutan !== undefined ? Number(b.urutan) : null
+export function sortKpmList<T = any>(list: T[]): T[] {
+  if (!Array.isArray(list)) return []
+  return [...list].sort((a: any, b: any) => {
+    const rawA = a?.urutan
+    const rawB = b?.urutan
 
-    // 1. Jika keduanya memiliki nomor urutan yang valid dan berbeda, prioritaskan urutan
-    if (urutanA !== null && urutanB !== null) {
-      if (urutanA !== urutanB) return urutanA - urutanB
-    } else if (urutanA !== null) {
-      return -1
-    } else if (urutanB !== null) {
-      return 1
+    const orderA = rawA !== null && rawA !== undefined && !isNaN(Number(rawA)) ? Number(rawA) : 999
+    const orderB = rawB !== null && rawB !== undefined && !isNaN(Number(rawB)) ? Number(rawB) : 999
+
+    if (orderA !== orderB) {
+      return orderA - orderB
     }
 
-    // 2. Fallback: Seluruh sekolah (KB, TK, RA, SD, SMP, MTs) di atas, Posyandu 3B selalu paling bawah
+    // Fallback jika urutan sama atau null
     const isPosyanduA = Boolean(
-      a.kategori?.toLowerCase().includes('posyandu') ||
-      a.jenis_kelompok?.toLowerCase().includes('posyandu') ||
-      a.nama_kelompok?.toLowerCase().includes('posyandu') ||
-      a.nama?.toLowerCase().includes('posyandu') ||
-      a.kategori?.toLowerCase().includes('3b')
+      a?.kategori?.toLowerCase().includes('posyandu') ||
+      a?.jenis_kelompok?.toLowerCase().includes('posyandu') ||
+      a?.nama_kelompok?.toLowerCase().includes('posyandu') ||
+      a?.nama?.toLowerCase().includes('posyandu') ||
+      a?.kategori?.toLowerCase().includes('3b')
     )
     const isPosyanduB = Boolean(
-      b.kategori?.toLowerCase().includes('posyandu') ||
-      b.jenis_kelompok?.toLowerCase().includes('posyandu') ||
-      b.nama_kelompok?.toLowerCase().includes('posyandu') ||
-      b.nama?.toLowerCase().includes('posyandu') ||
-      b.kategori?.toLowerCase().includes('3b')
+      b?.kategori?.toLowerCase().includes('posyandu') ||
+      b?.jenis_kelompok?.toLowerCase().includes('posyandu') ||
+      b?.nama_kelompok?.toLowerCase().includes('posyandu') ||
+      b?.nama?.toLowerCase().includes('posyandu') ||
+      b?.kategori?.toLowerCase().includes('3b')
     )
 
     if (isPosyanduA && !isPosyanduB) return 1
     if (!isPosyanduA && isPosyanduB) return -1
-    return 0
+    return (a?.nama_kelompok || a?.nama || '').localeCompare(b?.nama_kelompok || b?.nama || '')
   })
 }
 
