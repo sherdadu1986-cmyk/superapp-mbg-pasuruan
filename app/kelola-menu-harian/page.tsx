@@ -350,7 +350,7 @@ export default function KelolaMenuHarianPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Target Porsi (Jiwa) *
+                  Target Porsi (Penerima Manfaat) *
                 </label>
                 <input
                   type="number"

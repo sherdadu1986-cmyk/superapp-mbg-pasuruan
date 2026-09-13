@@ -1,14 +1,14 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { 
+import {
   Building2, Users, CheckCircle2, RotateCw, GraduationCap, Heart, ArrowRight,
   Clock, Utensils, UtensilsCrossed, Calendar, Edit3, Plus, Printer,
   FileCheck, ShieldCheck, Database, Award, Activity
 } from 'lucide-react'
-import { 
-  fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB, 
-  type KelompokPenerimaManfaat, type PenerimaManfaatBnba, type MenuHarianDB 
+import {
+  fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB,
+  type KelompokPenerimaManfaat, type PenerimaManfaatBnba, type MenuHarianDB
 } from '@/lib/data-helpers'
 import { supabase } from '@/lib/supabase'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
@@ -24,7 +24,6 @@ export interface MenuHariIniData {
   tags: string[]
   fotoUrl: string
 }
-
 
 
 
@@ -74,7 +73,7 @@ export default function BerandaOperasionalPage() {
   const [mounted, setMounted] = useState(false)
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
   const [realtimeStatus, setRealtimeStatus] = useState<'SUBSCRIBED' | 'REST' | 'CONNECTING'>('CONNECTING')
-  
+
   // Dynamic Supabase state
   const [kpmList, setKpmList] = useState<KelompokPenerimaManfaat[]>([])
   const [bnbaList, setBnbaList] = useState<PenerimaManfaatBnba[]>([])
@@ -106,7 +105,7 @@ export default function BerandaOperasionalPage() {
       const { data: kpmData, error: kpmErr } = await supabase
         .from('kelompok_penerima_manfaat')
         .select('*')
-        
+
       // Ambil BNBA riil langsung via REST API
       const { data: bnbaData, count, error: bnbaErr } = await supabase
         .from('penerima_manfaat_bnba')
@@ -214,14 +213,14 @@ export default function BerandaOperasionalPage() {
   const formatIndonesianDate = (date: Date) => {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
     const months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
       'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ]
     const dayName = days[date.getDay()]
     const dayNum = date.getDate()
     const monthName = months[date.getMonth()]
     const year = date.getFullYear()
-    
+
     const hours = String(date.getHours()).padStart(2, '0')
     const minutes = String(date.getMinutes()).padStart(2, '0')
     const seconds = String(date.getSeconds()).padStart(2, '0')
@@ -231,8 +230,8 @@ export default function BerandaOperasionalPage() {
 
   // ─── Dynamic KPI Calculations ──────────────────────────────────────────
   const totalKelompok = totalKpm !== null ? totalKpm : kpmList.length
-  const totalTargetPenerima = targetPenerima !== null 
-    ? targetPenerima 
+  const totalTargetPenerima = targetPenerima !== null
+    ? targetPenerima
     : kpmList.reduce((acc, item) => acc + (item.jumlah_penerima || 0), 0)
 
   // Sanitize BNBA count: exclude orphan records not connected to an active KPM
@@ -246,8 +245,8 @@ export default function BerandaOperasionalPage() {
   const realisasiTotal = totalBnba !== null ? totalBnba : validBnbaList.length
   const isOverAllocated = realisasiTotal > totalTargetPenerima && totalTargetPenerima > 0
 
-  const persentase = totalTargetPenerima > 0 
-    ? Math.min(Math.round((realisasiTotal / totalTargetPenerima) * 100), 100) 
+  const persentase = totalTargetPenerima > 0
+    ? Math.min(Math.round((realisasiTotal / totalTargetPenerima) * 100), 100)
     : 0
 
   // ─── Real-Time Portion Calculations (BGN Standard Rules) ──────────────
@@ -311,10 +310,10 @@ export default function BerandaOperasionalPage() {
     const countLembaga = matchedKpms.length
     const countTarget = matchedKpms.reduce((a, b) => a + (b.jumlah_penerima || 0), 0)
     const countBnba = getBnbaCountForKpms(matchedKpms)
-    return { 
-      jenjang: label, 
-      code, 
-      lembagaCount: countLembaga, 
+    return {
+      jenjang: label,
+      code,
+      lembagaCount: countLembaga,
       targetCount: countTarget,
       bnbaCount: countBnba
     }
@@ -444,33 +443,31 @@ export default function BerandaOperasionalPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">
-              BGN SuperApp
+              SPPG SuperApp
             </span>
-            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
-              realtimeStatus === 'SUBSCRIBED' 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                : realtimeStatus === 'REST'
+            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${realtimeStatus === 'SUBSCRIBED'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : realtimeStatus === 'REST'
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                realtimeStatus === 'SUBSCRIBED' 
-                  ? 'bg-emerald-500 animate-pulse' 
-                  : realtimeStatus === 'REST'
+              }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${realtimeStatus === 'SUBSCRIBED'
+                ? 'bg-emerald-500 animate-pulse'
+                : realtimeStatus === 'REST'
                   ? 'bg-emerald-500'
                   : 'bg-amber-500 animate-ping'
-              }`} />
+                }`} />
               <span>
-                {realtimeStatus === 'SUBSCRIBED' 
-                  ? '● Sinkron Realtime' 
+                {realtimeStatus === 'SUBSCRIBED'
+                  ? '● Sinkron Realtime'
                   : realtimeStatus === 'REST'
-                  ? '● Terhubung (REST)'
-                  : '○ Menghubungkan'}
+                    ? '● Terhubung (REST)'
+                    : '○ Menghubungkan'}
               </span>
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1">
-            Beranda Operasional (Enterprise Dashboard)
+            Dashboard Operasional
           </h1>
           <p className="text-xs text-slate-500 font-normal mt-0.5">
             Pemantauan alokasi porsi gizi harian, verifikasi BNBA, dan kesiapan distribusi real-time BGN Pasuruan.
@@ -523,7 +520,7 @@ export default function BerandaOperasionalPage() {
               Target Alokasi Penerima
             </span>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {totalTargetPenerima.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">Jiwa</span>
+              {totalTargetPenerima.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">Penerima Manfaat</span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
               SUM Target Seluruh KPM
@@ -553,9 +550,8 @@ export default function BerandaOperasionalPage() {
         </div>
 
         {/* KPI 4: Rasio Kelengkapan Data */}
-        <div className={`bg-white rounded-xl border p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group ${
-          isOverAllocated ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'
-        }`}>
+        <div className={`bg-white rounded-xl border p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group ${isOverAllocated ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'
+          }`}>
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
@@ -571,14 +567,13 @@ export default function BerandaOperasionalPage() {
               {persentase}%
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              {realisasiTotal.toLocaleString('id-ID')} dari {totalTargetPenerima.toLocaleString('id-ID')} Jiwa ({persentase}%)
+              {realisasiTotal.toLocaleString('id-ID')} dari {totalTargetPenerima.toLocaleString('id-ID')} Penerima Manfaat ({persentase}%)
             </p>
           </div>
-          <div className={`p-3 rounded-xl transition duration-200 ${
-            isOverAllocated 
-              ? 'bg-amber-100 text-amber-700 group-hover:bg-amber-600 group-hover:text-white' 
-              : 'bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white'
-          }`}>
+          <div className={`p-3 rounded-xl transition duration-200 ${isOverAllocated
+            ? 'bg-amber-100 text-amber-700 group-hover:bg-amber-600 group-hover:text-white'
+            : 'bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white'
+            }`}>
             <ShieldCheck size={24} />
           </div>
         </div>
@@ -732,8 +727,8 @@ export default function BerandaOperasionalPage() {
                 </span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-500 ${isOverAllocated ? 'bg-amber-500' : 'bg-emerald-600'}`} 
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${isOverAllocated ? 'bg-amber-500' : 'bg-emerald-600'}`}
                   style={{ width: `${persentase}%` }}
                 />
               </div>
@@ -820,11 +815,10 @@ export default function BerandaOperasionalPage() {
                         {row.bnbaCount}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          ratio >= 80 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${ratio >= 80
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
                           {ratio >= 100 ? '100% Valid' : `${ratio}% Terisi`}
                         </span>
                       </td>
@@ -867,7 +861,7 @@ export default function BerandaOperasionalPage() {
                 <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                   <th className="py-2.5 px-3">KATEGORI SASARAN</th>
                   <th className="py-2.5 px-3 text-center">POSYANDU</th>
-                  <th className="py-2.5 px-3 text-right">TOTAL JIWA</th>
+                  <th className="py-2.5 px-3 text-right">TOTAL PENERIMA MANFAAT</th>
                   <th className="py-2.5 px-3 text-center">BNBA MASUK</th>
                   <th className="py-2.5 px-3 text-center">KESIAPAN</th>
                 </tr>
@@ -920,16 +914,14 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('perlu')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                bnbaFilter === 'perlu'
-                  ? 'bg-slate-900 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'perlu'
+                ? 'bg-slate-900 text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
             >
               <span>Semua Perlu Tindakan</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                bnbaFilter === 'perlu' ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
-              }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'perlu' ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
+                }`}>
                 {sortedBnbaRecapList.filter(i => i.terisi < i.target).length}
               </span>
             </button>
@@ -937,16 +929,14 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('belum')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                bnbaFilter === 'belum'
-                  ? 'bg-rose-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'belum'
+                ? 'bg-rose-600 text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
             >
               <span>Belum Ada Detail (0)</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                bnbaFilter === 'belum' ? 'bg-white text-rose-700' : 'bg-slate-800 text-white'
-              }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'belum' ? 'bg-white text-rose-700' : 'bg-slate-800 text-white'
+                }`}>
                 {sortedBnbaRecapList.filter(i => i.terisi === 0).length}
               </span>
             </button>
@@ -954,16 +944,14 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('kurang')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                bnbaFilter === 'kurang'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'kurang'
+                ? 'bg-amber-600 text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
             >
               <span>Kurang dari Kuota</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                bnbaFilter === 'kurang' ? 'bg-white text-amber-800' : 'bg-slate-800 text-white'
-              }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'kurang' ? 'bg-white text-amber-800' : 'bg-slate-800 text-white'
+                }`}>
                 {sortedBnbaRecapList.filter(i => i.terisi > 0 && i.terisi < i.target).length}
               </span>
             </button>
@@ -971,16 +959,14 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('lengkap')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                bnbaFilter === 'lengkap'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'lengkap'
+                ? 'bg-emerald-600 text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
             >
               <span>Sudah Lengkap</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                bnbaFilter === 'lengkap' ? 'bg-white text-emerald-800' : 'bg-slate-800 text-white'
-              }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'lengkap' ? 'bg-white text-emerald-800' : 'bg-slate-800 text-white'
+                }`}>
                 {sortedBnbaRecapList.filter(i => i.terisi >= i.target).length}
               </span>
             </button>
@@ -1027,37 +1013,34 @@ export default function BerandaOperasionalPage() {
                         </div>
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-slate-900 font-mono">
-                        {row.target.toLocaleString('id-ID')} Jiwa
+                        {row.target.toLocaleString('id-ID')} Penerima Manfaat
                       </td>
                       <td className="py-3 px-3 text-right font-mono font-bold">
                         <span className={isZero ? 'text-rose-600' : isShortage ? 'text-amber-600' : 'text-emerald-700'}>
-                          {row.terisi.toLocaleString('id-ID')} Jiwa
+                          {row.terisi.toLocaleString('id-ID')} Penerima Manfaat
                         </span>
                       </td>
                       <td className="py-3 px-3">
                         <div className="space-y-1">
                           <div className="flex justify-between items-center text-[10px] font-bold">
-                            <span className="text-slate-500 font-mono">{row.pct}%</span>
+                            <span className="text-slate-500 font-mono">{isZero ? 0 : isShortage ? row.pct : 100}%</span>
                           </div>
                           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
                             <div
-                              className={`h-full rounded-full transition-all duration-300 ${
-                                isZero ? 'bg-slate-300' : isShortage ? 'bg-amber-500' : 'bg-emerald-600'
-                              }`}
-                              style={{ width: `${Math.min(row.pct, 100)}%` }}
+                              className={`h-full rounded-full transition-all duration-300 ${isZero ? 'bg-slate-300' : isShortage ? 'bg-amber-500' : 'bg-emerald-600'
+                                }`}
+                              style={{ width: `${isZero ? 0 : isShortage ? Math.min(row.pct, 100) : 100}%` }}
                             />
                           </div>
                         </div>
                       </td>
                       <td className="py-3 px-3 text-right font-mono font-bold">
                         {isZero ? (
-                          <span className="text-rose-600 font-extrabold">-{row.target} jiwa</span>
+                          <span className="text-rose-600 font-extrabold">-{row.target} Penerima Manfaat</span>
                         ) : isShortage ? (
-                          <span className="text-amber-600 font-bold">-{row.target - row.terisi} jiwa</span>
-                        ) : isOver ? (
-                          <span className="text-sky-600 font-bold">+{row.terisi - row.target} jiwa</span>
+                          <span className="text-amber-600 font-bold">-{row.target - row.terisi} Penerima Manfaat</span>
                         ) : (
-                          <span className="text-emerald-600 font-bold">0 jiwa</span>
+                          <span className="text-emerald-600 font-bold">Terpenuhi</span>
                         )}
                       </td>
                       <td className="py-3 px-3 text-center">
@@ -1067,7 +1050,7 @@ export default function BerandaOperasionalPage() {
                           </span>
                         ) : isShortage ? (
                           <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">
-                            Kurang {row.target - row.terisi} Jiwa
+                            Kurang {row.target - row.terisi} Penerima Manfaat
                           </span>
                         ) : (
                           <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">

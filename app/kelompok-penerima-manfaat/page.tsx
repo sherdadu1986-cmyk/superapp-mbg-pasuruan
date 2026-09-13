@@ -1574,7 +1574,7 @@ const getBnbaCountForGroup = (
             Total Target Penerima
           </span>
           <div className="text-2xl font-bold text-slate-800 tracking-tight">
-            {stats.totalTarget.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500">Jiwa</span>
+            {stats.totalTarget.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500">Penerima Manfaat</span>
           </div>
         </div>
 
