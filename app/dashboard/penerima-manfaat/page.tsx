@@ -25,15 +25,6 @@ export interface MenuHariIniData {
   fotoUrl: string
 }
 
-export const DEFAULT_MENU_DATA: MenuHariIniData = {
-  namaMenu: 'Nasi Ayam Teriyaki, Tumis Brokoli & Buah Pisang',
-  tanggal: 'Senin, 14 September 2026',
-  targetPorsi: '4,850 Porsi',
-  kalori: '~680 kkal',
-  status: 'Siap Distribusi',
-  tags: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah', 'Susu'],
-  fotoUrl: '/menu-today.png'
-}
 
 
 
@@ -597,60 +588,78 @@ export default function BerandaOperasionalPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Kolom Kiri (5/12): Foto Menu Aktif & Detail Siklus */}
         <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-amber-50 text-amber-600 rounded-md border border-amber-200">
-                  <Utensils size={16} />
+          {menuDb ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-50 text-amber-600 rounded-md border border-amber-200">
+                    <Utensils size={16} />
+                  </div>
+                  <h2 className="font-bold text-slate-900 text-sm tracking-tight">
+                    Menu Utama Hari Ini
+                  </h2>
                 </div>
-                <h2 className="font-bold text-slate-900 text-sm tracking-tight">
-                  Menu Utama Hari Ini
-                </h2>
-              </div>
-              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
-                ● {menuDb?.status || DEFAULT_MENU_DATA.status}
-              </span>
-            </div>
-
-            {/* Menu Photo Container */}
-            <div className="relative aspect-video w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs group">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={menuDb?.foto_url || DEFAULT_MENU_DATA.fotoUrl}
-                alt={menuDb?.nama_menu || DEFAULT_MENU_DATA.namaMenu}
-                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/menu-today.png'
-                }}
-              />
-              <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
-                ⚡ {menuDb?.kalori || DEFAULT_MENU_DATA.kalori}
-              </div>
-            </div>
-
-            {/* Menu Description & Tags */}
-            <div className="space-y-2">
-              <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
-                {menuDb?.nama_menu || DEFAULT_MENU_DATA.namaMenu}
-              </h3>
-              <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                <Calendar size={13} className="text-slate-400" />
-                <span>{menuDb?.tanggal || DEFAULT_MENU_DATA.tanggal}</span>
-              </p>
-
-              {/* Nutrition Tags */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                {(menuDb?.komposisi_gizi || DEFAULT_MENU_DATA.tags).map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="bg-slate-100 text-slate-700 text-[11px] font-medium px-2.5 py-0.5 rounded-md border border-slate-200"
-                  >
-                    ✓ {tag}
+                {menuDb.status && (
+                  <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
+                    ● {menuDb.status}
                   </span>
-                ))}
+                )}
+              </div>
+
+              {menuDb.foto_url && (
+                <div className="relative aspect-video w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={menuDb.foto_url}
+                    alt={menuDb.nama_menu || 'Foto Menu'}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                  />
+                  {menuDb.kalori && (
+                    <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
+                      ⚡ {menuDb.kalori}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
+                  {menuDb.nama_menu}
+                </h3>
+                {menuDb.tanggal && (
+                  <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                    <Calendar size={13} className="text-slate-400" />
+                    <span>{menuDb.tanggal}</span>
+                  </p>
+                )}
+
+                {menuDb.komposisi_gizi && menuDb.komposisi_gizi.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    {menuDb.komposisi_gizi.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="bg-slate-100 text-slate-700 text-[11px] font-medium px-2.5 py-0.5 rounded-md border border-slate-200"
+                      >
+                        ✓ {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-3 py-8 text-center flex flex-col items-center justify-center my-auto">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-full border border-amber-100">
+                <Utensils size={28} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">Belum Ada Menu Harian Yang Diinput</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                  Siklus menu belum diunggah dari database. Silakan kelola siklus menu di halaman Kelola Siklus Menu.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
             <span>Siklus Standar Nutrisi BGN</span>

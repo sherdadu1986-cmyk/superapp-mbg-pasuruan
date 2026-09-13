@@ -18,14 +18,14 @@ export default function KelolaMenuHarianPage() {
   const router = useRouter()
 
   // Active Menu Form States
-  const [namaMenu, setNamaMenu] = useState('Nasi Ayam Teriyaki, Tumis Brokoli & Buah Pisang')
-  const [tanggal, setTanggal] = useState('2026-09-14')
-  const [targetPorsi, setTargetPorsi] = useState(4850)
-  const [kalori, setKalori] = useState('~650 kkal')
-  const [status, setStatus] = useState('Siap Distribusi')
-  const [tags, setTags] = useState<string[]>(['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah', 'Susu'])
-  const [fotoUrl, setFotoUrl] = useState('/menu-today.png')
-  const [catatanMenu, setCatatanMenu] = useState('Menu standar gizi tinggi protein BGN Pasuruan')
+  const [namaMenu, setNamaMenu] = useState('')
+  const [tanggal, setTanggal] = useState('')
+  const [targetPorsi, setTargetPorsi] = useState<number | ''>('')
+  const [kalori, setKalori] = useState('')
+  const [status, setStatus] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [fotoUrl, setFotoUrl] = useState('')
+  const [catatanMenu, setCatatanMenu] = useState('')
 
   // Loading & Feedback States
   const [saving, setSaving] = useState(false)
@@ -608,7 +608,7 @@ export default function KelolaMenuHarianPage() {
                         {item.nama_menu}
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {(item.komposisi_gizi || ['Gizi Seimbang']).map((tag, idx) => (
+                        {(item.komposisi_gizi || []).map((tag, idx) => (
                           <span
                             key={idx}
                             className="bg-gray-100 text-gray-600 text-[10px] font-medium px-2 py-0.5 rounded border border-gray-200"
@@ -620,22 +620,26 @@ export default function KelolaMenuHarianPage() {
                     </td>
                     <td className="py-3 px-3 text-center whitespace-nowrap">
                       <div className="font-bold text-amber-700 font-mono">
-                        {item.kalori || '~650 kkal'}
+                        {item.kalori || '-'}
                       </div>
                       <div className="text-[11px] text-gray-500 font-medium">
-                        {(item.target_porsi || 4850).toLocaleString('id-ID')} Porsi
+                        {item.target_porsi ? `${item.target_porsi.toLocaleString('id-ID')} Porsi` : '-'}
                       </div>
                     </td>
                     <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                        item.status === 'Selesai Distribusi'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : item.status === 'Siap Distribusi'
-                          ? 'bg-sky-50 text-sky-700 border-sky-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}>
-                        ● {item.status || 'Siap Distribusi'}
-                      </span>
+                      {item.status ? (
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          item.status === 'Selesai Distribusi'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : item.status === 'Siap Distribusi'
+                            ? 'bg-sky-50 text-sky-700 border-sky-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          ● {item.status}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-medium text-xs">-</span>
+                      )}
                     </td>
                     <td className="py-3 px-3 text-center whitespace-nowrap">
                       <button
@@ -697,9 +701,11 @@ export default function KelolaMenuHarianPage() {
                   <span className="font-mono font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
                     ⚡ {previewModalMenu.kalori}
                   </span>
-                  <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-                    📦 {(previewModalMenu.target_porsi || 4850).toLocaleString('id-ID')} Target Porsi
-                  </span>
+                  {previewModalMenu.target_porsi ? (
+                    <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                      📦 {previewModalMenu.target_porsi.toLocaleString('id-ID')} Target Porsi
+                    </span>
+                  ) : null}
                   <span className="font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
                     ● {previewModalMenu.status}
                   </span>

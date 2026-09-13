@@ -463,34 +463,19 @@ export async function saveSppgProfile(profile: SppgProfile): Promise<SppgProfile
 }
 
 // ─── Kelompok Penerima Manfaat Helpers ───
-export const INITIAL_KPM_DATA: KelompokPenerimaManfaat[] = [
-  { id: '1', urutan: 1, nama: '3B POSYANDU UTAMA', kategori: 'POSYANDU_3B', sub_kategori: 'Balita', identitas_npsn_tmp: 'tmp: TMP-K8395745266', kode: 'K8395745266', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 640, status: 'Aktif' },
-  { id: '2', urutan: 2, nama: 'RA USWATUN HASANAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69746343 NSM: 101235140356', kode: 'K9282069580', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
-  { id: '3', urutan: 3, nama: 'KB HARAPAN', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873373', kode: 'K4829104821', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
-  { id: '4', urutan: 4, nama: 'MTSN 4 PASURUAN', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20582152', kode: 'K5920194812', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 480, status: 'Aktif' },
-  { id: '5', urutan: 5, nama: 'TK AL-ALAWIYAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69812401', kode: 'K1029481920', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
-  { id: '6', urutan: 6, nama: 'SDN WONOREJO V WONOREJO', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518921', kode: 'K9281048291', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 390, status: 'Aktif' },
-  { id: '7', urutan: 7, nama: 'SD NEGERI WONOREJO I', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518925', kode: 'K8291048292', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 420, status: 'Aktif' },
-  { id: '8', urutan: 8, nama: 'KB AN-NUR', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873374', kode: 'K7291048293', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
-  { id: '9', urutan: 9, nama: 'POSYANDU MAWAR', kategori: 'POSYANDU_3B', sub_kategori: 'Bumil', identitas_npsn_tmp: 'tmp: TMP-K3819203819', kode: 'K6291048294', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 145, status: 'Aktif' },
-  { id: '10', urutan: 10, nama: 'SMPN 1 WONOREJO', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20518900', kode: 'K5291048295', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 500, status: 'Aktif' },
-  { id: '11', urutan: 11, nama: 'SMAN 1 WONOREJO', kategori: 'SMA/SMK/MA', identitas_npsn_tmp: 'NPSN: 20518901', kode: 'K4291048296', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 780, status: 'Aktif' }
-]
+export const INITIAL_KPM_DATA: KelompokPenerimaManfaat[] = []
 
 export async function fetchKelompokPenerimaManfaatList(): Promise<KelompokPenerimaManfaat[]> {
   try {
     const { data, error } = await supabase.from('kelompok_penerima_manfaat').select('*').order('urutan', { ascending: true })
-    if (error || !data || data.length === 0) throw error
+    if (error || !data) return []
     return data
   } catch {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_kpm_list') : null
     if (stored) {
-      try { return JSON.parse(stored) } catch { /* use initial */ }
+      try { return JSON.parse(stored) } catch { return [] }
     }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sppg_kpm_list', JSON.stringify(INITIAL_KPM_DATA))
-    }
-    return INITIAL_KPM_DATA
+    return []
   }
 }
 
@@ -537,90 +522,22 @@ export async function deleteKelompokPenerimaManfaat(idOrKode: string): Promise<b
 }
 
 // ─── Menu Harian Helpers ───
-export const INITIAL_MENU_HISTORY: MenuHarianDB[] = [
-  {
-    id: 'menu-1',
-    tanggal: '2026-09-14',
-    nama_menu: 'Nasi Ayam Teriyaki, Tumis Brokoli & Buah Pisang',
-    foto_url: '/menu-today.png',
-    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah', 'Susu'],
-    kalori: '~680 kkal',
-    target_porsi: 4850,
-    porsi_kecil: 1820,
-    porsi_besar: 3030,
-    catatan: 'Menu standar gizi tinggi protein BGN Pasuruan',
-    status: 'Siap Distribusi',
-    created_at: '2026-09-14T06:00:00.000Z'
-  },
-  {
-    id: 'menu-2',
-    tanggal: '2026-09-13',
-    nama_menu: 'Nasi Kuning Bento, Telur Balado, Buncis & Melon',
-    foto_url: '/menu-today.png',
-    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah'],
-    kalori: '~640 kkal',
-    target_porsi: 4850,
-    porsi_kecil: 1820,
-    porsi_besar: 3030,
-    catatan: 'Variasi bento box nusantara untuk membangkitkan selera siswa',
-    status: 'Selesai Distribusi',
-    created_at: '2026-09-13T06:00:00.000Z'
-  },
-  {
-    id: 'menu-3',
-    tanggal: '2026-09-12',
-    nama_menu: 'Nasi Uduk Ayam Goreng Kremes, Capcay & Jeruk',
-    foto_url: '/menu-today.png',
-    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah', 'Susu'],
-    kalori: '~670 kkal',
-    target_porsi: 4700,
-    porsi_kecil: 1750,
-    porsi_besar: 2950,
-    catatan: 'Tambahan vitamin C jeruk manis lokal Pasuruan',
-    status: 'Selesai Distribusi',
-    created_at: '2026-09-12T06:00:00.000Z'
-  },
-  {
-    id: 'menu-4',
-    tanggal: '2026-09-11',
-    nama_menu: 'Nasi Semur Daging Sapi, Sup Bayam Wortel & Buah Apel',
-    foto_url: '/menu-today.png',
-    komposisi_gizi: ['Karbohidrat', 'Protein Hewani', 'Sayuran', 'Buah'],
-    kalori: '~700 kkal',
-    target_porsi: 4800,
-    porsi_kecil: 1800,
-    porsi_besar: 3000,
-    catatan: 'Menu kaya zat besi dan serat tinggi',
-    status: 'Selesai Distribusi',
-    created_at: '2026-09-11T06:00:00.000Z'
-  }
-]
+export const INITIAL_MENU_HISTORY: MenuHarianDB[] = []
 
 export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
   try {
-    const { data, error } = await supabase.from('menu_harian').select('*').order('created_at', { ascending: false }).limit(1).single()
-    if (error || !data) throw error
-    return data
+    const { data, error } = await supabase
+      .from('menu_harian')
+      .select('*')
+      .order('tanggal', { ascending: false })
+      .limit(1)
+      .single()
+    if (!error && data) return data
   } catch {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_menu_hari_ini') : null
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        return {
-          nama_menu: parsed.namaMenu,
-          tanggal: parsed.tanggal,
-          target_porsi: parseInt(parsed.targetPorsi?.replace(/[^0-9]/g, '') || '4850'),
-          kalori: parsed.kalori,
-          status: parsed.status,
-          komposisi_gizi: parsed.tags || [],
-          foto_url: parsed.fotoUrl || '/menu-today.png'
-        }
-      } catch {
-        return null
-      }
-    }
-    return null
+    // fallback
   }
+  const history = await fetchMenuHistoryDB()
+  return history && history.length > 0 ? history[0] : null
 }
 
 export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {
@@ -629,17 +546,17 @@ export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {
       .from('menu_harian')
       .select('*')
       .order('tanggal', { ascending: false })
-    if (error || !data || data.length === 0) throw error
+    if (error || !data) return []
     return data
   } catch {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_menu_history_list') : null
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      } catch { /* use initial */ }
+        if (Array.isArray(parsed)) return parsed
+      } catch { return [] }
     }
-    return INITIAL_MENU_HISTORY
+    return []
   }
 }
 
@@ -696,28 +613,8 @@ export interface PenerimaManfaatBnba {
 
 const LS_BNBA = 'sppg_penerima_bnba'
 
-// Initial mock BNBA list for audit items
-export const INITIAL_BNBA_DATA: PenerimaManfaatBnba[] = [
-  // kpm-1: POSYANDU WONOREJO (Ibu Menyusui) - sample BNBA items
-  { id: 'bnba-1-1', kelompok_id: 'kpm-1', nisn_nik: '3514015502900001', nama_lengkap: 'SITI NURHALIZA', tanggal_lahir: '15-02-1990', jenis_kelamin: 'P', nama_ortu: 'BAPAK SUMARNO', posisi: 'Busui', kelas: '-', created_at: new Date().toISOString() },
-  { id: 'bnba-1-2', kelompok_id: 'kpm-1', nisn_nik: '3514016208920002', nama_lengkap: 'DEWI ANGGRAINII', tanggal_lahir: '22-08-1992', jenis_kelamin: 'P', nama_ortu: 'BAPAK JOKO', posisi: 'Busui', kelas: '-', created_at: new Date().toISOString() },
-  { id: 'bnba-1-3', kelompok_id: 'kpm-1', nisn_nik: '3514014811950003', nama_lengkap: 'RATNA SARI', tanggal_lahir: '08-11-1995', jenis_kelamin: 'P', nama_ortu: 'BAPAK MULYADI', posisi: 'Busui', kelas: '-', created_at: new Date().toISOString() },
-
-  // kpm-6: KB MELATI DESA WONOSARI (9 items total)
-  { id: 'bnba-6-1', kelompok_id: 'kpm-6', nisn_nik: '3182910281', nama_lengkap: 'ANANDA RIZKY', tanggal_lahir: '12-05-2021', jenis_kelamin: 'L', nama_ortu: 'SLAMET RIYADI', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
-  { id: 'bnba-6-2', kelompok_id: 'kpm-6', nisn_nik: '3182910282', nama_lengkap: 'MUHAMMAD ALIF', tanggal_lahir: '04-09-2021', jenis_kelamin: 'L', nama_ortu: 'BUDI SANTOSO', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
-  { id: 'bnba-6-3', kelompok_id: 'kpm-6', nisn_nik: '3182910283', nama_lengkap: 'BINTANG SUTANTO', tanggal_lahir: '18-01-2021', jenis_kelamin: 'L', nama_ortu: 'AGUS SUTANTO', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
-  { id: 'bnba-6-4', kelompok_id: 'kpm-6', nisn_nik: '3182910284', nama_lengkap: 'DANI HERMAWAN', tanggal_lahir: '30-03-2021', jenis_kelamin: 'L', nama_ortu: 'HERMANSYAH', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
-  { id: 'bnba-6-5', kelompok_id: 'kpm-6', nisn_nik: '3182910285', nama_lengkap: 'AULIA RAHMA', tanggal_lahir: '14-07-2021', jenis_kelamin: 'P', nama_ortu: 'EKO PRASETYO', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
-  { id: 'bnba-6-6', kelompok_id: 'kpm-6', nisn_nik: '3182910286', nama_lengkap: 'CINTIA BELLA', tanggal_lahir: '02-12-2021', jenis_kelamin: 'P', nama_ortu: 'SUPRIYADI', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
-  { id: 'bnba-6-7', kelompok_id: 'kpm-6', nisn_nik: '3514011204850001', nama_lengkap: 'Susi yusniasari', tanggal_lahir: '12-04-1985', jenis_kelamin: 'P', nama_ortu: '-', posisi: 'Tendik', kelas: '-', created_at: new Date().toISOString() },
-  { id: 'bnba-6-8', kelompok_id: 'kpm-6', nisn_nik: '3514012006880002', nama_lengkap: 'KIKI AMALIA', tanggal_lahir: '20-06-1988', jenis_kelamin: 'P', nama_ortu: '-', posisi: 'Tendik', kelas: '-', created_at: new Date().toISOString() },
-  { id: 'bnba-6-9', kelompok_id: 'kpm-6', nisn_nik: '3514010509900003', nama_lengkap: 'NUR LATIFAH', tanggal_lahir: '05-09-1990', jenis_kelamin: 'P', nama_ortu: '-', posisi: 'Tendik', kelas: '-', created_at: new Date().toISOString() },
-
-  // kpm-7: TK PKK IV DESA WONOSARI
-  { id: 'bnba-7-1', kelompok_id: 'kpm-7', nisn_nik: '3192010291', nama_lengkap: 'AHMAD ZAKI', tanggal_lahir: '10-02-2020', jenis_kelamin: 'L', nama_ortu: 'M. RIDWAN', posisi: 'Siswa', kelas: 'TK B', created_at: new Date().toISOString() },
-  { id: 'bnba-7-2', kelompok_id: 'kpm-7', nisn_nik: '3192010292', nama_lengkap: 'SITI AISYAH', tanggal_lahir: '25-05-2020', jenis_kelamin: 'P', nama_ortu: 'AHMAD SYARIF', posisi: 'Siswa', kelas: 'TK B', created_at: new Date().toISOString() },
-]
+// Initial empty BNBA list
+export const INITIAL_BNBA_DATA: PenerimaManfaatBnba[] = []
 
 export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaatBnba[]> {
   try {
@@ -741,18 +638,13 @@ export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaa
       }
     }
     const { data, error } = await query
-    if (error || !data) throw error
+    if (error || !data) return []
     return data
   } catch {
     const stored = typeof window !== 'undefined' ? localStorage.getItem(LS_BNBA) : null
     let all: PenerimaManfaatBnba[] = []
     if (stored) {
-      try { all = JSON.parse(stored) } catch { all = INITIAL_BNBA_DATA }
-    } else {
-      all = INITIAL_BNBA_DATA
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LS_BNBA, JSON.stringify(INITIAL_BNBA_DATA))
-      }
+      try { all = JSON.parse(stored) } catch { return [] }
     }
     return kelompokId ? all.filter(item => item.kelompok_id === kelompokId) : all
   }

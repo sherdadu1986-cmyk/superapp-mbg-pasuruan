@@ -123,18 +123,18 @@ export default function LembarDistribusiPrint({
           busui = Number(parsedJson.busui) || 0
         } else if (sub === 'Bumil' || sub.toLowerCase().includes('bumil') || sub.toLowerCase().includes('hamil')) {
           balita = 0
-          bumil = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 30
+          bumil = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0)
           busui = 0
         } else if (sub === 'Busui' || sub.toLowerCase().includes('busui') || sub.toLowerCase().includes('menyusui')) {
           balita = 0
           bumil = 0
-          busui = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 30
+          busui = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0)
         } else if (sub === 'Balita' || sub.toLowerCase().includes('balita')) {
-          balita = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 100
+          balita = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0)
           bumil = 0
           busui = 0
         } else {
-          const tot = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 100
+          const tot = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0)
           if (item.target_pria && item.target_pria > 0 && item.target_wanita && item.target_wanita > 0) {
             balita = item.target_pria
             const sisaWanita = item.target_wanita
@@ -148,10 +148,10 @@ export default function LembarDistribusiPrint({
         }
 
         if (balita === 0 && bumil === 0 && busui === 0) {
-          const tot = item.jumlah_penerima || 60
+          const tot = item.jumlah_penerima || 0
           balita = Math.round(tot * 0.5)
           bumil = Math.round(tot * 0.25)
-          busui = tot - balita - bumil
+          busui = Math.max(0, tot - balita - bumil)
         }
 
         const totalPosy = balita + bumil + busui
@@ -201,13 +201,13 @@ export default function LembarDistribusiPrint({
             porsiKecil = sd13LakiVal + sd13PeremVal
             porsiBesarSiswa = sd46LakiVal + sd46PeremVal
           } else {
-            const siswaTotal = (item.target_pria || 0) + (item.target_wanita || 0) || (item.jumlah_penerima - porsiBesarTendik)
+            const siswaTotal = (item.target_pria || 0) + (item.target_wanita || 0) || Math.max(0, item.jumlah_penerima - porsiBesarTendik)
             porsiKecil = Math.floor(siswaTotal / 2)
             porsiBesarSiswa = Math.ceil(siswaTotal / 2)
           }
         } else if (isSmpSma) {
           porsiKecil = 0
-          porsiBesarSiswa = (item.target_pria || 0) + (item.target_wanita || 0) || (item.jumlah_penerima - porsiBesarTendik)
+          porsiBesarSiswa = (item.target_pria || 0) + (item.target_wanita || 0) || Math.max(0, item.jumlah_penerima - porsiBesarTendik)
         } else {
           porsiKecil = 0
           porsiBesarSiswa = (item.target_pria || 0) + (item.target_wanita || 0)
@@ -233,22 +233,7 @@ export default function LembarDistribusiPrint({
       }
     })
 
-    // Fallback Posyandu 3B rows matching reference design if database has fewer than 5 rows
-    let finalPosyandus = posyandus
-    if (posyandus.length < 5) {
-      const defaultPosyList = [
-        { id: 'posy-1', no: 1, nama: 'POSYANDU KAUMAN', balita: 70, bumil: 11, busui: 22, total: 103 },
-        { id: 'posy-2', no: 2, nama: 'POSYANDU MUDOREJO', balita: 26, bumil: 9, busui: 8, total: 43 },
-        { id: 'posy-3', no: 3, nama: 'POSYANDU KIDULDALEM', balita: 25, bumil: 8, busui: 6, total: 39 },
-        { id: 'posy-4', no: 4, nama: 'POSYANDU SIDOMULYO', balita: 25, bumil: 3, busui: 7, total: 35 },
-        { id: 'posy-5', no: 5, nama: 'POSYANDU MADUREJO', balita: 97, bumil: 12, busui: 22, total: 131 },
-      ]
-      finalPosyandus = defaultPosyList
-      totalBalitaPosyandu = finalPosyandus.reduce((sum, p) => sum + p.balita, 0)
-      totalBumilPosyandu = finalPosyandus.reduce((sum, p) => sum + p.bumil, 0)
-      totalBusuiPosyandu = finalPosyandus.reduce((sum, p) => sum + p.busui, 0)
-      totalKeseluruhanPosyandu = finalPosyandus.reduce((sum, p) => sum + p.total, 0)
-    }
+    const finalPosyandus = posyandus
 
     const rekapPorsiKecil = totalPorsiKecilSekolah + totalBalitaPosyandu
     const rekapPorsiBesar = totalPorsiBesarSiswaSekolah + totalBumilPosyandu + totalBusuiPosyandu

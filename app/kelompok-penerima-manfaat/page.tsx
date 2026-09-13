@@ -80,31 +80,31 @@ export default function KelompokPenerimaManfaatPage() {
   const [formSubKategori, setFormSubKategori] = useState('Balita')
   const [formIdentitas, setFormIdentitas] = useState('')
   const [formKepemilikan, setFormKepemilikan] = useState<'Negeri' | 'Swasta'>('Negeri')
-  const [formKecamatan, setFormKecamatan] = useState('WONOREJO')
-  const [formKelDesa, setFormKelDesa] = useState('WONOREJO')
-  const [formAlamat, setFormAlamat] = useState('Wonorejo Pasuruan')
+  const [formKecamatan, setFormKecamatan] = useState('')
+  const [formKelDesa, setFormKelDesa] = useState('')
+  const [formAlamat, setFormAlamat] = useState('')
   const [formPimpinan, setFormPimpinan] = useState('')
   const [formHp, setFormHp] = useState('')
   const [formEmail, setFormEmail] = useState('')
 
   // 1. Standard School Allocation Form Fields
-  const [formPria, setFormPria] = useState(100)
-  const [formWanita, setFormWanita] = useState(100)
-  const [formGuru, setFormGuru] = useState(10)
-  const [formTendik, setFormTendik] = useState(5)
+  const [formPria, setFormPria] = useState(0)
+  const [formWanita, setFormWanita] = useState(0)
+  const [formGuru, setFormGuru] = useState(0)
+  const [formTendik, setFormTendik] = useState(0)
 
   // 2. SD / MI Specific Allocation Fields (Classes 1-3 vs 4-6)
-  const [formSdSiswaLaki13, setFormSdSiswaLaki13] = useState(50)
-  const [formSdSiswaPerem13, setFormSdSiswaPerem13] = useState(50)
-  const [formSdSiswaLaki46, setFormSdSiswaLaki46] = useState(50)
-  const [formSdSiswaPerem46, setFormSdSiswaPerem46] = useState(50)
+  const [formSdSiswaLaki13, setFormSdSiswaLaki13] = useState(0)
+  const [formSdSiswaPerem13, setFormSdSiswaPerem13] = useState(0)
+  const [formSdSiswaLaki46, setFormSdSiswaLaki46] = useState(0)
+  const [formSdSiswaPerem46, setFormSdSiswaPerem46] = useState(0)
 
   // 3. Posyandu 3B Allocation Form Fields
-  const [formBalitaLaki, setFormBalitaLaki] = useState(30)
-  const [formBalitaPerem, setFormBalitaPerem] = useState(30)
-  const [formBumil, setFormBumil] = useState(15)
-  const [formBusui, setFormBusui] = useState(15)
-  const [formKaderPosyandu, setFormKaderPosyandu] = useState(5)
+  const [formBalitaLaki, setFormBalitaLaki] = useState(0)
+  const [formBalitaPerem, setFormBalitaPerem] = useState(0)
+  const [formBumil, setFormBumil] = useState(0)
+  const [formBusui, setFormBusui] = useState(0)
+  const [formKaderPosyandu, setFormKaderPosyandu] = useState(0)
 
   // Delete Confirmation State
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<DetailKpmItem | null>(null)
@@ -132,11 +132,11 @@ export default function KelompokPenerimaManfaatPage() {
   // BNBA Form Fields
   const [bnbaNisnNik, setBnbaNisnNik] = useState('')
   const [bnbaNama, setBnbaNama] = useState('')
-  const [bnbaTglLahir, setBnbaTglLahir] = useState('15-05-2015')
+  const [bnbaTglLahir, setBnbaTglLahir] = useState('')
   const [bnbaJk, setBnbaJk] = useState<'L' | 'P'>('L')
   const [bnbaOrtu, setBnbaOrtu] = useState('')
   const [bnbaPosisi, setBnbaPosisi] = useState<'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'>('Siswa')
-  const [bnbaKelas, setBnbaKelas] = useState('Kelas 4')
+  const [bnbaKelas, setBnbaKelas] = useState('')
 
   // Helper check for Posyandu 3B Category
   const isPosyanduCategory = useMemo(() => {
@@ -255,7 +255,7 @@ const getBnbaCountForGroup = (
         }
 
         const bnbaCount = getBnbaCountForGroup(kpm, combinedBnbaList)
-        const totalTarget = kpm.jumlah_penerima || (kpm.target_pria || 0) + (kpm.target_wanita || 0) + (kpm.target_guru || 0) + (kpm.target_tendik || 0) || 100
+        const totalTarget = kpm.jumlah_penerima || (kpm.target_pria || 0) + (kpm.target_wanita || 0) + (kpm.target_guru || 0) + (kpm.target_tendik || 0) || 0
 
         let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'
         let ketMsg = '✓ Sesuai'
@@ -297,11 +297,11 @@ const getBnbaCountForGroup = (
           nama: kpm.nama,
           npsnReg: kpm.identitas_npsn_tmp || kpm.kode,
           kepemilikan: (kpm.kepemilikan as 'Negeri' | 'Swasta') || 'Negeri',
-          kecamatan: kpm.kecamatan || 'WONOREJO',
-          kelDesa: kpm.kel_desa || 'WONOREJO',
-          alamat: kpm.alamat || kpm.wilayah || 'Wonorejo Pasuruan',
-          pria: kpm.target_pria || Math.floor(totalTarget / 2),
-          wanita: kpm.target_wanita || Math.ceil(totalTarget / 2),
+          kecamatan: kpm.kecamatan || '-',
+          kelDesa: kpm.kel_desa || '-',
+          alamat: kpm.alamat || kpm.wilayah || '-',
+          pria: kpm.target_pria ?? 0,
+          wanita: kpm.target_wanita ?? 0,
           guru: kpm.target_guru || 0,
           tendik: kpm.target_tendik || 0,
           totalTarget,
@@ -2595,7 +2595,9 @@ const getBnbaCountForGroup = (
                       })
                     ) : (
                       <tr>
-                        <td colSpan={10} className="py-8 text-center text-slate-400">Belum ada data BNBA.</td>
+                        <td colSpan={10} className="py-8 text-center text-slate-400 font-medium">
+                          Belum ada data riil BNBA yang diinput.
+                        </td>
                       </tr>
                     )}
                   </tbody>
