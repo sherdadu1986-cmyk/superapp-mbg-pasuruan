@@ -496,6 +496,31 @@ export async function saveKelompokPenerimaManfaat(kpm: KelompokPenerimaManfaat):
   return kpm
 }
 
+export async function deleteKelompokPenerimaManfaat(idOrKode: string): Promise<boolean> {
+  const currentList = await fetchKelompokPenerimaManfaatList()
+  const updatedList = currentList.filter(item => item.id !== idOrKode && item.kode !== idOrKode)
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('sppg_kpm_list', JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    let query = supabase.from('kelompok_penerima_manfaat').delete()
+    if (idOrKode.length > 20 && idOrKode.includes('-') && !idOrKode.startsWith('kpm-') && !idOrKode.startsWith('K')) {
+      query = query.eq('id', idOrKode)
+    } else {
+      query = query.eq('kode', idOrKode)
+    }
+    const { error } = await query
+    if (error) {
+      console.error('Delete Supabase helper error:', error.message)
+    }
+  } catch (err) {
+    console.error('Delete Supabase helper exception:', err)
+  }
+  return true
+}
+
 // ─── Menu Harian Helpers ───
 export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
   try {

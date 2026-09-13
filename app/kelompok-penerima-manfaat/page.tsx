@@ -3,11 +3,13 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { 
   Search, RotateCw, Plus, X, Check, Building2, Info, Eye, Edit, Trash2, 
   Bookmark, FileSpreadsheet, FileText, Printer, ChevronLeft, 
-  ChevronRight, UserPlus, Upload, ShieldAlert
+  ChevronRight, UserPlus, ShieldAlert
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { 
   fetchKelompokPenerimaManfaatList, 
   saveKelompokPenerimaManfaat, 
+  deleteKelompokPenerimaManfaat,
   fetchBnbaList,
   saveBnbaItem,
   deleteBnbaItem,
@@ -39,182 +41,19 @@ export interface DetailKpmItem {
   status: 'Aktif' | 'Non-Aktif'
 }
 
-// Initial Data Seed (Flat & Clean Schema)
-const INITIAL_AUDIT_ITEMS: DetailKpmItem[] = [
-  {
-    id: 'kpm-1',
-    no: 1,
-    jenis: 'Ibu Menyusui',
-    nama: 'POSYANDU WONOREJO',
-    npsnReg: '11111111111111',
-    kepemilikan: 'Negeri',
-    kecamatan: 'WONOREJO',
-    kelDesa: 'WONOREJO',
-    alamat: 'Wonorejo Pasuruan',
-    pria: 0,
-    wanita: 67,
-    guru: 0,
-    tendik: 0,
-    totalTarget: 67,
-    rincianTerisi: 64,
-    keteranganStatus: 'Kurang',
-    keteranganMsg: '↓ Kurang 3 orang',
-    pimpinan: 'IBU NURUL HAYATI',
-    hp: '085784249845',
-    email: 'posyandu.wonorejo1@gmail.com',
-    status: 'Aktif'
-  },
-  {
-    id: 'kpm-2',
-    no: 2,
-    jenis: 'Bayi Dibawah Lima Tahun',
-    nama: 'POSYANDU WONOREJO',
-    npsnReg: '00000000000000',
-    kepemilikan: 'Negeri',
-    kecamatan: 'WONOREJO',
-    kelDesa: 'WONOREJO',
-    alamat: 'Wonorejo Pasuruan',
-    pria: 179,
-    wanita: 129,
-    guru: 0,
-    tendik: 0,
-    totalTarget: 308,
-    rincianTerisi: 293,
-    keteranganStatus: 'Kurang',
-    keteranganMsg: '↓ Kurang 15 orang',
-    pimpinan: 'IBU KHANIFAH',
-    hp: '081234567890',
-    email: 'posyandu.balita@wonorejo.id',
-    status: 'Aktif'
-  },
-  {
-    id: 'kpm-3',
-    no: 3,
-    jenis: 'Ibu Hamil',
-    nama: 'POSYANDU WONOREJO',
-    npsnReg: '09909090',
-    kepemilikan: 'Negeri',
-    kecamatan: 'WONOREJO',
-    kelDesa: 'WONOREJO',
-    alamat: 'Wonorejo Pasuruan',
-    pria: 0,
-    wanita: 32,
-    guru: 0,
-    tendik: 0,
-    totalTarget: 32,
-    rincianTerisi: 31,
-    keteranganStatus: 'Kurang',
-    keteranganMsg: '↓ Kurang 1 orang',
-    pimpinan: 'IBU ROFI\'AH',
-    hp: '081987654321',
-    email: 'bumil.wonorejo@gmail.com',
-    status: 'Aktif'
-  },
-  {
-    id: 'kpm-4',
-    no: 4,
-    jenis: 'Madrasah Tsanawiyah',
-    nama: 'MTSN 4 PASURUAN',
-    npsnReg: '20582152',
-    kepemilikan: 'Negeri',
-    kecamatan: 'WONOREJO',
-    kelDesa: 'WONOREJO',
-    alamat: 'Alun-Alun Besaran',
-    pria: 216,
-    wanita: 172,
-    guru: 0,
-    tendik: 40,
-    totalTarget: 428,
-    rincianTerisi: 0,
-    keteranganStatus: 'Belum ada detail',
-    keteranganMsg: '⚠️ Belum ada detail',
-    pimpinan: 'AKHMAD FAUZI, S.Ag, M.PdI',
-    hp: '081333444555',
-    email: 'mtsn4pasuruan@kemenag.go.id',
-    status: 'Aktif'
-  },
-  {
-    id: 'kpm-5',
-    no: 5,
-    jenis: 'SMP',
-    nama: 'SMPN 2 WONOREJO',
-    npsnReg: '20541400',
-    kepemilikan: 'Negeri',
-    kecamatan: 'WONOREJO',
-    kelDesa: 'WONOREJO',
-    alamat: 'Jl. Raya Wonorejo No. 12',
-    pria: 139,
-    wanita: 85,
-    guru: 0,
-    tendik: 20,
-    totalTarget: 244,
-    rincianTerisi: 0,
-    keteranganStatus: 'Belum ada detail',
-    keteranganMsg: '⚠️ Belum ada detail',
-    pimpinan: 'BAPAK SUGENG',
-    hp: '081233445566',
-    email: 'smpn2wonorejo@kemdikbud.go.id',
-    status: 'Aktif'
-  },
-  {
-    id: 'kpm-6',
-    no: 6,
-    jenis: 'TK',
-    nama: 'KB MELATI DESA WONOSARI',
-    npsnReg: '69880987',
-    kepemilikan: 'Swasta',
-    kecamatan: 'WONOREJO',
-    kelDesa: 'WONOSARI',
-    alamat: 'Wonosari Wonorejo Pasuruan',
-    pria: 4,
-    wanita: 2,
-    guru: 0,
-    tendik: 3,
-    totalTarget: 9,
-    rincianTerisi: 9,
-    keteranganStatus: 'Sesuai',
-    keteranganMsg: '✓ Sesuai',
-    pimpinan: 'Susi yusniasari',
-    hp: '085233112233',
-    email: 'kbmelati.wonosari@gmail.com',
-    status: 'Aktif'
-  },
-  {
-    id: 'kpm-7',
-    no: 7,
-    jenis: 'TK',
-    nama: 'TK PKK IV DESA WONOSARI',
-    npsnReg: '20552433',
-    kepemilikan: 'Swasta',
-    kecamatan: 'WONOREJO',
-    kelDesa: 'WONOSARI',
-    alamat: 'Wonosari Wonorejo Pasuruan',
-    pria: 11,
-    wanita: 14,
-    guru: 0,
-    tendik: 3,
-    totalTarget: 28,
-    rincianTerisi: 28,
-    keteranganStatus: 'Sesuai',
-    keteranganMsg: '✓ Sesuai',
-    pimpinan: 'NUR AFIFAH, S.Pd',
-    hp: '081399887766',
-    email: 'tkpkk4wonosari@gmail.com',
-    status: 'Aktif'
-  }
-]
-
 export default function KelompokPenerimaManfaatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [perPage, setPerPage] = useState(15)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [showAlert, setShowAlert] = useState(true)
   const [activeFilter, setActiveFilter] = useState<'Semua' | 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih'>('Semua')
 
-  // Dynamic KPM Data & Supabase List
-  const [kpmItems, setKpmItems] = useState<DetailKpmItem[]>(INITIAL_AUDIT_ITEMS)
-  const [supabaseKpm, setSupabaseKpm] = useState<KelompokPenerimaManfaat[]>([])
+  // Toast Notification
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  // 100% Pure Dynamic Supabase State (No hardcoded initial arrays)
+  const [kpmItems, setKpmItems] = useState<DetailKpmItem[]>([])
   const [allBnbaRecords, setAllBnbaRecords] = useState<PenerimaManfaatBnba[]>([])
 
   // Modal Form States
@@ -260,20 +99,87 @@ export default function KelompokPenerimaManfaatPage() {
   const [bnbaPosisi, setBnbaPosisi] = useState<'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'>('Siswa')
   const [bnbaKelas, setBnbaKelas] = useState('Kelas 4')
 
+  // Load Data Purely from Supabase Database
   const loadData = async () => {
     setLoading(true)
-    const [kpmRes, bnbaRes] = await Promise.all([
-      fetchKelompokPenerimaManfaatList(),
-      fetchBnbaList()
-    ])
-    setSupabaseKpm(kpmRes)
-    setAllBnbaRecords(bnbaRes)
-    setLoading(false)
+    try {
+      const [supabaseRes, bnbaRes] = await Promise.all([
+        supabase.from('kelompok_penerima_manfaat').select('*').order('created_at', { ascending: true }),
+        fetchBnbaList()
+      ])
+
+      let data = supabaseRes.data
+      if (!data || data.length === 0) {
+        data = await fetchKelompokPenerimaManfaatList()
+      }
+
+      setAllBnbaRecords(bnbaRes || [])
+
+      // Map Supabase rows to DetailKpmItem format
+      const mappedItems: DetailKpmItem[] = (data || []).map((kpm: any, idx: number) => {
+        const is3B = kpm.kategori === 'POSYANDU_3B' || kpm.kategori === 'POSYANDU 3B'
+        const jenisLabel = is3B 
+          ? (kpm.sub_kategori === 'Bumil' ? 'Ibu Hamil' : kpm.sub_kategori === 'Busui' ? 'Ibu Menyusui' : 'Bayi Dibawah Lima Tahun')
+          : kpm.kategori
+
+        const bnbaCount = (bnbaRes || []).filter(b => b.kelompok_id === kpm.kode || b.kelompok_id === kpm.id).length
+        const totalTarget = kpm.jumlah_penerima || (kpm.target_pria || 0) + (kpm.target_wanita || 0) + (kpm.target_guru || 0) + (kpm.target_tendik || 0) || 100
+
+        let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'
+        let ketMsg = '✓ Sesuai'
+
+        if (bnbaCount === 0) {
+          ketStatus = 'Belum ada detail'
+          ketMsg = '⚠️ Belum ada detail'
+        } else if (bnbaCount < totalTarget) {
+          ketStatus = 'Kurang'
+          ketMsg = `↓ Kurang ${totalTarget - bnbaCount} orang`
+        } else if (bnbaCount > totalTarget) {
+          ketStatus = 'Lebih'
+          ketMsg = `↑ Lebih ${bnbaCount - totalTarget} orang`
+        }
+
+        return {
+          id: kpm.id || kpm.kode || `kpm-${idx + 1}`,
+          no: idx + 1,
+          jenis: jenisLabel,
+          nama: kpm.nama,
+          npsnReg: kpm.identitas_npsn_tmp || kpm.kode,
+          kepemilikan: (kpm.kepemilikan as 'Negeri' | 'Swasta') || 'Negeri',
+          kecamatan: kpm.kecamatan || 'WONOREJO',
+          kelDesa: kpm.kel_desa || 'WONOREJO',
+          alamat: kpm.alamat || kpm.wilayah || 'Wonorejo Pasuruan',
+          pria: kpm.target_pria || Math.floor(totalTarget / 2),
+          wanita: kpm.target_wanita || Math.ceil(totalTarget / 2),
+          guru: kpm.target_guru || 0,
+          tendik: kpm.target_tendik || 0,
+          totalTarget,
+          rincianTerisi: bnbaCount,
+          keteranganStatus: ketStatus,
+          keteranganMsg: ketMsg,
+          pimpinan: kpm.pimpinan || 'PENANGGUNG JAWAB',
+          hp: kpm.hp || '081234567890',
+          email: kpm.email || 'kpm.wonorejo@gmail.com',
+          status: (kpm.status as 'Aktif' | 'Non-Aktif') || 'Aktif'
+        }
+      })
+
+      setKpmItems(mappedItems)
+    } catch (err) {
+      console.error('Error fetching Supabase KPM data:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
     loadData()
   }, [])
+
+  const triggerToast = (msg: string) => {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3500)
+  }
 
   const handleRefresh = () => {
     setIsRefreshing(true)
@@ -283,59 +189,9 @@ export default function KelompokPenerimaManfaatPage() {
     }, 600)
   }
 
-  // Real-time calculated dataset combining Supabase & local state
+  // Real-time calculated dataset based purely on state & BNBA store
   const fullDataList: DetailKpmItem[] = useMemo(() => {
-    const customItems: DetailKpmItem[] = supabaseKpm.map((kpm, idx) => {
-      const is3B = kpm.kategori === 'POSYANDU_3B' || kpm.kategori === 'POSYANDU 3B'
-      const jenisLabel = is3B 
-        ? (kpm.sub_kategori === 'Bumil' ? 'Ibu Hamil' : kpm.sub_kategori === 'Busui' ? 'Ibu Menyusui' : 'Bayi Dibawah Lima Tahun')
-        : kpm.kategori
-
-      const bnbaCount = allBnbaRecords.filter(b => b.kelompok_id === kpm.kode || b.kelompok_id === kpm.id).length
-      const totalTarget = kpm.jumlah_penerima || 0
-
-      let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'
-      let ketMsg = '✓ Sesuai'
-
-      if (bnbaCount === 0) {
-        ketStatus = 'Belum ada detail'
-        ketMsg = '⚠️ Belum ada detail'
-      } else if (bnbaCount < totalTarget) {
-        ketStatus = 'Kurang'
-        ketMsg = `↓ Kurang ${totalTarget - bnbaCount} orang`
-      } else if (bnbaCount > totalTarget) {
-        ketStatus = 'Lebih'
-        ketMsg = `↑ Lebih ${bnbaCount - totalTarget} orang`
-      }
-
-      return {
-        id: kpm.kode || `sp-${idx}`,
-        no: INITIAL_AUDIT_ITEMS.length + idx + 1,
-        jenis: jenisLabel,
-        nama: kpm.nama,
-        npsnReg: kpm.identitas_npsn_tmp,
-        kepemilikan: 'Negeri',
-        kecamatan: 'WONOREJO',
-        kelDesa: 'WONOREJO',
-        alamat: kpm.wilayah,
-        pria: Math.floor(totalTarget / 2),
-        wanita: Math.ceil(totalTarget / 2),
-        guru: 0,
-        tendik: 0,
-        totalTarget,
-        rincianTerisi: bnbaCount,
-        keteranganStatus: ketStatus,
-        keteranganMsg: ketMsg,
-        pimpinan: 'PENANGGUNG JAWAB KPM',
-        hp: '081234567890',
-        email: 'kpm.sppg@wonorejo.id',
-        status: 'Aktif'
-      }
-    })
-
-    const combinedMap = new Map<string, DetailKpmItem>()
-    kpmItems.forEach(item => {
-      // Recalculate BNBA count dynamically
+    return kpmItems.map((item, idx) => {
       const bnbaCount = allBnbaRecords.filter(b => b.kelompok_id === item.id || b.kelompok_id === item.npsnReg).length
       const rincianVal = bnbaCount > 0 ? bnbaCount : item.rincianTerisi
 
@@ -356,24 +212,17 @@ export default function KelompokPenerimaManfaatPage() {
         ketMsg = `↑ Lebih ${rincianVal - item.totalTarget} orang`
       }
 
-      combinedMap.set(item.id, {
+      return {
         ...item,
+        no: idx + 1,
         rincianTerisi: rincianVal,
         keteranganStatus: ketStatus,
         keteranganMsg: ketMsg
-      })
-    })
-
-    customItems.forEach(ci => {
-      if (!combinedMap.has(ci.id) && !Array.from(combinedMap.values()).some(x => x.npsnReg === ci.npsnReg)) {
-        combinedMap.set(ci.id, ci)
       }
     })
+  }, [kpmItems, allBnbaRecords])
 
-    return Array.from(combinedMap.values())
-  }, [kpmItems, supabaseKpm, allBnbaRecords])
-
-  // Real-time Aggregate KPI Calculations (No Dummy Hardcode)
+  // Aggregate KPI Calculations
   const stats = useMemo(() => {
     const totalAktif = fullDataList.filter(i => i.status === 'Aktif').length
     const totalTarget = fullDataList.filter(i => i.status === 'Aktif').reduce((acc, curr) => acc + curr.totalTarget, 0)
@@ -459,25 +308,65 @@ export default function KelompokPenerimaManfaatPage() {
     setShowAddModal(true)
   }
 
-  // Delete Action
+  // Delete Click
   const handleDeleteClick = (item: DetailKpmItem) => {
     setDeleteConfirmItem(item)
   }
 
-  const confirmDeleteGroup = () => {
+  // ─── 100% Precise Supabase Delete Handler with Logging & Filter State ───
+  const confirmDeleteGroup = async () => {
     if (!deleteConfirmItem) return
+    const targetItem = deleteConfirmItem
+
+    // Logging to Browser DevTools Console
+    console.log('Menghapus item:', targetItem)
+
     setIsDeleting(true)
-    setKpmItems(prev => prev.filter(i => i.id !== deleteConfirmItem.id))
-    setTimeout(() => {
+    try {
+      let query = supabase.from('kelompok_penerima_manfaat').delete()
+
+      const targetId = targetItem.id
+      const targetKode = targetItem.npsnReg || targetItem.id
+
+      // Check if target identifier is a UUID or a code string
+      if (targetId && targetId.length > 20 && targetId.includes('-') && !targetId.startsWith('kpm-') && !targetId.startsWith('K')) {
+        query = query.eq('id', targetId)
+      } else if (targetKode) {
+        query = query.eq('kode', targetKode)
+      } else {
+        query = query.eq('id', targetId)
+      }
+
+      const { error } = await query
+
+      if (error) {
+        console.error("Gagal delete Supabase:", error.message)
+        alert("Gagal menghapus dari Supabase: " + error.message)
+        return
+      }
+
+      // Also cleanup local helper store
+      await deleteKelompokPenerimaManfaat(targetKode)
+
+      // Update State Cepat (Filter state after successful response)
+      setKpmItems(prev => prev.filter(k => k.id !== targetItem.id && k.npsnReg !== targetItem.npsnReg))
+
+      triggerToast(`Kelompok "${targetItem.nama}" berhasil dihapus.`)
+    } catch (err: any) {
+      console.error("Exception delete Supabase:", err)
+      alert("Gagal menghapus: " + (err.message || 'Error server'))
+    } finally {
+      // Guaranteed loading state reset
       setIsDeleting(false)
       setDeleteConfirmItem(null)
-    }, 400)
+    }
   }
 
   // Toggle Status Action
   const handleToggleStatus = (item: DetailKpmItem) => {
     const newStatus: 'Aktif' | 'Non-Aktif' = item.status === 'Aktif' ? 'Non-Aktif' : 'Aktif'
     setKpmItems(prev => prev.map(i => i.id === item.id ? { ...i, status: newStatus } : i))
+    triggerToast(`Status kelompok "${item.nama}" diubah menjadi ${newStatus}.`)
   }
 
   // Save KPM Group
@@ -514,6 +403,7 @@ export default function KelompokPenerimaManfaatPage() {
         hp: formHp.trim() || item.hp,
         email: formEmail.trim() || item.email,
       } : item))
+      triggerToast(`Perubahan data "${formNama}" berhasil disimpan.`)
     } else {
       const randomCode = `K${Math.floor(1000000000 + Math.random() * 9000000000)}`
       const newItem: DetailKpmItem = {
@@ -554,6 +444,7 @@ export default function KelompokPenerimaManfaatPage() {
         created_at: new Date().toISOString()
       }
       await saveKelompokPenerimaManfaat(newKpmSupabase)
+      triggerToast(`Kelompok baru "${formNama}" berhasil ditambahkan.`)
     }
 
     setSaving(false)
@@ -609,6 +500,7 @@ export default function KelompokPenerimaManfaatPage() {
 
     setSavingBnba(false)
     setShowAddBnbaModal(false)
+    triggerToast(`Penerima BNBA "${bnbaNama}" berhasil ditambahkan.`)
   }
 
   const handleDeleteBnba = async (bnbaId: string) => {
@@ -617,6 +509,7 @@ export default function KelompokPenerimaManfaatPage() {
     const updatedList = await fetchBnbaList(activeBnbaGroup.id)
     setBnbaList(updatedList)
     setAllBnbaRecords(prev => prev.filter(b => b.id !== bnbaId))
+    triggerToast('Data perorangan BNBA berhasil dihapus.')
   }
 
   const filteredBnbaList = useMemo(() => {
@@ -630,7 +523,15 @@ export default function KelompokPenerimaManfaatPage() {
   }, [bnbaList, bnbaSearch])
 
   return (
-    <div className="space-y-5 font-sans text-slate-800 pb-16">
+    <div className="space-y-5 font-sans text-slate-800 pb-16 relative">
+      {/* Toast Notification Banner */}
+      {toastMsg && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+          <Check size={16} className="text-emerald-400" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
+
       {/* 1. Header Atas Halaman (Flat BGN Style) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -994,7 +895,7 @@ export default function KelompokPenerimaManfaatPage() {
               ) : (
                 <tr>
                   <td colSpan={18} className="py-10 text-center text-slate-400 font-medium">
-                    Tidak ada data Kelompok Penerima Manfaat yang cocok.
+                    {loading ? 'Memuat data dari database Supabase...' : 'Tidak ada data Kelompok Penerima Manfaat yang cocok.'}
                   </td>
                 </tr>
               )}
@@ -1281,16 +1182,25 @@ export default function KelompokPenerimaManfaatPage() {
               <p>Apakah Anda yakin ingin menghapus kelompok ini?</p>
               <div className="p-3 bg-slate-50 rounded border border-slate-200">
                 <p className="font-bold text-slate-900">{deleteConfirmItem.nama}</p>
-                <p className="text-[11px] text-slate-500 font-mono">NPSN: {deleteConfirmItem.npsnReg}</p>
+                <p className="text-[11px] text-slate-500 font-mono">NPSN/REG: {deleteConfirmItem.npsnReg}</p>
               </div>
             </div>
 
             <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
-              <button onClick={() => setDeleteConfirmItem(null)} className="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-700">
+              <button 
+                onClick={() => setDeleteConfirmItem(null)} 
+                disabled={isDeleting}
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              >
                 Batal
               </button>
-              <button onClick={confirmDeleteGroup} disabled={isDeleting} className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-bold">
-                {isDeleting ? 'Menghapus...' : 'Ya, Hapus'}
+              <button 
+                onClick={confirmDeleteGroup} 
+                disabled={isDeleting} 
+                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeleting ? <RotateCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                <span>{isDeleting ? 'Menghapus...' : 'Ya, Hapus'}</span>
               </button>
             </div>
           </div>
