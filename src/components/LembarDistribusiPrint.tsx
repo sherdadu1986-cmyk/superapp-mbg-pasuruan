@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Printer, X, ShieldCheck, Building2, Package, Calendar } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { fetchKelompokPenerimaManfaatList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
+import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
 
 interface LembarDistribusiPrintProps {
   isOpen: boolean
@@ -109,7 +109,9 @@ export default function LembarDistribusiPrint({
     let grandBesar = 0
     let grandTendik = 0
 
-    const processed = kpmData.map((item, idx) => {
+    const sortedData = sortKpmList(kpmData)
+
+    const processed = sortedData.map((item, idx) => {
       const breakdown = calculateKpmPortion(item)
       grandTotal += breakdown.total
       grandKecil += breakdown.porsiKecil

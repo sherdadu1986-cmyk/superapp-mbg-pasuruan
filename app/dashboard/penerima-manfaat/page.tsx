@@ -144,10 +144,11 @@ export default function BerandaOperasionalPage() {
   // Load Real-Time Supabase Data
   const loadDashboardData = async () => {
     try {
-      // Ambil KPM langsung via REST API
+      // Ambil KPM langsung via REST API dengan urutan ascending
       const { data: kpmData, error: kpmErr } = await supabase
         .from('kelompok_penerima_manfaat')
         .select('*')
+        .order('urutan', { ascending: true })
 
       // Ambil BNBA riil langsung via REST API (limit 10000 agar tidak terpotong default 1000 baris Supabase)
       const { data: bnbaData, count, error: bnbaErr } = await supabase
@@ -158,7 +159,7 @@ export default function BerandaOperasionalPage() {
       console.log('Direct Fetch BNBA Count:', count ?? bnbaData?.length)
 
       let fetchedKpm = kpmData
-      if (kpmErr || !fetchedKpm) {
+      if (kpmErr || !fetchedKpm || fetchedKpm.length === 0) {
         fetchedKpm = await fetchKelompokPenerimaManfaatList()
       }
 
@@ -175,9 +176,10 @@ export default function BerandaOperasionalPage() {
         setTotalBnba(count ?? fetchedBnba.length)
       }
       if (fetchedKpm) {
-        setKpmList(fetchedKpm)
-        setTotalKpm(fetchedKpm.length)
-        const totalTarget = fetchedKpm.reduce((acc, curr) => acc + (Number(curr.jumlah_penerima) || 0), 0)
+        const sorted = sortKpmList(fetchedKpm)
+        setKpmList(sorted)
+        setTotalKpm(sorted.length)
+        const totalTarget = sorted.reduce((acc, curr) => acc + (Number(curr.jumlah_penerima) || 0), 0)
         setTargetPenerima(totalTarget)
       }
       if (menuRes) {
