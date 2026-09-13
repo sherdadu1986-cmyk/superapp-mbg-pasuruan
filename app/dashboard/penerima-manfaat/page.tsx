@@ -7,7 +7,7 @@ import {
   FileCheck, ShieldCheck, Database, Award, Activity, Truck, MapPin, Sparkles, Package
 } from 'lucide-react'
 import {
-  fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB,
+  fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB, sortKpmList,
   type KelompokPenerimaManfaat, type PenerimaManfaatBnba, type MenuHarianDB
 } from '@/lib/data-helpers'
 import { supabase } from '@/lib/supabase'
