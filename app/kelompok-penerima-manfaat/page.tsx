@@ -118,6 +118,12 @@ export default function KelompokPenerimaManfaatPage() {
   const [editingBnbaItem, setEditingBnbaItem] = useState<PenerimaManfaatBnba | null>(null)
   const [savingBnba, setSavingBnba] = useState(false)
 
+  // BNBA Multi-Select & Bulk Delete States
+  const [selectedBnbaIds, setSelectedBnbaIds] = useState<string[]>([])
+  const [showBulkDeleteConfirmModal, setShowBulkDeleteConfirmModal] = useState(false)
+  const [bulkDeleteType, setBulkDeleteType] = useState<'selected' | 'all' | null>(null)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+
   // BNBA Excel Import States
   const [importPreviewData, setImportPreviewData] = useState<PenerimaManfaatBnba[]>([])
   const [showImportConfirmModal, setShowImportConfirmModal] = useState(false)
@@ -790,6 +796,7 @@ export default function KelompokPenerimaManfaatPage() {
   // Open BNBA Modal Drawer
   const handleOpenBnbaModal = async (group: DetailKpmItem) => {
     setActiveBnbaGroup(group)
+    setSelectedBnbaIds([])
     const list = await fetchBnbaList(group.id)
     setBnbaList(list)
 
@@ -952,7 +959,82 @@ export default function KelompokPenerimaManfaatPage() {
     const updatedList = await fetchBnbaList(activeBnbaGroup.id)
     setBnbaList(updatedList)
     setAllBnbaRecords(prev => prev.filter(b => b.id !== bnbaId))
+    setSelectedBnbaIds(prev => prev.filter(id => id !== bnbaId))
     triggerToast('Data perorangan BNBA berhasil dihapus.')
+  }
+
+  // Bulk / Mass Delete BNBA Records (Selected or Clear All)
+  const handleExecuteBulkDelete = async () => {
+    if (!activeBnbaGroup || !bulkDeleteType) return
+    setIsBulkDeleting(true)
+
+    try {
+      const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
+
+      if (bulkDeleteType === 'selected') {
+        if (selectedBnbaIds.length === 0) return
+
+        const { error } = await supabase
+          .from('penerima_manfaat_bnba')
+          .delete()
+          .in('id', selectedBnbaIds)
+
+        if (error) {
+          console.error('Error bulk deleting BNBA in Supabase:', error)
+          alert('Gagal menghapus data terpilih: ' + error.message)
+          return
+        }
+
+        for (const id of selectedBnbaIds) {
+          await deleteBnbaItem(id)
+        }
+
+        const updatedList = await fetchBnbaList(activeBnbaGroup.id)
+        const finalList = updatedList.filter(b => !selectedBnbaIds.includes(b.id))
+        setBnbaList(finalList)
+        setAllBnbaRecords(prev => prev.filter(b => !selectedBnbaIds.includes(b.id)))
+
+        const newCount = finalList.length
+        setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: newCount } : null)
+        setKpmItems(prev => prev.map(k => (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === activeKelompokUuid) ? { ...k, rincianTerisi: newCount } : k))
+
+        triggerToast(`Berhasil menghapus ${selectedBnbaIds.length} data BNBA terpilih.`)
+        setSelectedBnbaIds([])
+      } else if (bulkDeleteType === 'all') {
+        if (bnbaList.length === 0) return
+
+        const { error } = await supabase
+          .from('penerima_manfaat_bnba')
+          .delete()
+          .or(`kelompok_id.eq.${activeKelompokUuid},kelompok_id.eq.${activeBnbaGroup.id},kelompok_id.eq.${activeBnbaGroup.npsnReg}`)
+
+        if (error) {
+          console.error('Error clearing all BNBA in Supabase:', error)
+          alert('Gagal mengosongkan data BNBA: ' + error.message)
+          return
+        }
+
+        for (const item of bnbaList) {
+          await deleteBnbaItem(item.id)
+        }
+
+        setBnbaList([])
+        setAllBnbaRecords(prev => prev.filter(b => b.kelompok_id !== activeBnbaGroup.id && b.kelompok_id !== activeKelompokUuid && b.kelompok_id !== activeBnbaGroup.npsnReg))
+
+        setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: 0 } : null)
+        setKpmItems(prev => prev.map(k => (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === activeKelompokUuid) ? { ...k, rincianTerisi: 0 } : k))
+
+        triggerToast(`Seluruh data BNBA kelompok "${activeBnbaGroup.nama}" berhasil dikosongkan.`)
+        setSelectedBnbaIds([])
+      }
+    } catch (err: any) {
+      console.error('Exception bulk deleting BNBA:', err)
+      alert('Terjadi kesalahan saat menghapus data BNBA: ' + (err.message || 'Error server'))
+    } finally {
+      setIsBulkDeleting(false)
+      setShowBulkDeleteConfirmModal(false)
+      setBulkDeleteType(null)
+    }
   }
 
   // ─── BNBA Excel Import & Template Download Helpers ───
@@ -2362,6 +2444,37 @@ export default function KelompokPenerimaManfaatPage() {
                   <span>Import Excel</span>
                 </label>
 
+                {/* Dynamic Bulk Action Buttons */}
+                {selectedBnbaIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkDeleteType('selected')
+                      setShowBulkDeleteConfirmModal(true)
+                    }}
+                    title="Hapus baris BNBA yang dipilih"
+                    className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs animate-fadeIn"
+                  >
+                    <Trash2 size={14} />
+                    <span>Hapus Terpilih ({selectedBnbaIds.length})</span>
+                  </button>
+                )}
+
+                {bnbaList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkDeleteType('all')
+                      setShowBulkDeleteConfirmModal(true)
+                    }}
+                    title="Kosongkan seluruh data BNBA kelompok ini"
+                    className="px-2.5 py-1.5 bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  >
+                    <Trash2 size={14} className="text-rose-600" />
+                    <span>Hapus Semua</span>
+                  </button>
+                )}
+
                 <button 
                   onClick={handleOpenAddBnbaModal} 
                   className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
@@ -2376,6 +2489,21 @@ export default function KelompokPenerimaManfaatPage() {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px]">
+                      <th className="py-2.5 px-3 text-center w-10">
+                        <input
+                          type="checkbox"
+                          checked={filteredBnbaList.length > 0 && selectedBnbaIds.length === filteredBnbaList.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedBnbaIds(filteredBnbaList.map(item => item.id))
+                            } else {
+                              setSelectedBnbaIds([])
+                            }
+                          }}
+                          className="rounded border-slate-300 text-slate-900 focus:ring-slate-800 cursor-pointer"
+                          title="Pilih Semua Data BNBA"
+                        />
+                      </th>
                       <th className="py-2.5 px-3 text-center">NO</th>
                       <th className="py-2.5 px-3">NIK / NISN</th>
                       <th className="py-2.5 px-3">NAMA PENERIMA</th>
@@ -2389,44 +2517,110 @@ export default function KelompokPenerimaManfaatPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {filteredBnbaList.length > 0 ? (
-                      filteredBnbaList.map((row, idx) => (
-                        <tr key={row.id} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-3 text-center text-slate-500">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-mono font-semibold">{row.nisn_nik}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{row.nama_lengkap}</td>
-                          <td className="py-2.5 px-3 font-mono">{row.tanggal_lahir}</td>
-                          <td className="py-2.5 px-3 text-center">{row.jenis_kelamin}</td>
-                          <td className="py-2.5 px-3">{row.nama_ortu}</td>
-                          <td className="py-2.5 px-3 text-center">{row.posisi}</td>
-                          <td className="py-2.5 px-3 text-center font-mono">{row.kelas}</td>
-                          <td className="py-2.5 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button 
-                                onClick={() => handleOpenEditBnbaModal(row)} 
-                                title="Edit Data BNBA"
-                                className="p-1 text-slate-500 hover:text-amber-600 transition cursor-pointer"
-                              >
-                                <Edit size={13} />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteBnba(row.id)} 
-                                title="Hapus Data BNBA"
-                                className="p-1 text-slate-500 hover:text-rose-600 transition cursor-pointer"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                      filteredBnbaList.map((row, idx) => {
+                        const isSelected = selectedBnbaIds.includes(row.id)
+                        return (
+                          <tr key={row.id} className={`hover:bg-slate-50 transition ${isSelected ? 'bg-amber-50/60' : ''}`}>
+                            <td className="py-2.5 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBnbaIds(prev => [...prev, row.id])
+                                  } else {
+                                    setSelectedBnbaIds(prev => prev.filter(id => id !== row.id))
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-slate-900 focus:ring-slate-800 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 text-center text-slate-500">{idx + 1}</td>
+                            <td className="py-2.5 px-3 font-mono font-semibold">{row.nisn_nik}</td>
+                            <td className="py-2.5 px-3 font-bold text-slate-900">{row.nama_lengkap}</td>
+                            <td className="py-2.5 px-3 font-mono">{row.tanggal_lahir}</td>
+                            <td className="py-2.5 px-3 text-center">{row.jenis_kelamin}</td>
+                            <td className="py-2.5 px-3">{row.nama_ortu}</td>
+                            <td className="py-2.5 px-3 text-center">{row.posisi}</td>
+                            <td className="py-2.5 px-3 text-center font-mono">{row.kelas}</td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button 
+                                  onClick={() => handleOpenEditBnbaModal(row)} 
+                                  title="Edit Data BNBA"
+                                  className="p-1 text-slate-500 hover:text-amber-600 transition cursor-pointer"
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteBnba(row.id)} 
+                                  title="Hapus Data BNBA"
+                                  className="p-1 text-slate-500 hover:text-rose-600 transition cursor-pointer"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
                     ) : (
                       <tr>
-                        <td colSpan={9} className="py-8 text-center text-slate-400">Belum ada data BNBA.</td>
+                        <td colSpan={10} className="py-8 text-center text-slate-400">Belum ada data BNBA.</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Bulk Delete (Selected / Clear All) */}
+      {showBulkDeleteConfirmModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-fadeIn">
+            <div className="p-4 border-b border-slate-200 bg-rose-50 flex items-center gap-3">
+              <ShieldAlert size={22} className="text-rose-600 shrink-0" />
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">
+                  {bulkDeleteType === 'all' ? 'Peringatan: Kosongkan Seluruh Data BNBA' : 'Konfirmasi Hapus Terpilih'}
+                </h3>
+                <p className="text-[11px] text-slate-500">Tindakan ini menghapus data secara permanen di database.</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3 text-xs text-slate-700">
+              {bulkDeleteType === 'selected' ? (
+                <p className="leading-relaxed">
+                  Apakah Anda yakin ingin menghapus <strong className="text-rose-600 font-bold">{selectedBnbaIds.length}</strong> data BNBA yang dipilih dari kelompok <strong className="text-slate-900">{activeBnbaGroup?.nama}</strong>?
+                </p>
+              ) : (
+                <p className="leading-relaxed text-rose-700 bg-rose-50 p-3 rounded-lg border border-rose-200">
+                  <strong>PERINGATAN KERAS!</strong> Anda akan menghapus <strong className="font-bold text-rose-900">seluruh {bnbaList.length} data BNBA</strong> untuk kelompok <strong className="font-bold text-slate-900">{activeBnbaGroup?.nama}</strong>. Tindakan ini tidak dapat dibatalkan!
+                </p>
+              )}
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowBulkDeleteConfirmModal(false); setBulkDeleteType(null); }}
+                disabled={isBulkDeleting}
+                className="px-3.5 py-1.5 bg-white border border-slate-300 rounded-md font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteBulkDelete}
+                disabled={isBulkDeleting}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md font-bold text-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isBulkDeleting ? <RotateCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                <span>{isBulkDeleting ? 'Menghapus...' : bulkDeleteType === 'all' ? 'Ya, Kosongkan Semua' : `Hapus ${selectedBnbaIds.length} Data`}</span>
+              </button>
             </div>
           </div>
         </div>
