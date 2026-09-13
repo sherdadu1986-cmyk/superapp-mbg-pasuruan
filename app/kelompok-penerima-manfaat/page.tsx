@@ -39,6 +39,11 @@ export interface DetailKpmItem {
   hp: string
   email: string
   status: 'Aktif' | 'Non-Aktif'
+  sd13Laki?: number
+  sd13Perem?: number
+  sd46Laki?: number
+  sd46Perem?: number
+  subKategoriRaw?: string
 }
 
 export default function KelompokPenerimaManfaatPage() {
@@ -75,13 +80,19 @@ export default function KelompokPenerimaManfaatPage() {
   const [formHp, setFormHp] = useState('')
   const [formEmail, setFormEmail] = useState('')
 
-  // 1. School Allocation Form Fields
+  // 1. Standard School Allocation Form Fields
   const [formPria, setFormPria] = useState(100)
   const [formWanita, setFormWanita] = useState(100)
   const [formGuru, setFormGuru] = useState(10)
   const [formTendik, setFormTendik] = useState(5)
 
-  // 2. Posyandu 3B Allocation Form Fields
+  // 2. SD / MI Specific Allocation Fields (Classes 1-3 vs 4-6)
+  const [formSdSiswaLaki13, setFormSdSiswaLaki13] = useState(50)
+  const [formSdSiswaPerem13, setFormSdSiswaPerem13] = useState(50)
+  const [formSdSiswaLaki46, setFormSdSiswaLaki46] = useState(50)
+  const [formSdSiswaPerem46, setFormSdSiswaPerem46] = useState(50)
+
+  // 3. Posyandu 3B Allocation Form Fields
   const [formBalitaLaki, setFormBalitaLaki] = useState(30)
   const [formBalitaPerem, setFormBalitaPerem] = useState(30)
   const [formBumil, setFormBumil] = useState(15)
@@ -114,6 +125,12 @@ export default function KelompokPenerimaManfaatPage() {
     return k.includes('POSYANDU') || k.includes('3B') || k.includes('KOMUNITAS')
   }, [formKategori])
 
+  // Helper check for SD / MI Category
+  const isSdCategory = useMemo(() => {
+    const k = (formKategori || '').toUpperCase()
+    return k === 'SD' || k === 'MI' || k.includes('SD') || k.includes('MI')
+  }, [formKategori])
+
   // Calculated target total based on category selection
   const calculatedTotalTarget = useMemo(() => {
     if (isPosyanduCategory) {
@@ -123,11 +140,43 @@ export default function KelompokPenerimaManfaatPage() {
              (Number(formBusui) || 0) + 
              (Number(formKaderPosyandu) || 0)
     }
+    if (isSdCategory) {
+      return (Number(formSdSiswaLaki13) || 0) +
+             (Number(formSdSiswaPerem13) || 0) +
+             (Number(formSdSiswaLaki46) || 0) +
+             (Number(formSdSiswaPerem46) || 0) +
+             (Number(formGuru) || 0) +
+             (Number(formTendik) || 0)
+    }
     return (Number(formPria) || 0) + 
            (Number(formWanita) || 0) + 
            (Number(formGuru) || 0) + 
            (Number(formTendik) || 0)
-  }, [isPosyanduCategory, formBalitaLaki, formBalitaPerem, formBumil, formBusui, formKaderPosyandu, formPria, formWanita, formGuru, formTendik])
+  }, [isPosyanduCategory, isSdCategory, formBalitaLaki, formBalitaPerem, formBumil, formBusui, formKaderPosyandu, formSdSiswaLaki13, formSdSiswaPerem13, formSdSiswaLaki46, formSdSiswaPerem46, formPria, formWanita, formGuru, formTendik])
+
+  // Portion sizing calculation for operational standards
+  const portionSummary = useMemo(() => {
+    if (isPosyanduCategory) {
+      const kecil = (Number(formBalitaLaki) || 0) + (Number(formBalitaPerem) || 0)
+      const besar = (Number(formBumil) || 0) + (Number(formBusui) || 0) + (Number(formKaderPosyandu) || 0)
+      return { kecil, besar, label: `Porsi Kecil: ${kecil} porsi (Balita) | Porsi Besar: ${besar} porsi (Bumil, Busui, Kader)` }
+    }
+    if (isSdCategory) {
+      const kecil = (Number(formSdSiswaLaki13) || 0) + (Number(formSdSiswaPerem13) || 0)
+      const besar = (Number(formSdSiswaLaki46) || 0) + (Number(formSdSiswaPerem46) || 0) + (Number(formGuru) || 0) + (Number(formTendik) || 0)
+      return { kecil, besar, label: `Porsi Kecil: ${kecil} porsi (Kelas 1-3) | Porsi Besar: ${besar} porsi (Kelas 4-6 + Guru/Tendik)` }
+    }
+    const k = (formKategori || '').toUpperCase()
+    const isPaudTk = k.includes('KB') || k.includes('PAUD') || k.includes('TK') || k.includes('RA')
+    if (isPaudTk) {
+      const kecil = (Number(formPria) || 0) + (Number(formWanita) || 0)
+      const besar = (Number(formGuru) || 0) + (Number(formTendik) || 0)
+      return { kecil, besar, label: `Porsi Kecil: ${kecil} porsi (Siswa PAUD/TK) | Porsi Besar: ${besar} porsi (Guru/Tendik)` }
+    } else {
+      const besar = (Number(formPria) || 0) + (Number(formWanita) || 0) + (Number(formGuru) || 0) + (Number(formTendik) || 0)
+      return { kecil: 0, besar, label: `Porsi Kecil: 0 porsi | Porsi Besar: ${besar} porsi (Siswa + Guru/Tendik)` }
+    }
+  }, [isPosyanduCategory, isSdCategory, formKategori, formBalitaLaki, formBalitaPerem, formBumil, formBusui, formKaderPosyandu, formSdSiswaLaki13, formSdSiswaPerem13, formSdSiswaLaki46, formSdSiswaPerem46, formPria, formWanita, formGuru, formTendik])
 
   // Load Data Purely from Supabase Database
   const loadData = async () => {
@@ -169,6 +218,21 @@ export default function KelompokPenerimaManfaatPage() {
           ketMsg = `↑ Lebih ${bnbaCount - totalTarget} orang`
         }
 
+        let sd13LakiVal: number | undefined = undefined
+        let sd13PeremVal: number | undefined = undefined
+        let sd46LakiVal: number | undefined = undefined
+        let sd46PeremVal: number | undefined = undefined
+
+        if (kpm.sub_kategori && typeof kpm.sub_kategori === 'string' && kpm.sub_kategori.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(kpm.sub_kategori)
+            sd13LakiVal = parsed.sd13Laki
+            sd13PeremVal = parsed.sd13Perem
+            sd46LakiVal = parsed.sd46Laki
+            sd46PeremVal = parsed.sd46Perem
+          } catch {}
+        }
+
         return {
           id: kpm.id || kpm.kode || `kpm-${idx + 1}`,
           no: idx + 1,
@@ -190,7 +254,12 @@ export default function KelompokPenerimaManfaatPage() {
           pimpinan: kpm.pimpinan || 'PENANGGUNG JAWAB',
           hp: kpm.hp || '081234567890',
           email: kpm.email || 'kpm.wonorejo@gmail.com',
-          status: (kpm.status as 'Aktif' | 'Non-Aktif') || 'Aktif'
+          status: (kpm.status as 'Aktif' | 'Non-Aktif') || 'Aktif',
+          sd13Laki: sd13LakiVal,
+          sd13Perem: sd13PeremVal,
+          sd46Laki: sd46LakiVal,
+          sd46Perem: sd46PeremVal,
+          subKategoriRaw: kpm.sub_kategori
         }
       })
 
@@ -311,11 +380,17 @@ export default function KelompokPenerimaManfaatPage() {
     setFormHp('')
     setFormEmail('')
 
-    // Reset School Allocation
+    // Reset Standard School Allocation
     setFormPria(100)
     setFormWanita(100)
     setFormGuru(10)
     setFormTendik(5)
+
+    // Reset SD Specific Allocation
+    setFormSdSiswaLaki13(50)
+    setFormSdSiswaPerem13(50)
+    setFormSdSiswaLaki46(50)
+    setFormSdSiswaPerem46(50)
 
     // Reset Posyandu 3B Allocation
     setFormBalitaLaki(30)
@@ -332,7 +407,8 @@ export default function KelompokPenerimaManfaatPage() {
     setEditingItem(item)
     setFormNama(item.nama)
     const is3BGroup = item.jenis.includes('Ibu') || item.jenis.includes('Bayi') || item.jenis.includes('POSYANDU')
-    setFormKategori(is3BGroup ? 'POSYANDU 3B' : item.jenis)
+    const isSdGroup = item.jenis.toUpperCase().includes('SD') || item.jenis.toUpperCase().includes('MI')
+    setFormKategori(is3BGroup ? 'POSYANDU 3B' : (isSdGroup ? 'SD' : item.jenis))
     setFormSubKategori(item.jenis.includes('Hamil') ? 'Bumil' : item.jenis.includes('Menyusui') ? 'Busui' : 'Balita')
     setFormIdentitas(item.npsnReg)
     setFormKepemilikan(item.kepemilikan)
@@ -349,6 +425,13 @@ export default function KelompokPenerimaManfaatPage() {
       setFormBumil(Math.floor(item.totalTarget * 0.2))
       setFormBusui(Math.floor(item.totalTarget * 0.15))
       setFormKaderPosyandu(item.guru || 5)
+    } else if (isSdGroup) {
+      setFormSdSiswaLaki13(item.sd13Laki ?? Math.floor(item.pria / 2))
+      setFormSdSiswaPerem13(item.sd13Perem ?? Math.floor(item.wanita / 2))
+      setFormSdSiswaLaki46(item.sd46Laki ?? Math.ceil(item.pria / 2))
+      setFormSdSiswaPerem46(item.sd46Perem ?? Math.ceil(item.wanita / 2))
+      setFormGuru(item.guru)
+      setFormTendik(item.tendik)
     } else {
       setFormPria(item.pria)
       setFormWanita(item.wanita)
@@ -416,12 +499,13 @@ export default function KelompokPenerimaManfaatPage() {
     triggerToast(`Status kelompok "${item.nama}" diubah menjadi ${newStatus}.`)
   }
 
-  // Save KPM Group with Conditional Mapping
+  // Save KPM Group with Conditional Mapping & JSON persistence
   const handleSaveKpm = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
 
     const is3B = isPosyanduCategory
+    const isSd = isSdCategory
     const totalPenerima = calculatedTotalTarget
 
     let identitasVal = formIdentitas.trim()
@@ -431,17 +515,48 @@ export default function KelompokPenerimaManfaatPage() {
 
     const fullWilayah = `JAWA TIMUR · PASURUAN · ${formKecamatan.trim()} · ${formKelDesa.trim()}`
 
-    // Mapping fields depending on Posyandu vs School
-    const targetPriaVal = is3B ? (Number(formBalitaLaki) || 0) : (Number(formPria) || 0)
-    const targetWanitaVal = is3B 
-      ? ((Number(formBalitaPerem) || 0) + (Number(formBumil) || 0) + (Number(formBusui) || 0))
-      : (Number(formWanita) || 0)
-    const targetGuruVal = is3B ? (Number(formKaderPosyandu) || 0) : (Number(formGuru) || 0)
-    const targetTendikVal = is3B ? 0 : (Number(formTendik) || 0)
+    // Mapping fields depending on Posyandu vs SD vs Standard School
+    let targetPriaVal = Number(formPria) || 0
+    let targetWanitaVal = Number(formWanita) || 0
+    let targetGuruVal = Number(formGuru) || 0
+    let targetTendikVal = Number(formTendik) || 0
 
-    const subKatSummary = is3B 
-      ? `Balita: ${(Number(formBalitaLaki) || 0) + (Number(formBalitaPerem) || 0)}, Bumil: ${formBumil || 0}, Busui: ${formBusui || 0}`
-      : undefined
+    let subKatSummary: string | undefined = undefined
+
+    if (is3B) {
+      targetPriaVal = Number(formBalitaLaki) || 0
+      targetWanitaVal = (Number(formBalitaPerem) || 0) + (Number(formBumil) || 0) + (Number(formBusui) || 0)
+      targetGuruVal = Number(formKaderPosyandu) || 0
+      targetTendikVal = 0
+      subKatSummary = JSON.stringify({
+        balitaLaki: formBalitaLaki,
+        balitaPerem: formBalitaPerem,
+        bumil: formBumil,
+        busui: formBusui,
+        kader: formKaderPosyandu,
+        porsiKecil: portionSummary.kecil,
+        porsiBesar: portionSummary.besar,
+        subKat: formSubKategori
+      })
+    } else if (isSd) {
+      targetPriaVal = (Number(formSdSiswaLaki13) || 0) + (Number(formSdSiswaLaki46) || 0)
+      targetWanitaVal = (Number(formSdSiswaPerem13) || 0) + (Number(formSdSiswaPerem46) || 0)
+      targetGuruVal = Number(formGuru) || 0
+      targetTendikVal = Number(formTendik) || 0
+      subKatSummary = JSON.stringify({
+        sd13Laki: formSdSiswaLaki13,
+        sd13Perem: formSdSiswaPerem13,
+        sd46Laki: formSdSiswaLaki46,
+        sd46Perem: formSdSiswaPerem46,
+        porsiKecil: portionSummary.kecil,
+        porsiBesar: portionSummary.besar
+      })
+    } else {
+      subKatSummary = JSON.stringify({
+        porsiKecil: portionSummary.kecil,
+        porsiBesar: portionSummary.besar
+      })
+    }
 
     if (editingItem) {
       setKpmItems(prev => prev.map(item => item.id === editingItem.id ? {
@@ -461,6 +576,11 @@ export default function KelompokPenerimaManfaatPage() {
         pimpinan: formPimpinan.trim() || item.pimpinan,
         hp: formHp.trim() || item.hp,
         email: formEmail.trim() || item.email,
+        sd13Laki: isSd ? formSdSiswaLaki13 : undefined,
+        sd13Perem: isSd ? formSdSiswaPerem13 : undefined,
+        sd46Laki: isSd ? formSdSiswaLaki46 : undefined,
+        sd46Perem: isSd ? formSdSiswaPerem46 : undefined,
+        subKategoriRaw: subKatSummary
       } : item))
       triggerToast(`Perubahan data "${formNama}" berhasil disimpan.`)
     } else {
@@ -486,7 +606,12 @@ export default function KelompokPenerimaManfaatPage() {
         pimpinan: formPimpinan.trim() || (is3B ? 'Bidan Desa / Ketua Kader' : 'Kepala Sekolah'),
         hp: formHp.trim() || '081234567890',
         email: formEmail.trim() || 'kpm.wonorejo@gmail.com',
-        status: 'Aktif'
+        status: 'Aktif',
+        sd13Laki: isSd ? formSdSiswaLaki13 : undefined,
+        sd13Perem: isSd ? formSdSiswaPerem13 : undefined,
+        sd46Laki: isSd ? formSdSiswaLaki46 : undefined,
+        sd46Perem: isSd ? formSdSiswaPerem46 : undefined,
+        subKategoriRaw: subKatSummary
       }
 
       setKpmItems(prev => [newItem, ...prev])
@@ -1043,9 +1168,9 @@ export default function KelompokPenerimaManfaatPage() {
                     <option value="PAUD">PAUD</option>
                     <option value="TK">TK</option>
                     <option value="RA">RA</option>
-                    <option value="SD">SD</option>
-                    <option value="SMP">SMP</option>
-                    <option value="SMA">SMA</option>
+                    <option value="SD">SD / MI</option>
+                    <option value="SMP">SMP / MTs</option>
+                    <option value="SMA">SMA / SMK / MA</option>
                     <option value="POSYANDU 3B">POSYANDU 3B / KOMUNITAS</option>
                   </select>
                 </div>
@@ -1131,18 +1256,111 @@ export default function KelompokPenerimaManfaatPage() {
               </div>
 
               {/* ─── DYNAMIC CONDITIONAL TARGET ALLOCATION SECTION ─── */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="space-y-2.5 pt-2 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <label className="block font-semibold text-slate-800">
-                    {isPosyanduCategory ? 'Target Alokasi Sasaran Posyandu 3B *' : 'Target Alokasi Penerima Sekolah *'}
+                    {isPosyanduCategory 
+                      ? 'Target Alokasi Sasaran Posyandu 3B *' 
+                      : (isSdCategory ? 'Target Alokasi Penerima SD / MI (Standarisasi Porsi) *' : 'Target Alokasi Penerima Sekolah *')}
                   </label>
                   <span className="text-[11px] font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                     Total: {calculatedTotalTarget} Sasaran
                   </span>
                 </div>
 
-                {/* CONDITIONAL BRANCH A: POSYANDU / KOMUNITAS 3B */}
-                {isPosyanduCategory ? (
+                {/* CONDITIONAL BRANCH A: SD / MI SPECIFIC ALLOCATION */}
+                {isSdCategory ? (
+                  <div className="space-y-3 animate-fadeIn bg-slate-50/80 p-3 rounded-lg border border-slate-200">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-800">Siswa Kelas 1 - 3</span>
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded font-semibold border border-emerald-200">
+                          Porsi Kecil
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-600">Siswa Laki-laki (Kelas 1-3)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formSdSiswaLaki13}
+                            onChange={(e) => setFormSdSiswaLaki13(e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-600">Siswa Perempuan (Kelas 1-3)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formSdSiswaPerem13}
+                            onChange={(e) => setFormSdSiswaPerem13(e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-800">Siswa Kelas 4 - 6</span>
+                        <span className="bg-sky-100 text-sky-800 text-[10px] px-2 py-0.5 rounded font-semibold border border-sky-200">
+                          Porsi Besar
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-600">Siswa Laki-laki (Kelas 4-6)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formSdSiswaLaki46}
+                            onChange={(e) => setFormSdSiswaLaki46(e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-600">Siswa Perempuan (Kelas 4-6)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formSdSiswaPerem46}
+                            onChange={(e) => setFormSdSiswaPerem46(e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                      <span className="text-[11px] font-bold text-slate-800 block">Tenaga Pendidik & Pendukung</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-600">Guru</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formGuru}
+                            onChange={(e) => setFormGuru(e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-600">Tendik</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={formTendik}
+                            onChange={(e) => setFormTendik(e.target.value === '' ? 0 : Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : isPosyanduCategory ? (
+                  /* CONDITIONAL BRANCH B: POSYANDU / KOMUNITAS 3B */
                   <div className="space-y-2.5 animate-fadeIn bg-slate-50/80 p-3 rounded-lg border border-slate-200">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div>
@@ -1199,7 +1417,7 @@ export default function KelompokPenerimaManfaatPage() {
                     </div>
                   </div>
                 ) : (
-                  /* CONDITIONAL BRANCH B: SCHOOL CATEGORIES */
+                  /* CONDITIONAL BRANCH C: OTHER SCHOOL CATEGORIES */
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 animate-fadeIn bg-slate-50/80 p-3 rounded-lg border border-slate-200">
                     <div>
                       <span className="text-[10px] font-semibold text-slate-600">Siswa Laki-laki</span>
@@ -1243,6 +1461,16 @@ export default function KelompokPenerimaManfaatPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Summary Helper Badge / Ringkasan Porsi */}
+                <div className="bg-slate-100 p-2.5 rounded-md border border-slate-200 text-[11px] font-medium text-slate-700 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Info size={14} className="text-slate-500 shrink-0" />
+                    <span>
+                      <strong className="text-slate-900 font-bold">Ringkasan Porsi:</strong> {portionSummary.label}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Kontak & Pimpinan (Dynamic Labels based on Category) */}
