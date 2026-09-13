@@ -68,6 +68,49 @@ function OperationalDashboardSkeleton() {
   )
 }
 
+function calculateKpmPortion(item: KelompokPenerimaManfaat) {
+  const kat = (item.kategori || '').toUpperCase()
+  const subKat = (item.sub_kategori || '').toUpperCase()
+  const total = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 0
+  const guruTendik = (item.target_guru || 0) + (item.target_tendik || 0)
+
+  let porsiKecil = 0
+  let porsiBesar = 0
+
+  if (kat.includes('KB') || kat.includes('PAUD') || kat.includes('TK') || kat.includes('RA')) {
+    const siswa = Math.max(0, total - guruTendik)
+    porsiKecil = siswa
+    porsiBesar = guruTendik
+  } else if (kat.includes('SD') || kat.includes('MI')) {
+    const siswa = Math.max(0, total - guruTendik)
+    const porsiKecilSiswa = Math.round(siswa * 0.5)
+    const porsiBesarSiswa = siswa - porsiKecilSiswa
+    porsiKecil = porsiKecilSiswa
+    porsiBesar = porsiBesarSiswa + guruTendik
+  } else if (kat.includes('SMP') || kat.includes('MTS') || kat.includes('SMA') || kat.includes('SMK') || kat.includes('MA')) {
+    porsiBesar = total
+  } else if (kat.includes('POSYANDU') || kat.includes('3B')) {
+    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
+      porsiBesar = total
+    } else {
+      porsiKecil = total
+    }
+  } else {
+    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
+      porsiBesar = total
+    } else {
+      porsiKecil = total
+    }
+  }
+
+  return {
+    total,
+    porsiKecil,
+    porsiBesar,
+    guruTendik
+  }
+}
+
 export default function BerandaOperasionalPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -315,38 +358,13 @@ export default function BerandaOperasionalPage() {
   // ─── Real-Time Portion Calculations (BGN Standard Rules) ──────────────
   let totalPorsiKecil = 0
   let totalPorsiBesar = 0
+  let totalTendik = 0
 
   kpmList.forEach(item => {
-    const kat = (item.kategori || '').toUpperCase()
-    const subKat = (item.sub_kategori || '').toUpperCase()
-    const total = item.jumlah_penerima || 0
-    const guruTendik = (item.target_guru || 0) + (item.target_tendik || 0)
-
-    if (kat.includes('KB') || kat.includes('PAUD') || kat.includes('TK') || kat.includes('RA')) {
-      const siswa = Math.max(0, total - guruTendik)
-      totalPorsiKecil += siswa
-      totalPorsiBesar += guruTendik
-    } else if (kat.includes('SD') || kat.includes('MI')) {
-      const siswa = Math.max(0, total - guruTendik)
-      const porsiKecilSiswa = Math.round(siswa * 0.5)
-      const porsiBesarSiswa = siswa - porsiKecilSiswa
-      totalPorsiKecil += porsiKecilSiswa
-      totalPorsiBesar += porsiBesarSiswa + guruTendik
-    } else if (kat.includes('SMP') || kat.includes('MTS') || kat.includes('SMA') || kat.includes('SMK') || kat.includes('MA')) {
-      totalPorsiBesar += total
-    } else if (kat.includes('POSYANDU') || kat.includes('3B')) {
-      if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
-        totalPorsiBesar += total
-      } else {
-        totalPorsiKecil += total
-      }
-    } else {
-      if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
-        totalPorsiBesar += total
-      } else {
-        totalPorsiKecil += total
-      }
-    }
+    const res = calculateKpmPortion(item)
+    totalPorsiKecil += res.porsiKecil
+    totalPorsiBesar += res.porsiBesar
+    totalTendik += res.guruTendik
   })
 
   const getBnbaCountForKpms = React.useCallback((kpms: KelompokPenerimaManfaat[]) => {
@@ -773,79 +791,93 @@ export default function BerandaOperasionalPage() {
         </div>
 
         {/* Kolom Kanan (7/12): Panel "Kebutuhan Porsi Harian (Real-Time BGN)" */}
-        <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-5 flex flex-col justify-between hover:shadow-md transition duration-200">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200">
+          <div className="space-y-3">
+            {/* Header Card */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h2 className="font-bold text-slate-900 text-base tracking-tight flex items-center gap-2">
                   <span>Kebutuhan Porsi Harian (Real-Time BGN)</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Perhitungan otomatis rasio porsi kecil dan besar dari alokasi Supabase.
+                  Ringkasan alokasi porsi kecil dan porsi besar per KPM dari data Supabase.
                 </p>
               </div>
-              <span className="bg-slate-100 text-slate-700 text-xs font-mono font-bold px-2.5 py-1 rounded-md border border-slate-200">
+              <span className="bg-slate-100 text-slate-700 text-xs font-mono font-bold px-2.5 py-1 rounded-md border border-slate-200 shrink-0">
                 {totalTargetPenerima.toLocaleString('id-ID')} Total Porsi
               </span>
             </div>
 
-            {/* 2 Cards Grid for Portion Breakdown */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Kartu Porsi Kecil */}
-              <div className="bg-gradient-to-br from-amber-50/60 to-orange-50/40 border border-amber-200/80 rounded-xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">
-                    Kartu Porsi Kecil
-                  </span>
-                  <span className="p-1.5 bg-amber-100 text-amber-700 rounded-md">
-                    <UtensilsCrossed size={16} />
-                  </span>
-                </div>
-                <div className="text-2xl sm:text-3xl font-black text-amber-900 tracking-tight">
-                  {totalPorsiKecil.toLocaleString('id-ID')} <span className="text-xs font-semibold text-amber-700">Porsi</span>
-                </div>
-                <p className="text-[11px] text-amber-800/80 font-medium leading-relaxed">
-                  Balita + PAUD/TK + SD Kelas 1-3
-                </p>
-              </div>
-
-              {/* Kartu Porsi Besar */}
-              <div className="bg-gradient-to-br from-indigo-50/60 to-slate-50/80 border border-indigo-200/80 rounded-xl p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">
-                    Kartu Porsi Besar
-                  </span>
-                  <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-md">
-                    <Utensils size={16} />
-                  </span>
-                </div>
-                <div className="text-2xl sm:text-3xl font-black text-indigo-950 tracking-tight">
-                  {totalPorsiBesar.toLocaleString('id-ID')} <span className="text-xs font-semibold text-indigo-700">Porsi</span>
-                </div>
-                <p className="text-[11px] text-indigo-800/80 font-medium leading-relaxed">
-                  SD Kelas 4-6 + SMP/SMA + Bumil/Busui + Guru/Tendik
-                </p>
-              </div>
-            </div>
-
-            {/* Status Kesiapan Distribusi (Progress Bar) */}
-            <div className="mt-5 space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex justify-between items-center text-xs font-bold text-slate-800">
-                <span>Status Kesiapan & Kelengkapan Data BNBA</span>
-                <span className={`font-mono ${isOverAllocated ? 'text-amber-700 font-bold' : 'text-emerald-700'}`}>
-                  {persentase}% Valid {isOverAllocated ? '(Kelebihan Input)' : ''}
-                </span>
-              </div>
-              <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${isOverAllocated ? 'bg-amber-500' : 'bg-emerald-600'}`}
-                  style={{ width: `${persentase}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
-                <span>Data Riil Valid: <strong>{realisasiTotal.toLocaleString('id-ID')}</strong> terdaftar</span>
-                <span>Target: <strong>{totalTargetPenerima.toLocaleString('id-ID')}</strong> alokasi</span>
-              </p>
+            {/* Tabel Ringkas Distribusi (Compact Table Container) */}
+            <div className="max-h-[360px] overflow-y-auto border border-slate-100 rounded-xl shadow-2xs">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="sticky top-0 bg-slate-900 text-white z-10 text-[10px] font-bold uppercase tracking-wider">
+                  <tr>
+                    <th className="py-2.5 px-3 text-center w-10 border-b border-slate-800">NO</th>
+                    <th className="py-2.5 px-3 border-b border-slate-800">NAMA KPM / LEMBAGA</th>
+                    <th className="py-2.5 px-3 text-right border-b border-slate-800">TOTAL</th>
+                    <th className="py-2.5 px-3 text-right border-b border-slate-800">KECIL</th>
+                    <th className="py-2.5 px-3 text-right border-b border-slate-800">BESAR</th>
+                    <th className="py-2.5 px-3 text-right border-b border-slate-800">TENDIK</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+                  {kpmList.length > 0 ? (
+                    kpmList.map((item, idx) => {
+                      const breakdown = calculateKpmPortion(item)
+                      return (
+                        <tr key={item.id || item.kode || idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 text-[11px] font-bold">
+                            {idx + 1}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="font-semibold text-slate-900 block truncate max-w-[200px]" title={item.nama}>
+                              {item.nama}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">
+                            {breakdown.total.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-700">
+                            {breakdown.porsiKecil > 0 ? breakdown.porsiKecil.toLocaleString('id-ID') : '-'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-indigo-900">
+                            {breakdown.porsiBesar > 0 ? breakdown.porsiBesar.toLocaleString('id-ID') : '-'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-600">
+                            {breakdown.guruTendik > 0 ? breakdown.guruTendik.toLocaleString('id-ID') : '-'}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
+                        Belum ada data KPM terdaftar.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot className="sticky bottom-0 bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs z-10 shadow-2xs">
+                  <tr>
+                    <td colSpan={2} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
+                      TOTAL KESELURUHAN
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black">
+                      {totalTargetPenerima.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
+                      {totalPorsiKecil.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-indigo-950 font-black">
+                      {totalPorsiBesar.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold">
+                      {totalTendik.toLocaleString('id-ID')}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
 
