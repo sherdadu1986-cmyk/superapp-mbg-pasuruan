@@ -197,13 +197,34 @@ export default function KelompokPenerimaManfaatPage() {
     }
   }, [isPosyanduCategory, isSdCategory, formKategori, formBalitaLaki, formBalitaPerem, formBumil, formBusui, formKaderPosyandu, formSdSiswaLaki13, formSdSiswaPerem13, formSdSiswaLaki46, formSdSiswaPerem46, formPria, formWanita, formGuru, formTendik])
 
+// Helper to calculate exact BNBA count for a KPM group by matching all possible identifiers (UUID, kode, npsnReg, nama)
+const getBnbaCountForGroup = (
+  group: { id?: string; npsnReg?: string; kode?: string; identitas_npsn_tmp?: string; nama?: string },
+  records: PenerimaManfaatBnba[]
+) => {
+  if (!records || records.length === 0) return 0
+  const possibleKeys = new Set<string>()
+  if (group.id) possibleKeys.add(String(group.id).trim().toLowerCase())
+  if (group.npsnReg) possibleKeys.add(String(group.npsnReg).trim().toLowerCase())
+  if (group.kode) possibleKeys.add(String(group.kode).trim().toLowerCase())
+  if (group.identitas_npsn_tmp) possibleKeys.add(String(group.identitas_npsn_tmp).trim().toLowerCase())
+  if (group.nama) possibleKeys.add(String(group.nama).trim().toLowerCase())
+
+  return records.filter(b => {
+    if (!b.kelompok_id) return false
+    const kId = String(b.kelompok_id).trim().toLowerCase()
+    return possibleKeys.has(kId)
+  }).length
+}
+
   // Load Data Purely from Supabase Database
   const loadData = async () => {
     setLoading(true)
     try {
-      const [supabaseRes, bnbaRes] = await Promise.all([
+      const [supabaseRes, bnbaRes, directBnbaRes] = await Promise.all([
         supabase.from('kelompok_penerima_manfaat').select('*').order('urutan', { ascending: true }),
-        fetchBnbaList()
+        fetchBnbaList(),
+        supabase.from('penerima_manfaat_bnba').select('*')
       ])
 
       let data = supabaseRes.data
@@ -211,7 +232,13 @@ export default function KelompokPenerimaManfaatPage() {
         data = await fetchKelompokPenerimaManfaatList()
       }
 
-      setAllBnbaRecords(bnbaRes || [])
+      // Combine BNBA records from fetchBnbaList and direct Supabase select for comprehensive coverage
+      const combinedBnbaMap = new Map<string, PenerimaManfaatBnba>()
+      ;(bnbaRes || []).forEach(b => { if (b.id) combinedBnbaMap.set(b.id, b) })
+      ;(directBnbaRes.data || []).forEach((b: any) => { if (b.id) combinedBnbaMap.set(b.id, b) })
+
+      const combinedBnbaList = Array.from(combinedBnbaMap.values())
+      setAllBnbaRecords(combinedBnbaList)
 
       // Map Supabase rows to DetailKpmItem format
       const mappedItems: DetailKpmItem[] = (data || []).map((kpm: any, idx: number) => {
@@ -227,7 +254,7 @@ export default function KelompokPenerimaManfaatPage() {
           jenisLabel = 'SMP / MTs'
         }
 
-        const bnbaCount = (bnbaRes || []).filter(b => b.kelompok_id === kpm.kode || b.kelompok_id === kpm.id).length
+        const bnbaCount = getBnbaCountForGroup(kpm, combinedBnbaList)
         const totalTarget = kpm.jumlah_penerima || (kpm.target_pria || 0) + (kpm.target_wanita || 0) + (kpm.target_guru || 0) + (kpm.target_tendik || 0) || 100
 
         let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'
@@ -239,7 +266,10 @@ export default function KelompokPenerimaManfaatPage() {
         } else if (bnbaCount < totalTarget) {
           ketStatus = 'Kurang'
           ketMsg = `↓ Kurang ${totalTarget - bnbaCount} orang`
-        } else if (bnbaCount > totalTarget) {
+        } else if (bnbaCount === totalTarget) {
+          ketStatus = 'Sesuai'
+          ketMsg = '✓ Sesuai'
+        } else {
           ketStatus = 'Lebih'
           ketMsg = `↑ Lebih ${bnbaCount - totalTarget} orang`
         }
@@ -352,30 +382,29 @@ export default function KelompokPenerimaManfaatPage() {
   // Real-time calculated dataset based purely on state & BNBA store
   const fullDataList: DetailKpmItem[] = useMemo(() => {
     return kpmItems.map((item, idx) => {
-      const bnbaCount = allBnbaRecords.filter(b => b.kelompok_id === item.id || b.kelompok_id === item.npsnReg).length
-      const rincianVal = bnbaCount > 0 ? bnbaCount : item.rincianTerisi
+      const bnbaCount = getBnbaCountForGroup(item, allBnbaRecords)
 
-      let ketStatus = item.keteranganStatus
-      let ketMsg = item.keteranganMsg
+      let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'
+      let ketMsg = '✓ Sesuai'
 
-      if (rincianVal === 0) {
+      if (bnbaCount === 0) {
         ketStatus = 'Belum ada detail'
         ketMsg = '⚠️ Belum ada detail'
-      } else if (rincianVal < item.totalTarget) {
+      } else if (bnbaCount < item.totalTarget) {
         ketStatus = 'Kurang'
-        ketMsg = `↓ Kurang ${item.totalTarget - rincianVal} orang`
-      } else if (rincianVal === item.totalTarget) {
+        ketMsg = `↓ Kurang ${item.totalTarget - bnbaCount} orang`
+      } else if (bnbaCount === item.totalTarget) {
         ketStatus = 'Sesuai'
         ketMsg = '✓ Sesuai'
       } else {
         ketStatus = 'Lebih'
-        ketMsg = `↑ Lebih ${rincianVal - item.totalTarget} orang`
+        ketMsg = `↑ Lebih ${bnbaCount - item.totalTarget} orang`
       }
 
       return {
         ...item,
         no: idx + 1,
-        rincianTerisi: rincianVal,
+        rincianTerisi: bnbaCount,
         keteranganStatus: ketStatus,
         keteranganMsg: ketMsg
       }
@@ -2387,7 +2416,7 @@ export default function KelompokPenerimaManfaatPage() {
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">Daftar penerima manfaat By Name By Address terverifikasi.</p>
               </div>
-              <button onClick={() => setActiveBnbaGroup(null)} className="text-slate-400 hover:text-slate-600 p-1">
+              <button onClick={() => { setActiveBnbaGroup(null); loadData(); }} className="text-slate-400 hover:text-slate-600 p-1">
                 <X size={18} />
               </button>
             </div>
