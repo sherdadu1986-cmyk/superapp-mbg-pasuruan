@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { 
   Search, RotateCw, Plus, X, Check, Building2, Info, Eye, Edit, Trash2, 
   Bookmark, FileSpreadsheet, FileText, Printer, ChevronLeft, 
-  ChevronRight, UserPlus, ShieldAlert
+  ChevronRight, UserPlus, ShieldAlert, HeartHandshake
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { 
@@ -52,7 +52,7 @@ export default function KelompokPenerimaManfaatPage() {
   // Toast Notification
   const [toastMsg, setToastMsg] = useState<string | null>(null)
 
-  // 100% Pure Dynamic Supabase State (No hardcoded initial arrays)
+  // Pure Dynamic Supabase State
   const [kpmItems, setKpmItems] = useState<DetailKpmItem[]>([])
   const [allBnbaRecords, setAllBnbaRecords] = useState<PenerimaManfaatBnba[]>([])
 
@@ -62,7 +62,7 @@ export default function KelompokPenerimaManfaatPage() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
-  // Form Fields
+  // Common Form Fields
   const [formNama, setFormNama] = useState('')
   const [formKategori, setFormKategori] = useState('SD')
   const [formSubKategori, setFormSubKategori] = useState('Balita')
@@ -71,13 +71,22 @@ export default function KelompokPenerimaManfaatPage() {
   const [formKecamatan, setFormKecamatan] = useState('WONOREJO')
   const [formKelDesa, setFormKelDesa] = useState('WONOREJO')
   const [formAlamat, setFormAlamat] = useState('Wonorejo Pasuruan')
+  const [formPimpinan, setFormPimpinan] = useState('')
+  const [formHp, setFormHp] = useState('')
+  const [formEmail, setFormEmail] = useState('')
+
+  // 1. School Allocation Form Fields
   const [formPria, setFormPria] = useState(100)
   const [formWanita, setFormWanita] = useState(100)
   const [formGuru, setFormGuru] = useState(10)
   const [formTendik, setFormTendik] = useState(5)
-  const [formPimpinan, setFormPimpinan] = useState('')
-  const [formHp, setFormHp] = useState('')
-  const [formEmail, setFormEmail] = useState('')
+
+  // 2. Posyandu 3B Allocation Form Fields
+  const [formBalitaLaki, setFormBalitaLaki] = useState(30)
+  const [formBalitaPerem, setFormBalitaPerem] = useState(30)
+  const [formBumil, setFormBumil] = useState(15)
+  const [formBusui, setFormBusui] = useState(15)
+  const [formKaderPosyandu, setFormKaderPosyandu] = useState(5)
 
   // Delete Confirmation State
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<DetailKpmItem | null>(null)
@@ -99,6 +108,27 @@ export default function KelompokPenerimaManfaatPage() {
   const [bnbaPosisi, setBnbaPosisi] = useState<'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'>('Siswa')
   const [bnbaKelas, setBnbaKelas] = useState('Kelas 4')
 
+  // Helper check for Posyandu 3B Category
+  const isPosyanduCategory = useMemo(() => {
+    const k = (formKategori || '').toUpperCase()
+    return k.includes('POSYANDU') || k.includes('3B') || k.includes('KOMUNITAS')
+  }, [formKategori])
+
+  // Calculated target total based on category selection
+  const calculatedTotalTarget = useMemo(() => {
+    if (isPosyanduCategory) {
+      return (Number(formBalitaLaki) || 0) + 
+             (Number(formBalitaPerem) || 0) + 
+             (Number(formBumil) || 0) + 
+             (Number(formBusui) || 0) + 
+             (Number(formKaderPosyandu) || 0)
+    }
+    return (Number(formPria) || 0) + 
+           (Number(formWanita) || 0) + 
+           (Number(formGuru) || 0) + 
+           (Number(formTendik) || 0)
+  }, [isPosyanduCategory, formBalitaLaki, formBalitaPerem, formBumil, formBusui, formKaderPosyandu, formPria, formWanita, formGuru, formTendik])
+
   // Load Data Purely from Supabase Database
   const loadData = async () => {
     setLoading(true)
@@ -117,7 +147,7 @@ export default function KelompokPenerimaManfaatPage() {
 
       // Map Supabase rows to DetailKpmItem format
       const mappedItems: DetailKpmItem[] = (data || []).map((kpm: any, idx: number) => {
-        const is3B = kpm.kategori === 'POSYANDU_3B' || kpm.kategori === 'POSYANDU 3B'
+        const is3B = kpm.kategori === 'POSYANDU_3B' || kpm.kategori === 'POSYANDU 3B' || kpm.kategori === 'POSYANDU'
         const jenisLabel = is3B 
           ? (kpm.sub_kategori === 'Bumil' ? 'Ibu Hamil' : kpm.sub_kategori === 'Busui' ? 'Ibu Menyusui' : 'Bayi Dibawah Lima Tahun')
           : kpm.kategori
@@ -266,7 +296,7 @@ export default function KelompokPenerimaManfaatPage() {
     })
   }, [fullDataList, searchQuery, activeFilter])
 
-  // Open Add Modal
+  // Open Add Modal with Default Reset Values
   const handleOpenAddModal = () => {
     setEditingItem(null)
     setFormNama('')
@@ -277,13 +307,23 @@ export default function KelompokPenerimaManfaatPage() {
     setFormKecamatan('WONOREJO')
     setFormKelDesa('WONOREJO')
     setFormAlamat('Wonorejo Pasuruan')
+    setFormPimpinan('')
+    setFormHp('')
+    setFormEmail('')
+
+    // Reset School Allocation
     setFormPria(100)
     setFormWanita(100)
     setFormGuru(10)
     setFormTendik(5)
-    setFormPimpinan('')
-    setFormHp('')
-    setFormEmail('')
+
+    // Reset Posyandu 3B Allocation
+    setFormBalitaLaki(30)
+    setFormBalitaPerem(30)
+    setFormBumil(15)
+    setFormBusui(15)
+    setFormKaderPosyandu(5)
+
     setShowAddModal(true)
   }
 
@@ -291,20 +331,31 @@ export default function KelompokPenerimaManfaatPage() {
   const handleEditClick = (item: DetailKpmItem) => {
     setEditingItem(item)
     setFormNama(item.nama)
-    setFormKategori(item.jenis.includes('Ibu') || item.jenis.includes('Bayi') ? 'POSYANDU 3B' : item.jenis)
+    const is3BGroup = item.jenis.includes('Ibu') || item.jenis.includes('Bayi') || item.jenis.includes('POSYANDU')
+    setFormKategori(is3BGroup ? 'POSYANDU 3B' : item.jenis)
     setFormSubKategori(item.jenis.includes('Hamil') ? 'Bumil' : item.jenis.includes('Menyusui') ? 'Busui' : 'Balita')
     setFormIdentitas(item.npsnReg)
     setFormKepemilikan(item.kepemilikan)
     setFormKecamatan(item.kecamatan)
     setFormKelDesa(item.kelDesa)
     setFormAlamat(item.alamat)
-    setFormPria(item.pria)
-    setFormWanita(item.wanita)
-    setFormGuru(item.guru)
-    setFormTendik(item.tendik)
     setFormPimpinan(item.pimpinan)
     setFormHp(item.hp)
     setFormEmail(item.email)
+
+    if (is3BGroup) {
+      setFormBalitaLaki(item.pria || Math.floor(item.totalTarget * 0.3))
+      setFormBalitaPerem(Math.floor(item.totalTarget * 0.3))
+      setFormBumil(Math.floor(item.totalTarget * 0.2))
+      setFormBusui(Math.floor(item.totalTarget * 0.15))
+      setFormKaderPosyandu(item.guru || 5)
+    } else {
+      setFormPria(item.pria)
+      setFormWanita(item.wanita)
+      setFormGuru(item.guru)
+      setFormTendik(item.tendik)
+    }
+
     setShowAddModal(true)
   }
 
@@ -313,12 +364,11 @@ export default function KelompokPenerimaManfaatPage() {
     setDeleteConfirmItem(item)
   }
 
-  // ─── 100% Precise Supabase Delete Handler with Logging & Filter State ───
+  // Delete Handler with Direct Supabase Query & Try-Catch-Finally
   const confirmDeleteGroup = async () => {
     if (!deleteConfirmItem) return
     const targetItem = deleteConfirmItem
 
-    // Logging to Browser DevTools Console
     console.log('Menghapus item:', targetItem)
 
     setIsDeleting(true)
@@ -328,7 +378,6 @@ export default function KelompokPenerimaManfaatPage() {
       const targetId = targetItem.id
       const targetKode = targetItem.npsnReg || targetItem.id
 
-      // Check if target identifier is a UUID or a code string
       if (targetId && targetId.length > 20 && targetId.includes('-') && !targetId.startsWith('kpm-') && !targetId.startsWith('K')) {
         query = query.eq('id', targetId)
       } else if (targetKode) {
@@ -345,10 +394,9 @@ export default function KelompokPenerimaManfaatPage() {
         return
       }
 
-      // Also cleanup local helper store
       await deleteKelompokPenerimaManfaat(targetKode)
 
-      // Update State Cepat (Filter state after successful response)
+      // Optimistic Update
       setKpmItems(prev => prev.filter(k => k.id !== targetItem.id && k.npsnReg !== targetItem.npsnReg))
 
       triggerToast(`Kelompok "${targetItem.nama}" berhasil dihapus.`)
@@ -356,7 +404,6 @@ export default function KelompokPenerimaManfaatPage() {
       console.error("Exception delete Supabase:", err)
       alert("Gagal menghapus: " + (err.message || 'Error server'))
     } finally {
-      // Guaranteed loading state reset
       setIsDeleting(false)
       setDeleteConfirmItem(null)
     }
@@ -369,20 +416,32 @@ export default function KelompokPenerimaManfaatPage() {
     triggerToast(`Status kelompok "${item.nama}" diubah menjadi ${newStatus}.`)
   }
 
-  // Save KPM Group
+  // Save KPM Group with Conditional Mapping
   const handleSaveKpm = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
 
-    const is3B = formKategori === 'POSYANDU 3B' || formKategori === 'POSYANDU_3B'
-    const totalPenerima = (Number(formPria) || 0) + (Number(formWanita) || 0) + (Number(formGuru) || 0) + (Number(formTendik) || 0)
-    
+    const is3B = isPosyanduCategory
+    const totalPenerima = calculatedTotalTarget
+
     let identitasVal = formIdentitas.trim()
     if (!identitasVal) {
       identitasVal = is3B ? `REG-3B-${Math.floor(10000 + Math.random() * 90000)}` : `NPSN: ${Math.floor(10000000 + Math.random() * 90000000)}`
     }
 
     const fullWilayah = `JAWA TIMUR · PASURUAN · ${formKecamatan.trim()} · ${formKelDesa.trim()}`
+
+    // Mapping fields depending on Posyandu vs School
+    const targetPriaVal = is3B ? (Number(formBalitaLaki) || 0) : (Number(formPria) || 0)
+    const targetWanitaVal = is3B 
+      ? ((Number(formBalitaPerem) || 0) + (Number(formBumil) || 0) + (Number(formBusui) || 0))
+      : (Number(formWanita) || 0)
+    const targetGuruVal = is3B ? (Number(formKaderPosyandu) || 0) : (Number(formGuru) || 0)
+    const targetTendikVal = is3B ? 0 : (Number(formTendik) || 0)
+
+    const subKatSummary = is3B 
+      ? `Balita: ${(Number(formBalitaLaki) || 0) + (Number(formBalitaPerem) || 0)}, Bumil: ${formBumil || 0}, Busui: ${formBusui || 0}`
+      : undefined
 
     if (editingItem) {
       setKpmItems(prev => prev.map(item => item.id === editingItem.id ? {
@@ -394,10 +453,10 @@ export default function KelompokPenerimaManfaatPage() {
         kecamatan: formKecamatan,
         kelDesa: formKelDesa,
         alamat: formAlamat,
-        pria: Number(formPria),
-        wanita: Number(formWanita),
-        guru: Number(formGuru),
-        tendik: Number(formTendik),
+        pria: targetPriaVal,
+        wanita: targetWanitaVal,
+        guru: targetGuruVal,
+        tendik: targetTendikVal,
         totalTarget: totalPenerima,
         pimpinan: formPimpinan.trim() || item.pimpinan,
         hp: formHp.trim() || item.hp,
@@ -416,15 +475,15 @@ export default function KelompokPenerimaManfaatPage() {
         kecamatan: formKecamatan,
         kelDesa: formKelDesa,
         alamat: formAlamat,
-        pria: Number(formPria),
-        wanita: Number(formWanita),
-        guru: Number(formGuru),
-        tendik: Number(formTendik),
+        pria: targetPriaVal,
+        wanita: targetWanitaVal,
+        guru: targetGuruVal,
+        tendik: targetTendikVal,
         totalTarget: totalPenerima,
         rincianTerisi: 0,
         keteranganStatus: 'Belum ada detail',
         keteranganMsg: '⚠️ Belum ada detail',
-        pimpinan: formPimpinan.trim() || 'PENANGGUNG JAWAB',
+        pimpinan: formPimpinan.trim() || (is3B ? 'Bidan Desa / Ketua Kader' : 'Kepala Sekolah'),
         hp: formHp.trim() || '081234567890',
         email: formEmail.trim() || 'kpm.wonorejo@gmail.com',
         status: 'Aktif'
@@ -435,7 +494,7 @@ export default function KelompokPenerimaManfaatPage() {
       const newKpmSupabase: KelompokPenerimaManfaat = {
         nama: formNama.trim(),
         kategori: is3B ? 'POSYANDU_3B' : formKategori,
-        sub_kategori: is3B ? formSubKategori : undefined,
+        sub_kategori: subKatSummary,
         identitas_npsn_tmp: identitasVal,
         kode: randomCode,
         wilayah: fullWilayah,
@@ -573,9 +632,8 @@ export default function KelompokPenerimaManfaatPage() {
         </div>
       </div>
 
-      {/* 2. 4 Kartu KPI Metrik (Flat Minimal Design - Border Gray Solid) */}
+      {/* 2. 4 Kartu KPI Metrik (Flat Minimal Design) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1 */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
           <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
             Total Kelompok Aktif
@@ -585,7 +643,6 @@ export default function KelompokPenerimaManfaatPage() {
           </div>
         </div>
 
-        {/* Card 2 */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
           <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
             Total Target Penerima
@@ -595,7 +652,6 @@ export default function KelompokPenerimaManfaatPage() {
           </div>
         </div>
 
-        {/* Card 3 */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
           <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
             Total Rincian Terisi
@@ -605,7 +661,6 @@ export default function KelompokPenerimaManfaatPage() {
           </div>
         </div>
 
-        {/* Card 4 */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
           <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
             Belum Dilengkapi
@@ -616,7 +671,7 @@ export default function KelompokPenerimaManfaatPage() {
         </div>
       </div>
 
-      {/* 3. Alert Box Banner (Collapsible / Dismissible Flat Style) */}
+      {/* 3. Alert Box Banner */}
       {showAlert && (
         <div className="bg-slate-50 border border-slate-200 text-slate-600 text-xs p-3 rounded-lg flex items-center justify-between gap-3 transition animate-fadeIn">
           <div className="flex items-center gap-2">
@@ -635,7 +690,7 @@ export default function KelompokPenerimaManfaatPage() {
         </div>
       )}
 
-      {/* 4. Filter Status Bar (Flat Gray Pill Buttons) + Export Toolbar */}
+      {/* 4. Filter Status Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 border border-slate-200 rounded-lg shadow-none">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -934,15 +989,21 @@ export default function KelompokPenerimaManfaatPage() {
         </div>
       </div>
 
-      {/* Modal Form Tambah / Edit KPM */}
+      {/* Modal Form Tambah / Edit KPM with DYNAMIC CONDITIONAL INPUTS */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden border border-slate-200 animate-fadeIn my-auto max-h-[90vh] flex flex-col">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <Building2 size={18} className="text-slate-800" />
+                {isPosyanduCategory ? (
+                  <HeartHandshake size={18} className="text-slate-800" />
+                ) : (
+                  <Building2 size={18} className="text-slate-800" />
+                )}
                 <h3 className="font-bold text-slate-900 text-sm">
-                  {editingItem ? 'Edit Kelompok Penerima Manfaat' : 'Form Tambah Kelompok Penerima Manfaat'}
+                  {editingItem 
+                    ? (isPosyanduCategory ? 'Edit Kelompok Posyandu 3B' : 'Edit Kelompok Sekolah') 
+                    : (isPosyanduCategory ? 'Form Tambah Kelompok Posyandu 3B' : 'Form Tambah Kelompok Sekolah')}
                 </h3>
               </div>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -966,8 +1027,8 @@ export default function KelompokPenerimaManfaatPage() {
                     required
                     value={formNama}
                     onChange={(e) => setFormNama(e.target.value)}
-                    placeholder="Contoh: SDN WONOREJO V"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs bg-white focus:ring-1 focus:ring-slate-800"
+                    placeholder={isPosyanduCategory ? "Contoh: POSYANDU MAWAR 3B" : "Contoh: SDN WONOREJO V"}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs bg-white focus:ring-1 focus:ring-slate-800 font-medium"
                   />
                 </div>
 
@@ -978,41 +1039,43 @@ export default function KelompokPenerimaManfaatPage() {
                     onChange={(e) => setFormKategori(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs font-semibold bg-white"
                   >
-                    <option value="KB">KB</option>
+                    <option value="KB">KB (Kelompok Bermain)</option>
                     <option value="PAUD">PAUD</option>
                     <option value="TK">TK</option>
                     <option value="RA">RA</option>
                     <option value="SD">SD</option>
                     <option value="SMP">SMP</option>
                     <option value="SMA">SMA</option>
-                    <option value="POSYANDU 3B">POSYANDU 3B</option>
+                    <option value="POSYANDU 3B">POSYANDU 3B / KOMUNITAS</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(formKategori === 'POSYANDU 3B' || formKategori === 'POSYANDU_3B') ? (
+                {isPosyanduCategory ? (
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Sub Kategori 3B *</label>
-                    <select
-                      value={formSubKategori}
-                      onChange={(e) => setFormSubKategori(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs font-semibold bg-white"
-                    >
-                      <option value="Balita">Bayi Dibawah Lima Tahun (Balita)</option>
-                      <option value="Bumil">Ibu Hamil (Bumil)</option>
-                      <option value="Busui">Ibu Menyusui (Busui)</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">NPSN / Kode *</label>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Kode Posyandu / No. Registrasi (TMP) *
+                    </label>
                     <input
                       type="text"
                       value={formIdentitas}
                       onChange={(e) => setFormIdentitas(e.target.value)}
-                      placeholder="20518921"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs bg-white"
+                      placeholder="Contoh: REG-3B-001 atau TMP-POSYANDU"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs bg-white font-mono"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Kode Kelompok (NPSN / NSM) *
+                    </label>
+                    <input
+                      type="text"
+                      value={formIdentitas}
+                      onChange={(e) => setFormIdentitas(e.target.value)}
+                      placeholder="Contoh: 20518921"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs bg-white font-mono"
                     />
                   </div>
                 )}
@@ -1030,6 +1093,7 @@ export default function KelompokPenerimaManfaatPage() {
                 </div>
               </div>
 
+              {/* Wilayah & Alamat */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <label className="block font-semibold text-slate-800">Wilayah & Alamat *</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -1066,79 +1130,154 @@ export default function KelompokPenerimaManfaatPage() {
                 </div>
               </div>
 
+              {/* ─── DYNAMIC CONDITIONAL TARGET ALLOCATION SECTION ─── */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
-                <label className="block font-semibold text-slate-800">Target Alokasi Penerima *</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div>
-                    <span className="text-[10px] text-slate-500">Pria</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={formPria}
-                      onChange={(e) => setFormPria(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500">Wanita</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={formWanita}
-                      onChange={(e) => setFormWanita(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500">Guru/Kader</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={formGuru}
-                      onChange={(e) => setFormGuru(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500">Tendik</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={formTendik}
-                      onChange={(e) => setFormTendik(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white"
-                    />
-                  </div>
+                <div className="flex items-center justify-between">
+                  <label className="block font-semibold text-slate-800">
+                    {isPosyanduCategory ? 'Target Alokasi Sasaran Posyandu 3B *' : 'Target Alokasi Penerima Sekolah *'}
+                  </label>
+                  <span className="text-[11px] font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    Total: {calculatedTotalTarget} Sasaran
+                  </span>
                 </div>
+
+                {/* CONDITIONAL BRANCH A: POSYANDU / KOMUNITAS 3B */}
+                {isPosyanduCategory ? (
+                  <div className="space-y-2.5 animate-fadeIn bg-slate-50/80 p-3 rounded-lg border border-slate-200">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div>
+                        <span className="text-[10px] font-semibold text-slate-600">Balita Laki-laki</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formBalitaLaki}
+                          onChange={(e) => setFormBalitaLaki(e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-semibold text-slate-600">Balita Perempuan</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formBalitaPerem}
+                          onChange={(e) => setFormBalitaPerem(e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-semibold text-slate-600">Ibu Hamil (Bumil)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formBumil}
+                          onChange={(e) => setFormBumil(e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-semibold text-slate-600">Ibu Menyusui (Busui)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formBusui}
+                          onChange={(e) => setFormBusui(e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-medium text-slate-500">Pendamping: Kader Posyandu (Opsional)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formKaderPosyandu}
+                        onChange={(e) => setFormKaderPosyandu(e.target.value === '' ? 0 : Number(e.target.value))}
+                        className="w-full sm:w-1/2 px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-semibold bg-white text-slate-800"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* CONDITIONAL BRANCH B: SCHOOL CATEGORIES */
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 animate-fadeIn bg-slate-50/80 p-3 rounded-lg border border-slate-200">
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-600">Siswa Laki-laki</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formPria}
+                        onChange={(e) => setFormPria(e.target.value === '' ? 0 : Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-600">Siswa Perempuan</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formWanita}
+                        onChange={(e) => setFormWanita(e.target.value === '' ? 0 : Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-600">Guru / Kader</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formGuru}
+                        onChange={(e) => setFormGuru(e.target.value === '' ? 0 : Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-600">Tendik</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formTendik}
+                        onChange={(e) => setFormTendik(e.target.value === '' ? 0 : Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs font-bold bg-white text-slate-900"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Kontak & Pimpinan (Dynamic Labels based on Category) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nama Pimpinan *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    {isPosyanduCategory ? 'Nama Bidan Desa / Ketua Kader Posyandu *' : 'Nama Pimpinan / Kepala Sekolah *'}
+                  </label>
                   <input
                     type="text"
                     required
                     value={formPimpinan}
                     onChange={(e) => setFormPimpinan(e.target.value)}
+                    placeholder={isPosyanduCategory ? "Contoh: Bidan Nurul / Ibu Bidan Siti" : "Contoh: SUBANDI, S.Pd"}
                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">No. HP *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">No. HP / Telepon *</label>
                   <input
                     type="text"
                     required
                     value={formHp}
                     onChange={(e) => setFormHp(e.target.value)}
+                    placeholder="081234567890"
                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs bg-white font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Email</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Email (Opsional)</label>
                   <input
                     type="email"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
+                    placeholder="email@lembaga.id"
                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-xs bg-white font-mono"
                   />
                 </div>
