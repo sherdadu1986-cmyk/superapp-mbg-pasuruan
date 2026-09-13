@@ -808,10 +808,10 @@ export default function BerandaOperasionalPage() {
               </span>
             </div>
 
-            {/* Tabel Ringkas Distribusi (Compact Table Container) */}
-            <div className="max-h-[360px] overflow-y-auto border border-slate-100 rounded-xl shadow-2xs">
+            {/* Tabel Ringkas Distribusi (Full Unclipped Table) */}
+            <div className="border border-slate-100 rounded-xl overflow-hidden shadow-2xs">
               <table className="w-full text-left border-collapse text-xs">
-                <thead className="sticky top-0 bg-slate-900 text-white z-10 text-[10px] font-bold uppercase tracking-wider">
+                <thead className="bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider">
                   <tr>
                     <th className="py-2.5 px-3 text-center w-10 border-b border-slate-800">NO</th>
                     <th className="py-2.5 px-3 border-b border-slate-800">NAMA KPM / LEMBAGA</th>
@@ -858,7 +858,7 @@ export default function BerandaOperasionalPage() {
                     </tr>
                   )}
                 </tbody>
-                <tfoot className="sticky bottom-0 bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs z-10 shadow-2xs">
+                <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs shadow-2xs">
                   <tr>
                     <td colSpan={2} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
                       TOTAL KESELURUHAN
