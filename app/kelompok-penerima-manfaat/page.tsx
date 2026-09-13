@@ -210,11 +210,24 @@ const getBnbaCountForGroup = (
   if (group.identitas_npsn_tmp) possibleKeys.add(String(group.identitas_npsn_tmp).trim().toLowerCase())
   if (group.nama) possibleKeys.add(String(group.nama).trim().toLowerCase())
 
-  return records.filter(b => {
-    if (!b.kelompok_id) return false
-    const kId = String(b.kelompok_id).trim().toLowerCase()
-    return possibleKeys.has(kId)
-  }).length
+  const matchedRowIds = new Set<string>()
+  records.forEach(b => {
+    const raw = b as any
+    const rowKeys = [
+      raw.kelompok_id,
+      raw.kpm_id,
+      raw.npsn,
+      raw.kode,
+      raw.sekolah_id,
+      raw.kode_kelompok
+    ].filter(Boolean)
+
+    if (rowKeys.some(k => possibleKeys.has(String(k).trim().toLowerCase()))) {
+      matchedRowIds.add(b.id || `${b.nisn_nik}-${b.nama_lengkap}`)
+    }
+  })
+
+  return matchedRowIds.size
 }
 
   // Load Data Purely from Supabase Database
@@ -224,7 +237,7 @@ const getBnbaCountForGroup = (
       const [supabaseRes, bnbaRes, directBnbaRes] = await Promise.all([
         supabase.from('kelompok_penerima_manfaat').select('*').order('urutan', { ascending: true }),
         fetchBnbaList(),
-        supabase.from('penerima_manfaat_bnba').select('*')
+        supabase.from('penerima_manfaat_bnba').select('*').limit(10000)
       ])
 
       let data = supabaseRes.data

@@ -106,10 +106,11 @@ export default function BerandaOperasionalPage() {
         .from('kelompok_penerima_manfaat')
         .select('*')
 
-      // Ambil BNBA riil langsung via REST API
+      // Ambil BNBA riil langsung via REST API (limit 10000 agar tidak terpotong default 1000 baris Supabase)
       const { data: bnbaData, count, error: bnbaErr } = await supabase
         .from('penerima_manfaat_bnba')
         .select('*', { count: 'exact' })
+        .limit(10000)
 
       console.log('Direct Fetch BNBA Count:', count ?? bnbaData?.length)
 
@@ -238,10 +239,72 @@ export default function BerandaOperasionalPage() {
   const activeKpmIdSet = new Set<string>()
   kpmList.forEach(kpm => {
     if (kpm.id) activeKpmIdSet.add(kpm.id)
-    if (kpm.kode) activeKpmIdSet.add(kpm.kode)
   })
 
-  const validBnbaList = bnbaList.filter(item => activeKpmIdSet.size === 0 || activeKpmIdSet.has(item.kelompok_id))
+  // ─── Multi-Column FK & Multi-Key Indexing for BNBA records ──────────────────────
+  const bnbaKeyToRowsMap = React.useMemo(() => {
+    const map = new Map<string, Set<PenerimaManfaatBnba>>()
+    ;(bnbaList || []).forEach(b => {
+      const raw = b as any
+      const candidateKeys = [
+        raw.kelompok_id,
+        raw.kpm_id,
+        raw.npsn,
+        raw.kode,
+        raw.sekolah_id,
+        raw.kode_kelompok
+      ].filter(Boolean)
+
+      candidateKeys.forEach(k => {
+        const cleanKey = String(k).trim().toLowerCase()
+        if (cleanKey) {
+          if (!map.has(cleanKey)) map.set(cleanKey, new Set())
+          map.get(cleanKey)!.add(b)
+        }
+      })
+    })
+    return map
+  }, [bnbaList])
+
+  const getBnbaCountForGroup = React.useCallback((group: { id?: string; kode?: string; identitas_npsn_tmp?: string; nama?: string }) => {
+    const possibleKeys = [
+      group.id ? String(group.id).trim().toLowerCase() : null,
+      group.kode ? String(group.kode).trim().toLowerCase() : null,
+      group.identitas_npsn_tmp ? String(group.identitas_npsn_tmp).trim().toLowerCase() : null,
+      group.nama ? String(group.nama).trim().toLowerCase() : null,
+    ].filter(Boolean) as string[]
+
+    const matchedRows = new Set<PenerimaManfaatBnba>()
+    possibleKeys.forEach(key => {
+      const rows = bnbaKeyToRowsMap.get(key)
+      if (rows) {
+        rows.forEach(r => matchedRows.add(r))
+      }
+    })
+
+    return matchedRows.size
+  }, [bnbaKeyToRowsMap])
+
+  const validBnbaList = React.useMemo(() => {
+    const matched = new Set<PenerimaManfaatBnba>()
+    kpmList.forEach(kpm => {
+      const possibleKeys = [
+        kpm.id ? String(kpm.id).trim().toLowerCase() : null,
+        kpm.kode ? String(kpm.kode).trim().toLowerCase() : null,
+        kpm.identitas_npsn_tmp ? String(kpm.identitas_npsn_tmp).trim().toLowerCase() : null,
+        kpm.nama ? String(kpm.nama).trim().toLowerCase() : null,
+      ].filter(Boolean) as string[]
+
+      possibleKeys.forEach(key => {
+        const rows = bnbaKeyToRowsMap.get(key)
+        if (rows) {
+          rows.forEach(r => matched.add(r))
+        }
+      })
+    })
+    return Array.from(matched)
+  }, [kpmList, bnbaKeyToRowsMap])
+
   const realisasiTotal = totalBnba !== null ? totalBnba : validBnbaList.length
   const isOverAllocated = realisasiTotal > totalTargetPenerima && totalTargetPenerima > 0
 
@@ -286,20 +349,9 @@ export default function BerandaOperasionalPage() {
     }
   })
 
-  // ─── BNBA Helper Mapping by KPM ID & Kode ─────────────────────────────
-  const bnbaCountMap = new Map<string, number>()
-  validBnbaList.forEach(item => {
-    const key = item.kelompok_id
-    bnbaCountMap.set(key, (bnbaCountMap.get(key) || 0) + 1)
-  })
-
-  const getBnbaCountForKpms = (kpms: KelompokPenerimaManfaat[]) => {
-    return kpms.reduce((acc, kpm) => {
-      const countById = kpm.id ? (bnbaCountMap.get(kpm.id) || 0) : 0
-      const countByKode = kpm.kode ? (bnbaCountMap.get(kpm.kode) || 0) : 0
-      return acc + Math.max(countById, countByKode)
-    }, 0)
-  }
+  const getBnbaCountForKpms = React.useCallback((kpms: KelompokPenerimaManfaat[]) => {
+    return kpms.reduce((acc, kpm) => acc + getBnbaCountForGroup(kpm), 0)
+  }, [getBnbaCountForGroup])
 
   // ─── Table 1: Jalur Pendidikan Breakdown ──────────────────────────────
   const getJenjangRowStats = (katKeys: string[], label: string, code: string) => {
@@ -366,21 +418,6 @@ export default function BerandaOperasionalPage() {
     get3BRowStats('bumil', 'Ibu Hamil (Bumil)', 'bumil'),
     get3BRowStats('busui', 'Ibu Menyusui (Busui)', 'busui'),
   ]
-
-  // Helper to calculate exact BNBA count for a KPM group by matching all possible identifiers (UUID, kode, npsnReg, nama)
-  const getBnbaCountForGroup = (group: { id?: string; kode?: string; identitas_npsn_tmp?: string; nama?: string }) => {
-    const possibleKeys = new Set<string>()
-    if (group.id) possibleKeys.add(String(group.id).trim().toLowerCase())
-    if (group.kode) possibleKeys.add(String(group.kode).trim().toLowerCase())
-    if (group.identitas_npsn_tmp) possibleKeys.add(String(group.identitas_npsn_tmp).trim().toLowerCase())
-    if (group.nama) possibleKeys.add(String(group.nama).trim().toLowerCase())
-
-    return validBnbaList.filter(b => {
-      if (!b.kelompok_id) return false
-      const kId = String(b.kelompok_id).trim().toLowerCase()
-      return possibleKeys.has(kId)
-    }).length
-  }
 
   // ─── Real-Time BNBA Fulfillment Recap Dataset ─────────────────────────────
   const sortedBnbaRecapList = React.useMemo(() => {
@@ -815,10 +852,7 @@ export default function BerandaOperasionalPage() {
                         {row.bnbaCount}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${ratio >= 80
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${ratio >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                           {ratio >= 100 ? '100% Valid' : `${ratio}% Terisi`}
                         </span>
                       </td>
@@ -914,14 +948,10 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('perlu')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'perlu'
-                ? 'bg-slate-900 text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'perlu' ? 'bg-slate-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               <span>Semua Perlu Tindakan</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'perlu' ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
-                }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'perlu' ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'}`}>
                 {sortedBnbaRecapList.filter(i => i.terisi < i.target).length}
               </span>
             </button>
@@ -929,14 +959,10 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('belum')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'belum'
-                ? 'bg-rose-600 text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'belum' ? 'bg-rose-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               <span>Belum Ada Detail (0)</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'belum' ? 'bg-white text-rose-700' : 'bg-slate-800 text-white'
-                }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'belum' ? 'bg-white text-rose-700' : 'bg-slate-800 text-white'}`}>
                 {sortedBnbaRecapList.filter(i => i.terisi === 0).length}
               </span>
             </button>
@@ -944,14 +970,10 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('kurang')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'kurang'
-                ? 'bg-amber-600 text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'kurang' ? 'bg-amber-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               <span>Kurang dari Kuota</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'kurang' ? 'bg-white text-amber-800' : 'bg-slate-800 text-white'
-                }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'kurang' ? 'bg-white text-amber-800' : 'bg-slate-800 text-white'}`}>
                 {sortedBnbaRecapList.filter(i => i.terisi > 0 && i.terisi < i.target).length}
               </span>
             </button>
@@ -959,14 +981,10 @@ export default function BerandaOperasionalPage() {
             <button
               type="button"
               onClick={() => setBnbaFilter('lengkap')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'lengkap'
-                ? 'bg-emerald-600 text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${bnbaFilter === 'lengkap' ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               <span>Sudah Lengkap</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'lengkap' ? 'bg-white text-emerald-800' : 'bg-slate-800 text-white'
-                }`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${bnbaFilter === 'lengkap' ? 'bg-white text-emerald-800' : 'bg-slate-800 text-white'}`}>
                 {sortedBnbaRecapList.filter(i => i.terisi >= i.target).length}
               </span>
             </button>
@@ -1027,8 +1045,7 @@ export default function BerandaOperasionalPage() {
                           </div>
                           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
                             <div
-                              className={`h-full rounded-full transition-all duration-300 ${isZero ? 'bg-slate-300' : isShortage ? 'bg-amber-500' : 'bg-emerald-600'
-                                }`}
+                              className={`h-full rounded-full transition-all duration-300 ${isZero ? 'bg-slate-300' : isShortage ? 'bg-amber-500' : 'bg-emerald-600'}`}
                               style={{ width: `${isZero ? 0 : isShortage ? Math.min(row.pct, 100) : 100}%` }}
                             />
                           </div>

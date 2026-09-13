@@ -618,22 +618,22 @@ export const INITIAL_BNBA_DATA: PenerimaManfaatBnba[] = []
 
 export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaatBnba[]> {
   try {
-    let query = supabase.from('penerima_manfaat_bnba').select('*').order('created_at', { ascending: false })
+    let query = supabase.from('penerima_manfaat_bnba').select('*').limit(10000).order('created_at', { ascending: false })
     if (kelompokId) {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       if (uuidRegex.test(kelompokId)) {
-        query = query.eq('kelompok_id', kelompokId)
+        query = query.or(`kelompok_id.eq.${kelompokId},kpm_id.eq.${kelompokId},sekolah_id.eq.${kelompokId}`)
       } else {
         const { data: kpm } = await supabase
           .from('kelompok_penerima_manfaat')
-          .select('id')
-          .or(`kode.eq.${kelompokId},identitas_npsn_tmp.eq.${kelompokId}`)
+          .select('id, kode, identitas_npsn_tmp')
+          .or(`kode.eq.${kelompokId},identitas_npsn_tmp.eq.${kelompokId},id.eq.${kelompokId}`)
           .limit(1)
-          .single()
+          .maybeSingle()
         if (kpm?.id) {
-          query = query.or(`kelompok_id.eq.${kelompokId},kelompok_id.eq.${kpm.id}`)
+          query = query.or(`kelompok_id.eq.${kelompokId},kelompok_id.eq.${kpm.id},kpm_id.eq.${kpm.id},npsn.eq.${kpm.identitas_npsn_tmp || kelompokId}`)
         } else {
-          query = query.eq('kelompok_id', kelompokId)
+          query = query.or(`kelompok_id.eq.${kelompokId},npsn.eq.${kelompokId},kode.eq.${kelompokId}`)
         }
       }
     }
