@@ -10,6 +10,7 @@ import {
   fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB, 
   type KelompokPenerimaManfaat, type PenerimaManfaatBnba, type MenuHarianDB 
 } from '@/lib/data-helpers'
+import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,6 +88,7 @@ export default function BerandaOperasionalPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
+  const [isRealtimeActive, setIsRealtimeActive] = useState(false)
   
   // Dynamic Supabase state
   const [kpmList, setKpmList] = useState<KelompokPenerimaManfaat[]>([])
@@ -108,7 +110,6 @@ export default function BerandaOperasionalPage() {
 
   // Load Real-Time Supabase Data
   const loadDashboardData = async () => {
-    setLoading(true)
     try {
       const [kpmRes, bnbaRes, menuRes] = await Promise.all([
         fetchKelompokPenerimaManfaatList(),
@@ -127,17 +128,52 @@ export default function BerandaOperasionalPage() {
 
   useEffect(() => {
     loadDashboardData()
+
+    // Supabase Realtime Subscription Channel for Instant Sync across Local & Vercel
+    const channel = supabase
+      .channel('schema-db-changes-dashboard')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kelompok_penerima_manfaat' },
+        () => {
+          console.log('Realtime change detected in kelompok_penerima_manfaat, re-fetching dashboard...')
+          loadDashboardData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'penerima_manfaat_bnba' },
+        () => {
+          console.log('Realtime change detected in penerima_manfaat_bnba, re-fetching dashboard...')
+          loadDashboardData()
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsRealtimeActive(true)
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setIsRealtimeActive(false)
+        }
+      })
+
     const handleStorage = () => loadDashboardData()
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await loadDashboardData()
-    setTimeout(() => {
-      setIsRefreshing(false)
-    }, 500)
+    try {
+      await loadDashboardData()
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false)
+      }, 400)
+    }
   }
 
   const handlePrintDistribution = () => {
@@ -323,8 +359,13 @@ export default function BerandaOperasionalPage() {
             <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">
               BGN SuperApp
             </span>
-            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-              ● Live Sync Supabase
+            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+              isRealtimeActive 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isRealtimeActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+              <span>{isRealtimeActive ? '● Sinkron Realtime' : '○ Menghubungkan'}</span>
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1">

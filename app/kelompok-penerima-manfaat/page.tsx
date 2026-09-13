@@ -51,6 +51,7 @@ export interface DetailKpmItem {
 export default function KelompokPenerimaManfaatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isRealtimeActive, setIsRealtimeActive] = useState(false)
   const [perPage, setPerPage] = useState(15)
   const [loading, setLoading] = useState(true)
   const [showAlert, setShowAlert] = useState(true)
@@ -280,6 +281,37 @@ export default function KelompokPenerimaManfaatPage() {
 
   useEffect(() => {
     loadData()
+
+    // Supabase Realtime Subscription Channel for Instant Sync across Local & Vercel
+    const channel = supabase
+      .channel('schema-db-changes-kpm')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kelompok_penerima_manfaat' },
+        () => {
+          console.log('Realtime change detected in kelompok_penerima_manfaat, re-fetching KPM list...')
+          loadData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'penerima_manfaat_bnba' },
+        () => {
+          console.log('Realtime change detected in penerima_manfaat_bnba, re-fetching KPM list...')
+          loadData()
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsRealtimeActive(true)
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setIsRealtimeActive(false)
+        }
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const triggerToast = (msg: string) => {
@@ -287,12 +319,15 @@ export default function KelompokPenerimaManfaatPage() {
     setTimeout(() => setToastMsg(null), 3500)
   }
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true)
-    loadData()
-    setTimeout(() => {
-      setIsRefreshing(false)
-    }, 600)
+    try {
+      await loadData()
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false)
+      }, 400)
+    }
   }
 
   // Real-time calculated dataset based purely on state & BNBA store
@@ -960,9 +995,19 @@ export default function KelompokPenerimaManfaatPage() {
       {/* 1. Header Atas Halaman (Flat BGN Style) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            Kelompok Penerima Manfaat
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Kelompok Penerima Manfaat
+            </h1>
+            <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+              isRealtimeActive 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isRealtimeActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+              <span>{isRealtimeActive ? '● Sinkron Realtime' : '○ Menghubungkan'}</span>
+            </span>
+          </div>
           <p className="text-xs text-slate-500 font-normal mt-0.5">
             Master Data & Registrasi BGN Kelompok Penerima Manfaat Terintegrasi Supabase.
           </p>
