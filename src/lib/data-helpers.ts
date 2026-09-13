@@ -714,7 +714,24 @@ export const INITIAL_BNBA_DATA: PenerimaManfaatBnba[] = [
 export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaatBnba[]> {
   try {
     let query = supabase.from('penerima_manfaat_bnba').select('*').order('created_at', { ascending: false })
-    if (kelompokId) query = query.eq('kelompok_id', kelompokId)
+    if (kelompokId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (uuidRegex.test(kelompokId)) {
+        query = query.eq('kelompok_id', kelompokId)
+      } else {
+        const { data: kpm } = await supabase
+          .from('kelompok_penerima_manfaat')
+          .select('id')
+          .or(`kode.eq.${kelompokId},identitas_npsn_tmp.eq.${kelompokId}`)
+          .limit(1)
+          .single()
+        if (kpm?.id) {
+          query = query.or(`kelompok_id.eq.${kelompokId},kelompok_id.eq.${kpm.id}`)
+        } else {
+          query = query.eq('kelompok_id', kelompokId)
+        }
+      }
+    }
     const { data, error } = await query
     if (error || !data) throw error
     return data
@@ -742,7 +759,11 @@ export async function saveBnbaItem(item: PenerimaManfaatBnba): Promise<PenerimaM
   }
 
   try {
-    const { data, error } = await supabase.from('penerima_manfaat_bnba').insert(item).select().single()
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const { id, ...cleanItem } = item as any
+    const payload = (id && uuidRegex.test(id)) ? item : cleanItem
+
+    const { data, error } = await supabase.from('penerima_manfaat_bnba').insert(payload).select().single()
     if (!error && data) return data
   } catch {
     // fallback
@@ -762,7 +783,16 @@ export async function saveBnbaBulk(items: PenerimaManfaatBnba[]): Promise<boolea
   }
 
   try {
-    const { error } = await supabase.from('penerima_manfaat_bnba').insert(items)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const payload = items.map(item => {
+      const { id, ...cleanItem } = item as any
+      if (id && uuidRegex.test(id)) {
+        return item
+      }
+      return cleanItem
+    })
+
+    const { error } = await supabase.from('penerima_manfaat_bnba').insert(payload)
     if (error) {
       console.error('Error inserting bulk BNBA to Supabase:', error.message)
     }

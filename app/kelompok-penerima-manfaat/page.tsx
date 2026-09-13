@@ -706,27 +706,67 @@ export default function KelompokPenerimaManfaatPage() {
     if (!activeBnbaGroup) return
     setSavingBnba(true)
 
-    const newBnba: PenerimaManfaatBnba = {
-      id: `bnba-${Date.now()}`,
-      kelompok_id: activeBnbaGroup.id,
-      nisn_nik: bnbaNisnNik.trim(),
-      nama_lengkap: bnbaNama.trim().toUpperCase(),
-      tanggal_lahir: bnbaTglLahir.trim(),
-      jenis_kelamin: bnbaJk,
-      nama_ortu: bnbaOrtu.trim().toUpperCase() || '-',
-      posisi: bnbaPosisi,
-      kelas: bnbaKelas,
-      created_at: new Date().toISOString()
+    try {
+      const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
+
+      let sanitizedDate = normalizeBirthDate(bnbaTglLahir)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedDate)) {
+        sanitizedDate = '2015-01-01'
+      }
+
+      const payload = {
+        kelompok_id: activeKelompokUuid,
+        nisn_nik: bnbaNisnNik.trim(),
+        nama_lengkap: bnbaNama.trim().toUpperCase(),
+        tanggal_lahir: sanitizedDate,
+        jenis_kelamin: parseJk(bnbaJk),
+        nama_ortu: bnbaOrtu.trim().toUpperCase() || '-',
+        posisi: parsePosisi(bnbaPosisi),
+        kelas: bnbaKelas
+      }
+
+      const { data, error } = await supabase
+        .from('penerima_manfaat_bnba')
+        .insert(payload)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error inserting single BNBA to Supabase:', error)
+        alert('Gagal menyimpan BNBA: ' + error.message)
+        return
+      }
+
+      const newBnba: PenerimaManfaatBnba = {
+        id: data?.id || `bnba-${Date.now()}`,
+        kelompok_id: activeBnbaGroup.id,
+        nisn_nik: payload.nisn_nik,
+        nama_lengkap: payload.nama_lengkap,
+        tanggal_lahir: payload.tanggal_lahir,
+        jenis_kelamin: payload.jenis_kelamin,
+        nama_ortu: payload.nama_ortu,
+        posisi: payload.posisi,
+        kelas: payload.kelas,
+        created_at: data?.created_at || new Date().toISOString()
+      }
+
+      await saveBnbaItem(newBnba)
+      const updatedList = await fetchBnbaList(activeBnbaGroup.id)
+      const finalList = updatedList.length > 0 ? updatedList : [newBnba, ...bnbaList]
+      setBnbaList(finalList)
+      setAllBnbaRecords(prev => [newBnba, ...prev.filter(b => b.id !== newBnba.id)])
+
+      // Update count on active group
+      setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: finalList.length } : null)
+
+      setShowAddBnbaModal(false)
+      triggerToast(`Penerima BNBA "${bnbaNama}" berhasil ditambahkan.`)
+    } catch (err: any) {
+      console.error('Exception saving BNBA item:', err)
+      alert('Gagal menyimpan data BNBA: ' + (err.message || 'Terjadi kesalahan'))
+    } finally {
+      setSavingBnba(false)
     }
-
-    await saveBnbaItem(newBnba)
-    const updatedList = await fetchBnbaList(activeBnbaGroup.id)
-    setBnbaList(updatedList)
-    setAllBnbaRecords(prev => [newBnba, ...prev.filter(b => b.id !== newBnba.id)])
-
-    setSavingBnba(false)
-    setShowAddBnbaModal(false)
-    triggerToast(`Penerima BNBA "${bnbaNama}" berhasil ditambahkan.`)
   }
 
   const handleDeleteBnba = async (bnbaId: string) => {
@@ -949,24 +989,158 @@ export default function KelompokPenerimaManfaatPage() {
     reader.readAsBinaryString(file)
   }
 
+  // Helper to resolve or create valid UUID for kelompok_id in Supabase
+  const resolveSupabaseKelompokUuid = async (group: DetailKpmItem): Promise<string> => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (group.id && uuidRegex.test(group.id)) {
+      return group.id
+    }
+
+    try {
+      const { data } = await supabase
+        .from('kelompok_penerima_manfaat')
+        .select('id')
+        .or(`kode.eq.${group.npsnReg},identitas_npsn_tmp.eq.${group.npsnReg},nama.eq.${group.nama}`)
+        .limit(1)
+        .maybeSingle()
+
+      if (data?.id && uuidRegex.test(data.id)) {
+        return data.id
+      }
+    } catch (e) {
+      console.warn('Could not resolve KPM UUID:', e)
+    }
+
+    try {
+      const randomCode = `K${Math.floor(1000000000 + Math.random() * 9000000000)}`
+      const is3B = group.jenis.includes('POSYANDU') || group.jenis.includes('Ibu') || group.jenis.includes('Bayi')
+      const { data: newKpm } = await supabase
+        .from('kelompok_penerima_manfaat')
+        .insert({
+          nama: group.nama,
+          kategori: is3B ? 'POSYANDU_3B' : 'SD',
+          identitas_npsn_tmp: group.npsnReg || 'NPSN-TMP',
+          kode: group.npsnReg && group.npsnReg.startsWith('K') ? group.npsnReg : randomCode,
+          wilayah: `JAWA TIMUR · PASURUAN · ${group.kecamatan} · ${group.kelDesa}`,
+          jumlah_penerima: group.totalTarget || 10,
+          status: 'Aktif'
+        })
+        .select('id')
+        .single()
+
+      if (newKpm?.id) return newKpm.id
+    } catch (err) {
+      console.error('Error creating fallback KPM:', err)
+    }
+
+    return group.id
+  }
+
   // Execute Bulk Import to Supabase & Update local state
   const confirmExecuteImport = async () => {
     if (!activeBnbaGroup || importPreviewData.length === 0) return
     setIsImporting(true)
 
     try {
-      await saveBnbaBulk(importPreviewData)
+      const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
+
+      const payload = importPreviewData.map(item => {
+        let sanitizedDate: string | null = normalizeBirthDate(item.tanggal_lahir)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedDate || '')) {
+          sanitizedDate = '2015-01-01'
+        }
+
+        const rowPayload: any = {
+          kelompok_id: activeKelompokUuid,
+          nisn_nik: String(item.nisn_nik || '').trim(),
+          nama_lengkap: String(item.nama_lengkap || '').trim().toUpperCase(),
+          tanggal_lahir: sanitizedDate,
+          jenis_kelamin: parseJk(item.jenis_kelamin),
+          nama_ortu: String(item.nama_ortu || '-').trim().toUpperCase(),
+          posisi: parsePosisi(item.posisi),
+          kelas: String(item.kelas || '-').trim()
+        }
+
+        if (item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
+          rowPayload.id = item.id
+        }
+
+        return rowPayload
+      })
+
+      console.log('Sending BNBA Bulk Import Payload to Supabase:', payload)
+
+      const { data, error } = await supabase
+        .from('penerima_manfaat_bnba')
+        .insert(payload)
+        .select()
+
+      if (error) {
+        console.error("Gagal Import BNBA:", error)
+        alert("Gagal mengimpor data: " + error.message)
+        return
+      }
+
+      console.log('BNBA Bulk Import Success from Supabase:', data)
+
+      const localItems: PenerimaManfaatBnba[] = (data || []).map((d: any, idx: number) => ({
+        id: d.id || `bnba-imp-${Date.now()}-${idx}`,
+        kelompok_id: activeBnbaGroup.id,
+        nisn_nik: d.nisn_nik,
+        nama_lengkap: d.nama_lengkap,
+        tanggal_lahir: d.tanggal_lahir,
+        jenis_kelamin: d.jenis_kelamin,
+        nama_ortu: d.nama_ortu,
+        posisi: d.posisi,
+        kelas: d.kelas,
+        created_at: d.created_at || new Date().toISOString()
+      }))
+
+      await saveBnbaBulk(localItems.length > 0 ? localItems : importPreviewData)
 
       const updatedList = await fetchBnbaList(activeBnbaGroup.id)
-      setBnbaList(updatedList)
-      setAllBnbaRecords(prev => [...importPreviewData, ...prev.filter(b => !importPreviewData.some(imp => imp.id === b.id))])
+      const finalList = updatedList.length > 0 ? updatedList : (data || [])
+      setBnbaList(finalList)
 
-      triggerToast(`Berhasil mengimpor ${importPreviewData.length} data BNBA.`)
+      setAllBnbaRecords(prev => [
+        ...finalList,
+        ...prev.filter(b => b.kelompok_id !== activeBnbaGroup.id && b.kelompok_id !== activeKelompokUuid)
+      ])
+
+      const updatedCount = finalList.length
+      setKpmItems(prev => prev.map(k => {
+        if (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === activeKelompokUuid) {
+          const totalTarget = k.totalTarget
+          let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'
+          let ketMsg = '✓ Sesuai'
+          if (updatedCount === 0) {
+            ketStatus = 'Belum ada detail'
+            ketMsg = '⚠️ Belum ada detail'
+          } else if (updatedCount < totalTarget) {
+            ketStatus = 'Kurang'
+            ketMsg = `↓ Kurang ${totalTarget - updatedCount} orang`
+          } else if (updatedCount > totalTarget) {
+            ketStatus = 'Lebih'
+            ketMsg = `↑ Lebih ${updatedCount - totalTarget} orang`
+          }
+          return {
+            ...k,
+            rincianTerisi: updatedCount,
+            keteranganStatus: ketStatus,
+            keteranganMsg: ketMsg
+          }
+        }
+        return k
+      }))
+
+      setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: updatedCount } : null)
+
+      triggerToast(`Berhasil mengimpor ${payload.length} data BNBA ke Supabase!`)
       setShowImportConfirmModal(false)
       setImportPreviewData([])
     } catch (err: any) {
-      console.error('Error importing BNBA:', err)
-      alert('Gagal mengimpor data ke Supabase: ' + (err.message || 'Error server'))
+      console.error('Exception importing BNBA:', err)
+      alert('Gagal mengimpor data: ' + (err.message || 'Terjadi kesalahan sistem'))
     } finally {
       setIsImporting(false)
     }
