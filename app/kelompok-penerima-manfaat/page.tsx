@@ -259,9 +259,9 @@ export default function KelompokPenerimaManfaatPage() {
           rincianTerisi: bnbaCount,
           keteranganStatus: ketStatus,
           keteranganMsg: ketMsg,
-          pimpinan: kpm.pimpinan || 'PENANGGUNG JAWAB',
-          hp: kpm.hp || '081234567890',
-          email: kpm.email || 'kpm.wonorejo@gmail.com',
+          pimpinan: kpm.pimpinan || kpm.nama_pimpinan || kpm.penanggung_jawab || '-',
+          hp: kpm.hp || kpm.no_telepon || kpm.no_hp || kpm.kontak || '-',
+          email: kpm.email || '-',
           status: (kpm.status as 'Aktif' | 'Non-Aktif') || 'Aktif',
           sd13Laki: sd13LakiVal,
           sd13Perem: sd13PeremVal,
@@ -457,9 +457,9 @@ export default function KelompokPenerimaManfaatPage() {
     setFormKecamatan(item.kecamatan)
     setFormKelDesa(item.kelDesa)
     setFormAlamat(item.alamat)
-    setFormPimpinan(item.pimpinan)
-    setFormHp(item.hp)
-    setFormEmail(item.email)
+    setFormPimpinan(item.pimpinan && item.pimpinan !== '-' ? item.pimpinan : '')
+    setFormHp(item.hp && item.hp !== '-' ? item.hp : '')
+    setFormEmail(item.email && item.email !== '-' ? item.email : '')
 
     if (is3BGroup) {
       setFormBalitaLaki(item.pria || Math.floor(item.totalTarget * 0.3))
@@ -601,62 +601,60 @@ export default function KelompokPenerimaManfaatPage() {
     }
 
     if (editingItem) {
-      setKpmItems(prev => prev.map(item => item.id === editingItem.id ? {
-        ...item,
+      const updatedPimpinan = formPimpinan.trim() || '-'
+      const updatedHp = formHp.trim() || '-'
+      const updatedEmail = formEmail.trim() || '-'
+
+      const updatePayload: any = {
         nama: formNama.trim(),
-        jenis: is3B ? (formSubKategori === 'Bumil' ? 'Ibu Hamil' : formSubKategori === 'Busui' ? 'Ibu Menyusui' : 'Bayi Dibawah Lima Tahun') : formKategori,
-        npsnReg: identitasVal,
+        kategori: is3B ? 'POSYANDU_3B' : formKategori,
+        sub_kategori: subKatSummary,
+        identitas_npsn_tmp: identitasVal,
+        wilayah: fullWilayah,
         kepemilikan: formKepemilikan,
-        kecamatan: formKecamatan,
-        kelDesa: formKelDesa,
-        alamat: formAlamat,
-        pria: targetPriaVal,
-        wanita: targetWanitaVal,
-        guru: targetGuruVal,
-        tendik: targetTendikVal,
-        totalTarget: totalPenerima,
-        pimpinan: formPimpinan.trim() || item.pimpinan,
-        hp: formHp.trim() || item.hp,
-        email: formEmail.trim() || item.email,
-        sd13Laki: isSd ? formSdSiswaLaki13 : undefined,
-        sd13Perem: isSd ? formSdSiswaPerem13 : undefined,
-        sd46Laki: isSd ? formSdSiswaLaki46 : undefined,
-        sd46Perem: isSd ? formSdSiswaPerem46 : undefined,
-        subKategoriRaw: subKatSummary
-      } : item))
-      triggerToast(`Perubahan data "${formNama}" berhasil disimpan.`)
-    } else {
-      const randomCode = `K${Math.floor(1000000000 + Math.random() * 9000000000)}`
-      const newItem: DetailKpmItem = {
-        id: `kpm-new-${Date.now()}`,
-        no: kpmItems.length + 1,
-        jenis: is3B ? (formSubKategori === 'Bumil' ? 'Ibu Hamil' : formSubKategori === 'Busui' ? 'Ibu Menyusui' : 'Bayi Dibawah Lima Tahun') : formKategori,
-        nama: formNama.trim(),
-        npsnReg: identitasVal,
-        kepemilikan: formKepemilikan,
-        kecamatan: formKecamatan,
-        kelDesa: formKelDesa,
-        alamat: formAlamat,
-        pria: targetPriaVal,
-        wanita: targetWanitaVal,
-        guru: targetGuruVal,
-        tendik: targetTendikVal,
-        totalTarget: totalPenerima,
-        rincianTerisi: 0,
-        keteranganStatus: 'Belum ada detail',
-        keteranganMsg: '⚠️ Belum ada detail',
-        pimpinan: formPimpinan.trim() || (is3B ? 'Bidan Desa / Ketua Kader' : 'Kepala Sekolah'),
-        hp: formHp.trim() || '081234567890',
-        email: formEmail.trim() || 'kpm.wonorejo@gmail.com',
-        status: 'Aktif',
-        sd13Laki: isSd ? formSdSiswaLaki13 : undefined,
-        sd13Perem: isSd ? formSdSiswaPerem13 : undefined,
-        sd46Laki: isSd ? formSdSiswaLaki46 : undefined,
-        sd46Perem: isSd ? formSdSiswaPerem46 : undefined,
-        subKategoriRaw: subKatSummary
+        kecamatan: formKecamatan.trim(),
+        kel_desa: formKelDesa.trim(),
+        alamat: formAlamat.trim(),
+        target_pria: targetPriaVal,
+        target_wanita: targetWanitaVal,
+        target_guru: targetGuruVal,
+        target_tendik: targetTendikVal,
+        jumlah_penerima: totalPenerima,
+        pimpinan: updatedPimpinan !== '-' ? updatedPimpinan : null,
+        hp: updatedHp !== '-' ? updatedHp : null,
+        email: updatedEmail !== '-' ? updatedEmail : null,
+        updated_at: new Date().toISOString()
       }
 
-      setKpmItems(prev => [newItem, ...prev])
+      console.log('Sending KPM Update Payload to Supabase:', updatePayload)
+
+      let query = supabase.from('kelompok_penerima_manfaat').update(updatePayload)
+
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (editingItem.id && uuidRegex.test(editingItem.id)) {
+        query = query.eq('id', editingItem.id)
+      } else if (editingItem.npsnReg) {
+        query = query.or(`kode.eq.${editingItem.npsnReg},identitas_npsn_tmp.eq.${editingItem.npsnReg}`)
+      } else {
+        query = query.eq('id', editingItem.id)
+      }
+
+      const { error: updateErr } = await query
+
+      if (updateErr) {
+        console.error('Gagal update KPM di Supabase:', updateErr.message)
+        alert('Gagal meng-update data KPM di Supabase: ' + updateErr.message)
+        setSaving(false)
+        return
+      }
+
+      await loadData()
+      triggerToast(`Perubahan data "${formNama}" berhasil disimpan ke Supabase!`)
+    } else {
+      const randomCode = `K${Math.floor(1000000000 + Math.random() * 9000000000)}`
+      const newPimpinan = formPimpinan.trim() || '-'
+      const newHp = formHp.trim() || '-'
+      const newEmail = formEmail.trim() || '-'
 
       const newKpmSupabase: KelompokPenerimaManfaat = {
         nama: formNama.trim(),
@@ -665,12 +663,38 @@ export default function KelompokPenerimaManfaatPage() {
         identitas_npsn_tmp: identitasVal,
         kode: randomCode,
         wilayah: fullWilayah,
+        kepemilikan: formKepemilikan,
+        kecamatan: formKecamatan.trim(),
+        kel_desa: formKelDesa.trim(),
+        alamat: formAlamat.trim(),
+        target_pria: targetPriaVal,
+        target_wanita: targetWanitaVal,
+        target_guru: targetGuruVal,
+        target_tendik: targetTendikVal,
         jumlah_penerima: totalPenerima,
+        pimpinan: newPimpinan !== '-' ? newPimpinan : undefined,
+        hp: newHp !== '-' ? newHp : undefined,
+        email: newEmail !== '-' ? newEmail : undefined,
         status: 'Aktif',
         created_at: new Date().toISOString()
       }
+
+      const { data: insertedKpm, error: insertErr } = await supabase
+        .from('kelompok_penerima_manfaat')
+        .insert(newKpmSupabase)
+        .select()
+        .single()
+
+      if (insertErr) {
+        console.error('Gagal tambah KPM baru ke Supabase:', insertErr.message)
+        alert('Gagal menambah KPM ke Supabase: ' + insertErr.message)
+        setSaving(false)
+        return
+      }
+
       await saveKelompokPenerimaManfaat(newKpmSupabase)
-      triggerToast(`Kelompok baru "${formNama}" berhasil ditambahkan.`)
+      await loadData()
+      triggerToast(`Kelompok baru "${formNama}" berhasil ditambahkan ke Supabase!`)
     }
 
     setSaving(false)
