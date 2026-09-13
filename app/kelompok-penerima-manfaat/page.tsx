@@ -704,25 +704,79 @@ export default function KelompokPenerimaManfaatPage() {
   }
 
   // ─── BNBA Excel Import & Template Download Helpers ───
-  const parseExcelDate = (val: any): string => {
-    if (!val) return '2015-01-01'
-    if (typeof val === 'number') {
-      const dateObj = XLSX.SSF.parse_date_code(val)
-      if (dateObj) {
-        const yyyy = dateObj.y
-        const mm = String(dateObj.m).padStart(2, '0')
-        const dd = String(dateObj.d).padStart(2, '0')
-        return `${yyyy}-${mm}-${dd}`
-      }
+  const normalizeBirthDate = (val: any): string => {
+    if (val === null || val === undefined || val === '') {
+      return '2015-01-01'
     }
-    const str = String(val).trim()
-    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
+
+    // 1. Handle Excel serial date number
+    if (typeof val === 'number') {
+      try {
+        if (XLSX?.SSF?.parse_date_code) {
+          const dateObj = XLSX.SSF.parse_date_code(val)
+          if (dateObj && dateObj.y && dateObj.m && dateObj.d) {
+            const yyyy = String(dateObj.y).padStart(4, '0')
+            const mm = String(dateObj.m).padStart(2, '0')
+            const dd = String(dateObj.d).padStart(2, '0')
+            return `${yyyy}-${mm}-${dd}`
+          }
+        }
+        const jsDate = new Date(Math.round((val - 25569) * 86400 * 1000))
+        if (!isNaN(jsDate.getTime())) {
+          return jsDate.toISOString().split('T')[0]
+        }
+      } catch {}
+    }
+
+    let str = String(val).trim()
+    // Clean up inner whitespace (e.g., "24 -04 - 1996" -> "24-04-1996", "2022- 08 -18" -> "2022-08-18")
+    str = str.replace(/\s+/g, '')
+
+    // Check if YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str
+    }
+
+    // Handle DD/MM/YYYY, DD-MM-YYYY, D/M/YY, etc.
     const parts = str.split(/[-/.]/)
     if (parts.length === 3) {
-      if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
-      if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+      let p1 = parts[0]
+      let p2 = parts[1]
+      let p3 = parts[2]
+
+      // Case: YYYY-M-D or YYYY/M/D
+      if (p1.length === 4) {
+        const y = p1
+        const m = p2.padStart(2, '0')
+        const d = p3.padStart(2, '0')
+        return `${y}-${m}-${d}`
+      }
+
+      // Case: DD-MM-YYYY or D/M/YY (e.g. 5/9/81, 9/2/23, 24-04-1996)
+      let d = p1.padStart(2, '0')
+      let m = p2.padStart(2, '0')
+      let y = p3
+
+      if (y.length === 2) {
+        const yy = parseInt(y, 10)
+        if (!isNaN(yy)) {
+          y = yy <= 30 ? `20${y.padStart(2, '0')}` : `19${y.padStart(2, '0')}`
+        }
+      }
+
+      if (y.length === 4) {
+        return `${y}-${m}-${d}`
+      }
     }
-    return str
+
+    try {
+      const d = new Date(str)
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0]
+      }
+    } catch {}
+
+    return str || '2015-01-01'
   }
 
   const parsePosisi = (val: any): 'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui' => {
@@ -737,7 +791,8 @@ export default function KelompokPenerimaManfaatPage() {
   const parseJk = (val: any): 'L' | 'P' => {
     const s = String(val || '').trim().toUpperCase()
     if (s.startsWith('L') || s.includes('PRIA') || s.includes('LAKI')) return 'L'
-    return 'P'
+    if (s.startsWith('P') || s.includes('PEREMPUAN') || s.includes('WANITA')) return 'P'
+    return 'L'
   }
 
   // Download BNBA Excel Template
@@ -822,7 +877,7 @@ export default function KelompokPenerimaManfaatPage() {
           const namaLengkap = String(row[1] || '').trim().toUpperCase()
           if (!nisnNik || !namaLengkap) return
 
-          const tglLahir = parseExcelDate(row[2])
+          const tglLahir = normalizeBirthDate(row[2])
           const jk = parseJk(row[3])
           const ortu = String(row[4] || '-').trim().toUpperCase()
           const posisi = parsePosisi(row[5])
@@ -1939,13 +1994,13 @@ export default function KelompokPenerimaManfaatPage() {
       {/* Import Preview & Confirmation Modal */}
       {showImportConfirmModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 animate-fadeIn my-auto max-h-[85vh] flex flex-col text-xs">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-fadeIn my-auto max-h-[90vh] flex flex-col text-xs">
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-slate-800" />
                 <div>
                   <h3 className="font-bold text-slate-900 text-sm">Konfirmasi Import Data BNBA</h3>
-                  <p className="text-[11px] text-slate-500">Ditemukan <strong className="text-slate-900">{importPreviewData.length}</strong> baris data BNBA yang valid.</p>
+                  <p className="text-[11px] text-slate-500">Ditemukan <strong className="text-slate-900">{importPreviewData.length}</strong> baris data BNBA yang terverifikasi valid.</p>
                 </div>
               </div>
               <button onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); }} className="text-slate-400 hover:text-slate-600">
@@ -1955,43 +2010,42 @@ export default function KelompokPenerimaManfaatPage() {
 
             <div className="p-4 flex-1 overflow-y-auto space-y-3 bg-slate-50">
               <p className="text-slate-600 font-medium">
-                Preview 5 baris pertama data yang akan diimpor ke kelompok <strong>{activeBnbaGroup?.nama}</strong>:
+                Data yang akan diimpor ke kelompok <strong className="text-slate-900">{activeBnbaGroup?.nama}</strong>:
               </p>
 
-              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              {/* Scrollable Container with max-h-[380px] and sticky top-0 header */}
+              <div className="max-h-[380px] overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg scrollbar-thin">
                 <table className="w-full text-left border-collapse text-[11px]">
-                  <thead>
-                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase">
-                      <th className="py-2 px-2.5 text-center">#</th>
-                      <th className="py-2 px-2.5">NIK / NISN</th>
-                      <th className="py-2 px-2.5">Nama Lengkap</th>
-                      <th className="py-2 px-2.5">Tgl Lahir</th>
-                      <th className="py-2 px-2.5 text-center">JK</th>
-                      <th className="py-2 px-2.5">Ortu / Wali</th>
-                      <th className="py-2 px-2.5 text-center">Posisi</th>
+                  <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase z-10 shadow-2xs">
+                    <tr>
+                      <th className="py-2.5 px-3 text-center w-10">#</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">NIK / NISN</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">NAMA LENGKAP</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">TGL LAHIR</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">JK</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap">ORTU / WALI</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">POSISI</th>
+                      <th className="py-2.5 px-3 text-center whitespace-nowrap">KELAS</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {importPreviewData.slice(0, 5).map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 font-medium">
-                        <td className="py-2 px-2.5 text-slate-400 text-center">{idx + 1}</td>
-                        <td className="py-2 px-2.5 font-mono font-bold">{row.nisn_nik}</td>
-                        <td className="py-2 px-2.5 font-bold text-slate-900">{row.nama_lengkap}</td>
-                        <td className="py-2 px-2.5 font-mono">{row.tanggal_lahir}</td>
-                        <td className="py-2 px-2.5 text-center font-bold">{row.jenis_kelamin}</td>
-                        <td className="py-2 px-2.5">{row.nama_ortu}</td>
-                        <td className="py-2 px-2.5 text-center">{row.posisi}</td>
+                  <tbody className="divide-y divide-slate-200 bg-white font-medium">
+                    {importPreviewData.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition">
+                        <td className="py-2 px-3 text-slate-400 text-center font-bold">{idx + 1}</td>
+                        <td className="py-2 px-3 font-mono font-bold text-slate-800">{row.nisn_nik}</td>
+                        <td className="py-2 px-3 font-bold text-slate-900">{row.nama_lengkap}</td>
+                        <td className="py-2 px-3 font-mono text-slate-800 font-semibold">{row.tanggal_lahir}</td>
+                        <td className="py-2 px-3 text-center font-bold text-slate-800">
+                          {row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
+                        </td>
+                        <td className="py-2 px-3 text-slate-700">{row.nama_ortu}</td>
+                        <td className="py-2 px-3 text-center font-semibold text-slate-700">{row.posisi}</td>
+                        <td className="py-2 px-3 text-center font-mono text-slate-700">{row.kelas}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-
-              {importPreviewData.length > 5 && (
-                <p className="text-[11px] text-slate-500 italic text-center">
-                  ... dan {importPreviewData.length - 5} baris data lainnya.
-                </p>
-              )}
             </div>
 
             <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-end gap-2">
