@@ -1,0 +1,646 @@
+import { supabase } from './supabase'
+
+// ─── Type Definitions ───────────────────────────────────────
+
+export type Jenjang = 'KB_PAUD' | 'TK_RA' | 'SD_MI' | 'SMP_MTS' | 'SMA_SMK_MA'
+export type Kategori3B = 'balita' | 'bumil' | 'busui'
+
+export interface LembagaSekolah {
+  id: string
+  nama_sekolah: string
+  jenjang: Jenjang
+  alamat: string
+  kontak: string
+  penanggung_jawab: string
+  created_at?: string
+}
+
+export interface PenerimaManfaatSiswa {
+  id: string
+  nama: string
+  jenis_kelamin: 'L' | 'P'
+  tanggal_lahir: string
+  lembaga_id: string
+  kelas: string
+  status_aktif: boolean
+  catatan_alergi: string
+  created_at?: string
+  // Joined field
+  lembaga?: LembagaSekolah
+}
+
+export interface PenerimaManfaat3B {
+  id: string
+  nama: string
+  kategori: Kategori3B
+  nik: string
+  tanggal_lahir: string
+  usia_kehamilan: string
+  nama_wali_atau_anak: string
+  rt_rw: string
+  kontak: string
+  status_gizi: string
+  catatan_alergi: string
+  status_aktif: boolean
+  created_at?: string
+}
+
+export interface DashboardStats {
+  totalSiswa: number
+  siswaPaud: number
+  siswaTk: number
+  siswaSd: number
+  siswaSmp: number
+  siswaSma: number
+  totalBalita: number
+  totalBumil: number
+  totalBusui: number
+  total3B: number
+  totalPorsiHarian: number
+}
+
+// ─── Display Labels ─────────────────────────────────────────
+
+export const JENJANG_LABELS: Record<Jenjang, string> = {
+  KB_PAUD: 'KB/PAUD',
+  TK_RA: 'TK/RA',
+  SD_MI: 'SD/MI',
+  SMP_MTS: 'SMP/MTs',
+  SMA_SMK_MA: 'SMA/SMK/MA',
+}
+
+export const KATEGORI_3B_LABELS: Record<Kategori3B, string> = {
+  balita: 'Balita',
+  bumil: 'Ibu Hamil (Bumil)',
+  busui: 'Ibu Menyusui (Busui)',
+}
+
+// ─── LocalStorage Keys ──────────────────────────────────────
+
+const LS_LEMBAGA = 'sppg_lembaga_sekolah'
+const LS_SISWA = 'sppg_penerima_siswa'
+const LS_3B = 'sppg_penerima_3b'
+
+// ─── UUID Generator (for localStorage fallback) ─────────────
+
+function generateId(): string {
+  return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+}
+
+// ─── LocalStorage Helpers ───────────────────────────────────
+
+function lsGet<T>(key: string): T[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function lsSet<T>(key: string, data: T[]): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(key, JSON.stringify(data))
+}
+
+// ─── Lembaga Sekolah CRUD ───────────────────────────────────
+
+export async function fetchLembaga(jenjang?: Jenjang): Promise<LembagaSekolah[]> {
+  try {
+    let query = supabase.from('lembaga_sekolah').select('*').order('nama_sekolah')
+    if (jenjang) query = query.eq('jenjang', jenjang)
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  } catch {
+    // Fallback to localStorage
+    const all = lsGet<LembagaSekolah>(LS_LEMBAGA)
+    return jenjang ? all.filter(l => l.jenjang === jenjang) : all
+  }
+}
+
+export async function createLembaga(input: Omit<LembagaSekolah, 'id' | 'created_at'>): Promise<LembagaSekolah | null> {
+  try {
+    const { data, error } = await supabase.from('lembaga_sekolah').insert(input).select().single()
+    if (error) throw error
+    return data
+  } catch {
+    const record: LembagaSekolah = { ...input, id: generateId(), created_at: new Date().toISOString() }
+    const all = lsGet<LembagaSekolah>(LS_LEMBAGA)
+    all.push(record)
+    lsSet(LS_LEMBAGA, all)
+    return record
+  }
+}
+
+export async function updateLembaga(id: string, input: Partial<LembagaSekolah>): Promise<LembagaSekolah | null> {
+  try {
+    const { data, error } = await supabase.from('lembaga_sekolah').update(input).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  } catch {
+    const all = lsGet<LembagaSekolah>(LS_LEMBAGA)
+    const idx = all.findIndex(l => l.id === id)
+    if (idx === -1) return null
+    all[idx] = { ...all[idx], ...input }
+    lsSet(LS_LEMBAGA, all)
+    return all[idx]
+  }
+}
+
+export async function deleteLembaga(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('lembaga_sekolah').delete().eq('id', id)
+    if (error) throw error
+    return true
+  } catch {
+    const all = lsGet<LembagaSekolah>(LS_LEMBAGA)
+    lsSet(LS_LEMBAGA, all.filter(l => l.id !== id))
+    return true
+  }
+}
+
+// ─── Penerima Manfaat Siswa CRUD ────────────────────────────
+
+export async function fetchSiswa(lembagaId?: string): Promise<PenerimaManfaatSiswa[]> {
+  try {
+    let query = supabase.from('penerima_manfaat_siswa').select('*, lembaga:lembaga_sekolah(*)').order('nama')
+    if (lembagaId) query = query.eq('lembaga_id', lembagaId)
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  } catch {
+    const all = lsGet<PenerimaManfaatSiswa>(LS_SISWA)
+    return lembagaId ? all.filter(s => s.lembaga_id === lembagaId) : all
+  }
+}
+
+export async function fetchSiswaByJenjang(jenjang: Jenjang): Promise<PenerimaManfaatSiswa[]> {
+  try {
+    const { data, error } = await supabase
+      .from('penerima_manfaat_siswa')
+      .select('*, lembaga:lembaga_sekolah!inner(*)')
+      .eq('lembaga.jenjang', jenjang)
+      .order('nama')
+    if (error) throw error
+    return data || []
+  } catch {
+    const lembagaList = lsGet<LembagaSekolah>(LS_LEMBAGA).filter(l => l.jenjang === jenjang)
+    const lembagaIds = new Set(lembagaList.map(l => l.id))
+    return lsGet<PenerimaManfaatSiswa>(LS_SISWA).filter(s => lembagaIds.has(s.lembaga_id))
+  }
+}
+
+export async function createSiswa(input: Omit<PenerimaManfaatSiswa, 'id' | 'created_at' | 'lembaga'>): Promise<PenerimaManfaatSiswa | null> {
+  try {
+    const { data, error } = await supabase.from('penerima_manfaat_siswa').insert(input).select().single()
+    if (error) throw error
+    return data
+  } catch {
+    const record = { ...input, id: generateId(), created_at: new Date().toISOString() } as PenerimaManfaatSiswa
+    const all = lsGet<PenerimaManfaatSiswa>(LS_SISWA)
+    all.push(record)
+    lsSet(LS_SISWA, all)
+    return record
+  }
+}
+
+export async function updateSiswa(id: string, input: Partial<PenerimaManfaatSiswa>): Promise<PenerimaManfaatSiswa | null> {
+  try {
+    const { lembaga: _l, ...cleanInput } = input as PenerimaManfaatSiswa
+    const { data, error } = await supabase.from('penerima_manfaat_siswa').update(cleanInput).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  } catch {
+    const all = lsGet<PenerimaManfaatSiswa>(LS_SISWA)
+    const idx = all.findIndex(s => s.id === id)
+    if (idx === -1) return null
+    all[idx] = { ...all[idx], ...input }
+    lsSet(LS_SISWA, all)
+    return all[idx]
+  }
+}
+
+export async function deleteSiswa(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('penerima_manfaat_siswa').delete().eq('id', id)
+    if (error) throw error
+    return true
+  } catch {
+    const all = lsGet<PenerimaManfaatSiswa>(LS_SISWA)
+    lsSet(LS_SISWA, all.filter(s => s.id !== id))
+    return true
+  }
+}
+
+// ─── Penerima Manfaat 3B CRUD ───────────────────────────────
+
+export async function fetch3B(kategori?: Kategori3B): Promise<PenerimaManfaat3B[]> {
+  try {
+    let query = supabase.from('penerima_manfaat_3b').select('*').order('nama')
+    if (kategori) query = query.eq('kategori', kategori)
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  } catch {
+    const all = lsGet<PenerimaManfaat3B>(LS_3B)
+    return kategori ? all.filter(r => r.kategori === kategori) : all
+  }
+}
+
+export async function create3B(input: Omit<PenerimaManfaat3B, 'id' | 'created_at'>): Promise<PenerimaManfaat3B | null> {
+  try {
+    const { data, error } = await supabase.from('penerima_manfaat_3b').insert(input).select().single()
+    if (error) throw error
+    return data
+  } catch {
+    const record: PenerimaManfaat3B = { ...input, id: generateId(), created_at: new Date().toISOString() }
+    const all = lsGet<PenerimaManfaat3B>(LS_3B)
+    all.push(record)
+    lsSet(LS_3B, all)
+    return record
+  }
+}
+
+export async function update3B(id: string, input: Partial<PenerimaManfaat3B>): Promise<PenerimaManfaat3B | null> {
+  try {
+    const { data, error } = await supabase.from('penerima_manfaat_3b').update(input).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  } catch {
+    const all = lsGet<PenerimaManfaat3B>(LS_3B)
+    const idx = all.findIndex(r => r.id === id)
+    if (idx === -1) return null
+    all[idx] = { ...all[idx], ...input }
+    lsSet(LS_3B, all)
+    return all[idx]
+  }
+}
+
+export async function delete3B(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('penerima_manfaat_3b').delete().eq('id', id)
+    if (error) throw error
+    return true
+  } catch {
+    const all = lsGet<PenerimaManfaat3B>(LS_3B)
+    lsSet(LS_3B, all.filter(r => r.id !== id))
+    return true
+  }
+}
+
+// ─── Dashboard Statistics ───────────────────────────────────
+
+export async function fetchDashboardStats(): Promise<DashboardStats> {
+  try {
+    // Try Supabase first
+    const [lembagaRes, siswaRes, tigaBRes] = await Promise.all([
+      supabase.from('lembaga_sekolah').select('id, jenjang'),
+      supabase.from('penerima_manfaat_siswa').select('id, lembaga_id, status_aktif'),
+      supabase.from('penerima_manfaat_3b').select('id, kategori, status_aktif'),
+    ])
+
+    if (lembagaRes.error || siswaRes.error || tigaBRes.error) throw new Error('Supabase error')
+
+    const lembagaList = lembagaRes.data || []
+    const siswaList = (siswaRes.data || []).filter((s: { status_aktif: boolean }) => s.status_aktif !== false)
+    const tigaBList = (tigaBRes.data || []).filter((r: { status_aktif: boolean }) => r.status_aktif !== false)
+
+    // Build jenjang→lembaga_id mapping
+    const jenjangIds: Record<Jenjang, Set<string>> = {
+      KB_PAUD: new Set(), TK_RA: new Set(), SD_MI: new Set(), SMP_MTS: new Set(), SMA_SMK_MA: new Set()
+    }
+    lembagaList.forEach((l: { id: string; jenjang: Jenjang }) => jenjangIds[l.jenjang]?.add(l.id))
+
+    const countByJenjang = (j: Jenjang) => siswaList.filter((s: { lembaga_id: string }) => jenjangIds[j].has(s.lembaga_id)).length
+    const countByKat = (k: Kategori3B) => tigaBList.filter((r: { kategori: string }) => r.kategori === k).length
+
+    const totalSiswa = siswaList.length
+    const totalBalita = countByKat('balita')
+    const totalBumil = countByKat('bumil')
+    const totalBusui = countByKat('busui')
+
+    return {
+      totalSiswa,
+      siswaPaud: countByJenjang('KB_PAUD') + countByJenjang('TK_RA'),
+      siswaTk: countByJenjang('TK_RA'),
+      siswaSd: countByJenjang('SD_MI'),
+      siswaSmp: countByJenjang('SMP_MTS'),
+      siswaSma: countByJenjang('SMA_SMK_MA'),
+      totalBalita,
+      totalBumil,
+      totalBusui,
+      total3B: totalBalita + totalBumil + totalBusui,
+      totalPorsiHarian: totalSiswa + totalBalita + totalBumil + totalBusui,
+    }
+  } catch {
+    // Fallback to localStorage
+    return computeLocalStats()
+  }
+}
+
+function computeLocalStats(): DashboardStats {
+  const lembagaList = lsGet<LembagaSekolah>(LS_LEMBAGA)
+  const siswaList = lsGet<PenerimaManfaatSiswa>(LS_SISWA).filter(s => s.status_aktif !== false)
+  const tigaBList = lsGet<PenerimaManfaat3B>(LS_3B).filter(r => r.status_aktif !== false)
+
+  const jenjangIds: Record<Jenjang, Set<string>> = {
+    KB_PAUD: new Set(), TK_RA: new Set(), SD_MI: new Set(), SMP_MTS: new Set(), SMA_SMK_MA: new Set()
+  }
+  lembagaList.forEach(l => jenjangIds[l.jenjang]?.add(l.id))
+
+  const countByJenjang = (j: Jenjang) => siswaList.filter(s => jenjangIds[j].has(s.lembaga_id)).length
+  const countByKat = (k: Kategori3B) => tigaBList.filter(r => r.kategori === k).length
+
+  const totalSiswa = siswaList.length
+  const totalBalita = countByKat('balita')
+  const totalBumil = countByKat('bumil')
+  const totalBusui = countByKat('busui')
+
+  return {
+    totalSiswa,
+    siswaPaud: countByJenjang('KB_PAUD') + countByJenjang('TK_RA'),
+    siswaTk: countByJenjang('TK_RA'),
+    siswaSd: countByJenjang('SD_MI'),
+    siswaSmp: countByJenjang('SMP_MTS'),
+    siswaSma: countByJenjang('SMA_SMK_MA'),
+    totalBalita,
+    totalBumil,
+    totalBusui,
+    total3B: totalBalita + totalBumil + totalBusui,
+    totalPorsiHarian: totalSiswa + totalBalita + totalBumil + totalBusui,
+  }
+}
+
+// ─── Super App Schema Types & Functions ─────────────────────────────
+
+export interface SppgProfile {
+  id?: string
+  nama_unit: string
+  penanggung_jawab: string
+  wilayah: string
+  kapasitas_harian: number
+  status_operasional: string
+  updated_at?: string
+}
+
+export interface KelompokPenerimaManfaat {
+  id?: string
+  nama: string
+  kategori: string // 'KB/PAUD' | 'TK/RA' | 'SD/MI' | 'SMP/MTS' | 'SMA/SMK/MA' | 'POSYANDU_3B'
+  sub_kategori?: string // 'Balita' | 'Bumil' | 'Busui'
+  identitas_npsn_tmp: string
+  kode: string
+  wilayah: string
+  jumlah_penerima: number
+  status: string
+  created_at?: string
+}
+
+export interface MenuHarianDB {
+  id?: string
+  tanggal: string
+  nama_menu: string
+  foto_url: string
+  komposisi_gizi: string[]
+  kalori: string
+  target_porsi: number
+  status: string
+  created_at?: string
+}
+
+// ─── SPPG Profile Helpers ───
+export async function fetchSppgProfile(): Promise<SppgProfile> {
+  const defaultProfile: SppgProfile = {
+    nama_unit: 'SPPG PASURUAN WONOREJO',
+    penanggung_jawab: 'Ahmad Sayyidani Haqiqi, S.Pd.',
+    wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO',
+    kapasitas_harian: 5000,
+    status_operasional: 'Aktif'
+  }
+
+  try {
+    const { data, error } = await supabase.from('sppg_profile').select('*').limit(1).single()
+    if (error || !data) throw error
+    return data
+  } catch {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_profile_data') : null
+    if (stored) {
+      try { return JSON.parse(stored) } catch { /* use default */ }
+    }
+    return defaultProfile
+  }
+}
+
+export async function saveSppgProfile(profile: SppgProfile): Promise<SppgProfile> {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('sppg_profile_data', JSON.stringify(profile))
+    window.dispatchEvent(new Event('storage'))
+  }
+  try {
+    const { data, error } = await supabase.from('sppg_profile').upsert(profile).select().single()
+    if (!error && data) return data
+  } catch {
+    // fallback
+  }
+  return profile
+}
+
+// ─── Kelompok Penerima Manfaat Helpers ───
+export const INITIAL_KPM_DATA: KelompokPenerimaManfaat[] = [
+  { id: '1', nama: '3B POSYANDU UTAMA', kategori: 'POSYANDU_3B', sub_kategori: 'Balita', identitas_npsn_tmp: 'tmp: TMP-K8395745266', kode: 'K8395745266', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 640, status: 'Aktif' },
+  { id: '2', nama: 'RA USWATUN HASANAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69746343 NSM: 101235140356', kode: 'K9282069580', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
+  { id: '3', nama: 'KB HARAPAN', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873373', kode: 'K4829104821', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
+  { id: '4', nama: 'MTSN 4 PASURUAN', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20582152', kode: 'K5920194812', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 480, status: 'Aktif' },
+  { id: '5', nama: 'TK AL-ALAWIYAH', kategori: 'TK/RA', identitas_npsn_tmp: 'NPSN: 69812401', kode: 'K1029481920', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 210, status: 'Aktif' },
+  { id: '6', nama: 'SDN WONOREJO V WONOREJO', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518921', kode: 'K9281048291', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 390, status: 'Aktif' },
+  { id: '7', nama: 'SD NEGERI WONOREJO I', kategori: 'SD/MI', identitas_npsn_tmp: 'NPSN: 20518925', kode: 'K8291048292', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 420, status: 'Aktif' },
+  { id: '8', nama: 'KB AN-NUR', kategori: 'KB/PAUD', identitas_npsn_tmp: 'NPSN: 69873374', kode: 'K7291048293', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 180, status: 'Aktif' },
+  { id: '9', nama: 'POSYANDU MAWAR', kategori: 'POSYANDU_3B', sub_kategori: 'Bumil', identitas_npsn_tmp: 'tmp: TMP-K3819203819', kode: 'K6291048294', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 145, status: 'Aktif' },
+  { id: '10', nama: 'SMPN 1 WONOREJO', kategori: 'SMP/MTS', identitas_npsn_tmp: 'NPSN: 20518900', kode: 'K5291048295', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 500, status: 'Aktif' },
+  { id: '11', nama: 'SMAN 1 WONOREJO', kategori: 'SMA/SMK/MA', identitas_npsn_tmp: 'NPSN: 20518901', kode: 'K4291048296', wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO', jumlah_penerima: 780, status: 'Aktif' }
+]
+
+export async function fetchKelompokPenerimaManfaatList(): Promise<KelompokPenerimaManfaat[]> {
+  try {
+    const { data, error } = await supabase.from('kelompok_penerima_manfaat').select('*').order('created_at', { ascending: false })
+    if (error || !data || data.length === 0) throw error
+    return data
+  } catch {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_kpm_list') : null
+    if (stored) {
+      try { return JSON.parse(stored) } catch { /* use initial */ }
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sppg_kpm_list', JSON.stringify(INITIAL_KPM_DATA))
+    }
+    return INITIAL_KPM_DATA
+  }
+}
+
+export async function saveKelompokPenerimaManfaat(kpm: KelompokPenerimaManfaat): Promise<KelompokPenerimaManfaat> {
+  const currentList = await fetchKelompokPenerimaManfaatList()
+  const updatedList = [kpm, ...currentList.filter(item => item.kode !== kpm.kode)]
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('sppg_kpm_list', JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    const { data, error } = await supabase.from('kelompok_penerima_manfaat').insert(kpm).select().single()
+    if (!error && data) return data
+  } catch {
+    // fallback
+  }
+  return kpm
+}
+
+// ─── Menu Harian Helpers ───
+export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
+  try {
+    const { data, error } = await supabase.from('menu_harian').select('*').order('created_at', { ascending: false }).limit(1).single()
+    if (error || !data) throw error
+    return data
+  } catch {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_menu_hari_ini') : null
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        return {
+          nama_menu: parsed.namaMenu,
+          tanggal: parsed.tanggal,
+          target_porsi: parseInt(parsed.targetPorsi?.replace(/[^0-9]/g, '') || '4850'),
+          kalori: parsed.kalori,
+          status: parsed.status,
+          komposisi_gizi: parsed.tags || [],
+          foto_url: parsed.fotoUrl || '/menu-today.png'
+        }
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+}
+
+export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianDB> {
+  const localFormat = {
+    namaMenu: menu.nama_menu,
+    tanggal: menu.tanggal,
+    targetPorsi: `${menu.target_porsi.toLocaleString('id-ID')} Porsi`,
+    kalori: menu.kalori,
+    status: menu.status,
+    tags: menu.komposisi_gizi,
+    fotoUrl: menu.foto_url
+  }
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('sppg_menu_hari_ini', JSON.stringify(localFormat))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    const { data, error } = await supabase.from('menu_harian').insert(menu).select().single()
+    if (!error && data) return data
+  } catch {
+    // fallback
+  }
+  return menu
+}
+
+// ─── BNBA (By Name By Address) Types & Helpers ───────────────────────
+
+export interface PenerimaManfaatBnba {
+  id: string
+  kelompok_id: string
+  nisn_nik: string
+  nama_lengkap: string
+  tanggal_lahir: string
+  jenis_kelamin: 'L' | 'P'
+  nama_ortu: string
+  posisi: 'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'
+  kelas: string
+  created_at?: string
+}
+
+const LS_BNBA = 'sppg_penerima_bnba'
+
+// Initial mock BNBA list for audit items
+export const INITIAL_BNBA_DATA: PenerimaManfaatBnba[] = [
+  // kpm-1: POSYANDU WONOREJO (Ibu Menyusui) - sample BNBA items
+  { id: 'bnba-1-1', kelompok_id: 'kpm-1', nisn_nik: '3514015502900001', nama_lengkap: 'SITI NURHALIZA', tanggal_lahir: '15-02-1990', jenis_kelamin: 'P', nama_ortu: 'BAPAK SUMARNO', posisi: 'Busui', kelas: '-', created_at: new Date().toISOString() },
+  { id: 'bnba-1-2', kelompok_id: 'kpm-1', nisn_nik: '3514016208920002', nama_lengkap: 'DEWI ANGGRAINII', tanggal_lahir: '22-08-1992', jenis_kelamin: 'P', nama_ortu: 'BAPAK JOKO', posisi: 'Busui', kelas: '-', created_at: new Date().toISOString() },
+  { id: 'bnba-1-3', kelompok_id: 'kpm-1', nisn_nik: '3514014811950003', nama_lengkap: 'RATNA SARI', tanggal_lahir: '08-11-1995', jenis_kelamin: 'P', nama_ortu: 'BAPAK MULYADI', posisi: 'Busui', kelas: '-', created_at: new Date().toISOString() },
+
+  // kpm-6: KB MELATI DESA WONOSARI (9 items total)
+  { id: 'bnba-6-1', kelompok_id: 'kpm-6', nisn_nik: '3182910281', nama_lengkap: 'ANANDA RIZKY', tanggal_lahir: '12-05-2021', jenis_kelamin: 'L', nama_ortu: 'SLAMET RIYADI', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
+  { id: 'bnba-6-2', kelompok_id: 'kpm-6', nisn_nik: '3182910282', nama_lengkap: 'MUHAMMAD ALIF', tanggal_lahir: '04-09-2021', jenis_kelamin: 'L', nama_ortu: 'BUDI SANTOSO', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
+  { id: 'bnba-6-3', kelompok_id: 'kpm-6', nisn_nik: '3182910283', nama_lengkap: 'BINTANG SUTANTO', tanggal_lahir: '18-01-2021', jenis_kelamin: 'L', nama_ortu: 'AGUS SUTANTO', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
+  { id: 'bnba-6-4', kelompok_id: 'kpm-6', nisn_nik: '3182910284', nama_lengkap: 'DANI HERMAWAN', tanggal_lahir: '30-03-2021', jenis_kelamin: 'L', nama_ortu: 'HERMANSYAH', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
+  { id: 'bnba-6-5', kelompok_id: 'kpm-6', nisn_nik: '3182910285', nama_lengkap: 'AULIA RAHMA', tanggal_lahir: '14-07-2021', jenis_kelamin: 'P', nama_ortu: 'EKO PRASETYO', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
+  { id: 'bnba-6-6', kelompok_id: 'kpm-6', nisn_nik: '3182910286', nama_lengkap: 'CINTIA BELLA', tanggal_lahir: '02-12-2021', jenis_kelamin: 'P', nama_ortu: 'SUPRIYADI', posisi: 'Siswa', kelas: 'KB', created_at: new Date().toISOString() },
+  { id: 'bnba-6-7', kelompok_id: 'kpm-6', nisn_nik: '3514011204850001', nama_lengkap: 'Susi yusniasari', tanggal_lahir: '12-04-1985', jenis_kelamin: 'P', nama_ortu: '-', posisi: 'Tendik', kelas: '-', created_at: new Date().toISOString() },
+  { id: 'bnba-6-8', kelompok_id: 'kpm-6', nisn_nik: '3514012006880002', nama_lengkap: 'KIKI AMALIA', tanggal_lahir: '20-06-1988', jenis_kelamin: 'P', nama_ortu: '-', posisi: 'Tendik', kelas: '-', created_at: new Date().toISOString() },
+  { id: 'bnba-6-9', kelompok_id: 'kpm-6', nisn_nik: '3514010509900003', nama_lengkap: 'NUR LATIFAH', tanggal_lahir: '05-09-1990', jenis_kelamin: 'P', nama_ortu: '-', posisi: 'Tendik', kelas: '-', created_at: new Date().toISOString() },
+
+  // kpm-7: TK PKK IV DESA WONOSARI
+  { id: 'bnba-7-1', kelompok_id: 'kpm-7', nisn_nik: '3192010291', nama_lengkap: 'AHMAD ZAKI', tanggal_lahir: '10-02-2020', jenis_kelamin: 'L', nama_ortu: 'M. RIDWAN', posisi: 'Siswa', kelas: 'TK B', created_at: new Date().toISOString() },
+  { id: 'bnba-7-2', kelompok_id: 'kpm-7', nisn_nik: '3192010292', nama_lengkap: 'SITI AISYAH', tanggal_lahir: '25-05-2020', jenis_kelamin: 'P', nama_ortu: 'AHMAD SYARIF', posisi: 'Siswa', kelas: 'TK B', created_at: new Date().toISOString() },
+]
+
+export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaatBnba[]> {
+  try {
+    let query = supabase.from('penerima_manfaat_bnba').select('*').order('created_at', { ascending: false })
+    if (kelompokId) query = query.eq('kelompok_id', kelompokId)
+    const { data, error } = await query
+    if (error || !data || data.length === 0) throw error
+    return data
+  } catch {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem(LS_BNBA) : null
+    let all: PenerimaManfaatBnba[] = []
+    if (stored) {
+      try { all = JSON.parse(stored) } catch { all = INITIAL_BNBA_DATA }
+    } else {
+      all = INITIAL_BNBA_DATA
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LS_BNBA, JSON.stringify(INITIAL_BNBA_DATA))
+      }
+    }
+    return kelompokId ? all.filter(item => item.kelompok_id === kelompokId) : all
+  }
+}
+
+export async function saveBnbaItem(item: PenerimaManfaatBnba): Promise<PenerimaManfaatBnba> {
+  const currentList = await fetchBnbaList()
+  const updatedList = [item, ...currentList.filter(i => i.id !== item.id)]
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LS_BNBA, JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    const { data, error } = await supabase.from('penerima_manfaat_bnba').insert(item).select().single()
+    if (!error && data) return data
+  } catch {
+    // fallback
+  }
+  return item
+}
+
+export async function deleteBnbaItem(id: string): Promise<boolean> {
+  const currentList = await fetchBnbaList()
+  const updatedList = currentList.filter(i => i.id !== id)
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LS_BNBA, JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    await supabase.from('penerima_manfaat_bnba').delete().eq('id', id)
+  } catch {
+    // fallback
+  }
+  return true
+}
+
+

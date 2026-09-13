@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Manajemen Dapur SPPG Pasuruan Wonorejo",
-  description: "Sistem Manajemen & Monitoring Dapur Satuan Pelayanan Pemenuhan Gizi (SPPG) Pasuruan Wonorejo",
+  title: "SPPG Super App — Kiduldalem",
+  description: "Super App Operasional Satuan Pelayanan Pemenuhan Gizi (SPPG) Kiduldalem — Sistem Manajemen Penerima Manfaat, Dapur, dan Distribusi Terintegrasi",
   metadataBase: new URL("https://dapur-sppg.pasuruankab.go.id"),
-  keywords: ["SPPG", "Pasuruan", "Wonorejo", "Dapur", "Makanan Bergizi Gratis"],
+  keywords: ["SPPG", "Super App", "Kiduldalem", "Penerima Manfaat", "Makanan Bergizi Gratis", "Pasuruan"],
 };
 
 export default function RootLayout({

@@ -1,24 +1,20 @@
 "use client"
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  LayoutDashboard, 
-  ChefHat, 
-  Boxes, 
+  LayoutGrid, 
+  MapPin, 
+  BookOpen, 
   Users, 
-  School, 
-  ShieldCheck, 
-  BarChart3, 
-  Folder, 
-  ChevronDown, 
+  ClipboardCheck, 
+  FileText, 
+  User, 
   Menu, 
   X,
-  LogOut,
-  Eye,
-  AlertCircle,
-  Truck
+  ChevronDown,
+  UtensilsCrossed
 } from 'lucide-react'
 
 interface SubMenuItem {
@@ -31,146 +27,64 @@ interface MenuItem {
   icon: React.ReactNode;
   path?: string;
   submenus?: SubMenuItem[];
+  active?: boolean;
+  disabled?: boolean;
 }
 
-interface UserAccount {
-  name: string;
-  role: string;
-  initials: string;
-}
-
-type AccessType = 'full' | 'readonly' | 'hidden';
-
-// RBAC access decision engine
-export function getPathAccess(role: string, path: string): AccessType {
-  if (!role) return 'hidden';
-  
-  // Kepala SPPG has full access to everything
-  if (role === 'Kepala SPPG') return 'full';
-
-  // Root path is the work dashboard for everyone
-  if (path === '/') return 'full';
-
-  // Akuntan Allowed Paths
-  if (role === 'Akuntan') {
-    if (path.includes('/pembelian') || path.includes('/supplier') || path === '/dokumen') {
-      return 'full';
-    }
-    return 'hidden';
-  }
-
-  // Ahli Gizi Allowed Paths
-  if (role === 'Ahli Gizi') {
-    if (path.includes('/menu-harian') || path.includes('/kalkulator-bahan') || path === '/laporan') {
-      return 'full';
-    }
-    return 'hidden';
-  }
-
-  // Aslap Allowed Paths
-  if (role === 'Aslap') {
-    if (path.includes('/checklist') || path.includes('/packing') || path === '/dokumen' || path === '/laporan') {
-      return 'full';
-    }
-    return 'hidden';
-  }
-
-  // Keamanan Allowed Paths
-  if (role === 'Keamanan') {
-    if (path === '/') {
-      return 'full';
-    }
-    return 'hidden';
-  }
-
-  return 'hidden';
+interface MenuSection {
+  title: string;
+  items: MenuItem[];
 }
 
 export default function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
-  
   const [mobileOpen, setMobileOpen] = useState(false)
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({})
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  // Fetch active user on mount and every pathname change to keep it reactive
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    // One-time database reset for browser cleanup
-    if (typeof window !== 'undefined' && !localStorage.getItem('sppg_reset_done_v3')) {
-      localStorage.clear()
-      localStorage.setItem('sppg_reset_done_v3', 'true')
-      window.location.reload()
-      return
-    }
-
-    const storedUser = localStorage.getItem('sppg_user')
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser))
-    } else if (!pathname.startsWith('/login')) {
-      router.push('/login')
-    }
-    setLoading(false)
-  }, [pathname, router])
-
-  // Pruned menus according to role
-  const getMenuItemsForRole = (role: string): MenuItem[] => {
-    if (role === 'Kepala SPPG') {
-      return [
-        { name: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/' },
-        {
-          name: 'SDM / Relawan',
-          icon: <Users size={18} />,
-          submenus: [
-            { name: 'Data Relawan', path: '/sdm/relawan' },
-            { name: 'Laporan Absensi', path: '/sdm/absensi' }
-          ]
+  const menuSections: MenuSection[] = [
+    {
+      title: 'MENU',
+      items: [
+        { 
+          name: 'Beranda', 
+          icon: <LayoutGrid size={17} />, 
+          path: '/',
+          active: pathname === '/'
         }
       ]
-    }
-    
-    if (role === 'Akuntan') {
-      return [
-        { name: 'Pembelian', icon: <Boxes size={18} />, path: '/gudang/pembelian' },
-        { name: 'Supplier', icon: <Boxes size={18} />, path: '/gudang/supplier' },
-        { name: 'Pengeluaran', icon: <BarChart3 size={18} />, path: '/' },
-        { name: 'Invoice', icon: <Folder size={18} />, path: '/dokumen' },
-        { name: 'Riwayat', icon: <Folder size={18} />, path: '/dokumen' }
+    },
+    {
+      title: 'REFERENSI',
+      items: [
+        { 
+          name: 'SPPG', 
+          icon: <MapPin size={17} />, 
+          path: '/sppg',
+          active: pathname === '/sppg'
+        },
+        { 
+          name: 'Kelompok Penerima Manfaat', 
+          icon: <BookOpen size={17} className="text-emerald-600" />, 
+          path: '/kelompok-penerima-manfaat',
+          active: pathname === '/kelompok-penerima-manfaat'
+        }
+      ]
+    },
+    {
+      title: 'OPERASIONAL',
+      items: [
+        {
+          name: 'Kelola Menu Harian',
+          icon: <UtensilsCrossed size={17} className="text-amber-600" />,
+          path: '/kelola-menu-harian',
+          active: pathname === '/kelola-menu-harian' || pathname === '/kelola-menu'
+        },
+        { name: 'Penilaian Organoleptik', icon: <ClipboardCheck size={17} />, path: '#', disabled: true },
+        { name: 'Laporan VA Harian SPPG', icon: <FileText size={17} />, path: '#', disabled: true },
+        { name: 'Profil SPPG', icon: <User size={17} />, path: '/sppg', active: pathname === '/sppg' },
       ]
     }
-
-    if (role === 'Ahli Gizi') {
-      return [
-        { name: 'Menu Hari Ini', icon: <ChefHat size={18} />, path: '/' },
-        { name: 'Resep', icon: <ChefHat size={18} />, path: '/operasional/menu-harian' },
-        { name: 'Nilai Gizi', icon: <ChefHat size={18} />, path: '/operasional/kalkulator-bahan' },
-        { name: 'Riwayat', icon: <Folder size={18} />, path: '/laporan' }
-      ]
-    }
-
-    if (role === 'Aslap') {
-      return [
-        { name: 'Checklist', icon: <ShieldCheck size={18} />, path: '/quality/checklist' },
-        { name: 'Packing', icon: <ChefHat size={18} />, path: '/operasional/packing' },
-        { name: 'Distribusi', icon: <Truck size={18} />, path: '/' },
-        { name: 'Dokumentasi', icon: <Folder size={18} />, path: '/dokumen' },
-        { name: 'Riwayat', icon: <Folder size={18} />, path: '/laporan' }
-      ]
-    }
-
-    if (role === 'Keamanan') {
-      return [
-        { name: 'Absensi Relawan', icon: <Users size={18} />, path: '/' }
-      ]
-    }
-
-    return []
-  }
-
-  const userRole = currentUser?.role || ''
-  const filteredMenuItems = getMenuItemsForRole(userRole)
+  ]
 
   const toggleSubmenu = (name: string) => {
     setOpenSubmenus((prev) => ({
@@ -179,225 +93,173 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
     }))
   }
 
-  const isMenuItemActive = (item: MenuItem) => {
-    if (item.path) {
-      return pathname === item.path
-    }
-    if (item.submenus) {
-      return item.submenus.some((sub) => pathname === sub.path)
-    }
-    return false
-  }
+  const renderMenuItem = (item: MenuItem) => {
+    const isExplicitActive = item.active || (item.path === '/' ? pathname === '/' : item.path && pathname.startsWith(item.path) && item.path !== '#')
+    const hasSubmenus = !!item.submenus
+    const isExpanded = openSubmenus[item.name]
+    const isDisabled = !!item.disabled
 
-  const handleLogout = () => {
-    localStorage.removeItem('sppg_user')
-    setCurrentUser(null)
-    router.push('/login')
+    if (isDisabled) {
+      return (
+        <div
+          key={item.name}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-gray-400 opacity-60 cursor-not-allowed select-none"
+        >
+          <div className="flex items-center gap-3">
+            <span>{item.icon}</span>
+            <span>{item.name}</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (hasSubmenus) {
+      const isAnySubActive = item.submenus?.some(sub => pathname.startsWith(sub.path))
+      return (
+        <div key={item.name} className="space-y-1">
+          <button
+            onClick={() => toggleSubmenu(item.name)}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition duration-150 cursor-pointer ${
+              isAnySubActive 
+                ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-100' 
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <span className={isAnySubActive ? 'text-emerald-600' : 'text-gray-500'}>{item.icon}</span>
+              <span>{item.name}</span>
+            </div>
+            <motion.div
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <ChevronDown size={14} className="text-gray-400" />
+            </motion.div>
+          </button>
+
+          <AnimatePresence initial={false}>
+            {isExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden pl-7 space-y-1"
+              >
+                {item.submenus!.map((sub) => {
+                  const isSubActive = pathname === sub.path || pathname.startsWith(sub.path)
+                  return (
+                    <Link
+                      key={sub.path}
+                      href={sub.path}
+                      onClick={() => setMobileOpen(false)}
+                      className={`block px-3 py-1.5 rounded-md text-[11px] font-medium transition duration-150 ${
+                        isSubActive 
+                          ? 'text-emerald-700 font-semibold bg-emerald-50/80' 
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      }`}
+                    >
+                      {sub.name}
+                    </Link>
+                  )
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )
+    }
+
+    return (
+      <Link
+        key={item.name}
+        href={item.path || '#'}
+        onClick={() => setMobileOpen(false)}
+        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition duration-150 ${
+          isExplicitActive 
+            ? 'bg-emerald-50 text-emerald-800 font-semibold border border-emerald-100/80' 
+            : 'text-gray-700 hover:bg-gray-100'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span className={isExplicitActive ? 'text-emerald-600' : 'text-gray-500'}>{item.icon}</span>
+          <span>{item.name}</span>
+        </div>
+      </Link>
+    )
   }
 
   const renderSidebarContents = () => (
-    <div className="flex flex-col h-full bg-slate-900 border-r border-slate-800 text-slate-300">
-      {/* Brand Header */}
-      <div className="p-6 border-b border-slate-800 flex items-center gap-3 bg-slate-950/40">
-        <div className="w-10 h-10 rounded bg-emerald-900 flex items-center justify-center text-white font-black text-lg border border-emerald-800">
-          🍽️
-        </div>
-        <div>
-          <h2 className="font-extrabold text-white text-sm leading-tight tracking-tight">Dapur SPPG</h2>
-          <span className="text-[9px] font-bold text-emerald-400 tracking-wider uppercase">Pasuruan Wonorejo</span>
-        </div>
-      </div>
-
-      {/* Nav Items */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-1 scrollbar-thin">
-        {filteredMenuItems.map((item) => {
-          const isActive = isMenuItemActive(item)
-          const hasSubmenus = !!item.submenus
-          const isExpanded = openSubmenus[item.name]
-
-          if (hasSubmenus) {
-            return (
-              <div key={item.name} className="space-y-1">
-                <button
-                  onClick={() => toggleSubmenu(item.name)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded text-xs font-bold transition duration-150 cursor-pointer ${
-                    isActive 
-                      ? 'text-white bg-slate-800' 
-                      : 'hover:text-slate-100 hover:bg-slate-800/40 text-slate-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className={isActive ? 'text-emerald-400' : ''}>{item.icon}</span>
-                    <span>{item.name}</span>
-                  </div>
-                  <motion.div
-                    animate={{ rotate: isExpanded ? 180 : 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <ChevronDown size={14} />
-                  </motion.div>
-                </button>
-
-                <AnimatePresence initial={false}>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="overflow-hidden pl-6 space-y-1"
-                    >
-                      {item.submenus!.map((sub) => {
-                        const isSubActive = pathname === sub.path
-                        return (
-                          <Link
-                            key={sub.path}
-                            href={sub.path}
-                            onClick={() => setMobileOpen(false)}
-                            className={`flex items-center justify-between px-3 py-1.5 rounded text-[11px] font-bold transition duration-150 ${
-                              isSubActive 
-                                ? 'text-emerald-400 bg-emerald-950/40' 
-                                : 'text-slate-550 hover:text-slate-300 hover:bg-slate-800/20'
-                            }`}
-                          >
-                            <span>• {sub.name}</span>
-                          </Link>
-                        )
-                      })}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )
-          }
-
-          return (
-            <Link
-              key={item.name}
-              href={item.path!}
-              onClick={() => setMobileOpen(false)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded text-xs font-bold transition duration-150 ${
-                isActive 
-                  ? 'text-white bg-emerald-900 border border-emerald-950' 
-                  : 'hover:text-slate-100 hover:bg-slate-800/40 text-slate-400'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <span>{item.icon}</span>
-                <span>{item.name}</span>
-              </div>
-            </Link>
-          )
-        })}
-      </div>
-
-      {/* User Footer Profile */}
-      <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-8 h-8 rounded bg-emerald-900 flex items-center justify-center text-white font-extrabold text-xs flex-shrink-0">
-            {currentUser?.initials || 'U'}
+    <div className="flex flex-col h-full bg-white border-r border-gray-200 text-gray-700">
+      {/* Sidebar Nav Sections */}
+      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6 scrollbar-thin">
+        {menuSections.map((section, sIdx) => (
+          <div key={sIdx} className="space-y-1.5">
+            <div className="px-3 pb-1">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                {section.title}
+              </span>
+            </div>
+            <div className="space-y-1">
+              {section.items.map((item) => renderMenuItem(item))}
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <h4 className="text-[11px] font-bold text-white truncate leading-tight" title={currentUser?.name}>
-              {currentUser?.name || 'Guest'}
-            </h4>
-            <span className="text-[9px] text-emerald-400 font-bold uppercase">{currentUser?.role || 'Guest'}</span>
-          </div>
-        </div>
-        <button 
-          onClick={() => {
-            if (confirm('Apakah Anda yakin ingin mereset database (localStorage)?')) {
-              localStorage.clear();
-              localStorage.setItem('sppg_reset_done_v3', 'true');
-              alert('Database berhasil direset!');
-              window.location.reload();
-            }
-          }}
-          title="Reset Sistem (localStorage)"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition duration-150 cursor-pointer flex-shrink-0 opacity-10 hover:opacity-100"
-        >
-          <span className="text-[10px]">⚙️</span>
-        </button>
-        <button 
-          onClick={handleLogout}
-          title="Keluar dari Sistem"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition duration-150 cursor-pointer flex-shrink-0"
-        >
-          <LogOut size={14} />
-        </button>
+        ))}
       </div>
     </div>
   )
 
-  // Bypass layout wrapper fully on all /login/* pages
-  if (pathname.startsWith('/login')) {
-    return <div className="min-h-screen bg-gray-50">{children}</div>
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-900"></div>
-      </div>
-    )
-  }
-
-  if (!currentUser) {
-    return <div className="min-h-screen bg-[#F8FAFC]"></div>
-  }
-
-  // Check RBAC access
-  const currentAccess = getPathAccess(userRole, pathname)
-
-  if (currentAccess === 'hidden') {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 text-center font-sans">
-        <div className="bg-white border border-gray-200 rounded p-6 max-w-sm space-y-4">
-          <div className="w-10 h-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto text-lg font-bold border border-red-100">
-            ⚠️
-          </div>
-          <h1 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Akses Terbatas</h1>
-          <p className="text-xs text-gray-500 font-semibold">
-            Peran Anda ({currentUser?.role}) tidak diizinkan untuk mengakses modul <span className="font-bold text-slate-700">{pathname}</span>.
-          </p>
-          <button 
-            onClick={() => router.push('/')}
-            className="px-3 py-2 bg-slate-900 hover:bg-slate-950 text-white text-[10px] font-bold uppercase rounded transition duration-150 cursor-pointer border border-slate-950"
-          >
-            Kembali ke Beranda Kerja
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex font-sans">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:block w-64 flex-shrink-0 h-screen sticky top-0">
-        {renderSidebarContents()}
-      </aside>
-
-      {/* Main Container */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Header */}
-        <header className="lg:hidden flex items-center justify-between px-6 py-4 bg-slate-900 text-white shadow z-40 sticky top-0">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">🍽️</span>
-            <div>
-              <h1 className="font-extrabold text-xs leading-none">Dapur SPPG</h1>
-              <span className="text-[8px] text-emerald-400 uppercase font-black">Wonorejo</span>
-            </div>
-          </div>
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
+      {/* Header Top Navbar (Clean White SIPGN Style) */}
+      <header className="bg-white border-b border-gray-200 h-14 px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40 shadow-2xs">
+        {/* Left Header: Mobile Toggle + Logo + App Title */}
+        <div className="flex items-center gap-3">
           <button 
             onClick={() => setMobileOpen(true)}
-            className="p-2 hover:bg-slate-800 rounded transition duration-150 cursor-pointer"
+            className="lg:hidden p-1.5 text-gray-600 hover:bg-gray-100 rounded-md transition cursor-pointer"
           >
-            <Menu size={18} />
+            <Menu size={20} />
           </button>
-        </header>
+          
+          <div className="flex items-center gap-2">
+            <div className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[11px] tracking-wider font-mono shadow-2xs flex items-center justify-center">
+              BGN
+            </div>
+            <h1 className="font-extrabold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
+              <span>BGN</span>
+              <span className="text-slate-400 font-normal">·</span>
+              <span className="text-slate-600 font-medium text-xs">Manajemen Penerima Manfaat</span>
+            </h1>
+          </div>
+        </div>
 
-        {/* Mobile Sidebar Navigation Drawer Overlay */}
+        {/* Right Header: User Profile Badge */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-300 flex-shrink-0">
+              AS
+            </div>
+            <div className="hidden sm:block text-left">
+              <h4 className="text-xs font-semibold text-gray-900 leading-tight">
+                AHMAD SAYYIDANI KH...
+              </h4>
+              <p className="text-[10px] text-gray-500 font-normal leading-tight">
+                Kepala SPPG | SPPG PASURUAN WONOREJO ...
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Body: Sidebar + Full Width Content */}
+      <div className="flex-1 flex min-w-0">
+        {/* Desktop Sidebar (White bg-white border-r w-64) */}
+        <aside className="hidden lg:block w-64 flex-shrink-0 border-r border-gray-200 bg-white">
+          {renderSidebarContents()}
+        </aside>
+
+        {/* Mobile Sidebar Overlay Drawer */}
         <AnimatePresence>
           {mobileOpen && (
             <>
@@ -406,7 +268,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setMobileOpen(false)}
-                className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 lg:hidden"
+                className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 lg:hidden"
               />
               
               <motion.div
@@ -414,14 +276,15 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed top-0 bottom-0 left-0 w-64 max-w-[80vw] z-50 lg:hidden h-full"
+                className="fixed top-0 bottom-0 left-0 w-64 max-w-[80vw] z-50 lg:hidden bg-white h-full shadow-xl"
               >
-                <div className="absolute top-4 right-4 z-50">
+                <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                  <span className="font-bold text-xs text-gray-800">Menu SIPGN</span>
                   <button 
                     onClick={() => setMobileOpen(false)}
-                    className="p-1.5 text-white bg-slate-950/40 hover:bg-slate-950/60 rounded-full transition cursor-pointer"
+                    className="p-1 text-gray-500 hover:bg-gray-100 rounded-md transition"
                   >
-                    <X size={16} />
+                    <X size={18} />
                   </button>
                 </div>
                 {renderSidebarContents()}
@@ -430,8 +293,8 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           )}
         </AnimatePresence>
 
-        {/* Main Contents Window Flat Background */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-6xl mx-auto w-full">
+        {/* Main Content Area (Full width, no tight max-w) */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[#F8FAFC] min-w-0">
           {children}
         </main>
       </div>
