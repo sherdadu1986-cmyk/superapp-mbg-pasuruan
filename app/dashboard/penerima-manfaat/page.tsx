@@ -168,9 +168,20 @@ export default function BerandaOperasionalPage() {
   // ─── Dynamic KPI Calculations ──────────────────────────────────────────
   const totalKelompok = kpmList.length
   const totalTargetPenerima = kpmList.reduce((acc, item) => acc + (item.jumlah_penerima || 0), 0)
-  const realisasiBnba = bnbaList.length
-  const rasioKelengkapan = totalTargetPenerima > 0 
-    ? Math.min(100, (realisasiBnba / totalTargetPenerima) * 100) 
+
+  // Sanitize BNBA count: exclude orphan records not connected to an active KPM
+  const activeKpmIdSet = new Set<string>()
+  kpmList.forEach(kpm => {
+    if (kpm.id) activeKpmIdSet.add(kpm.id)
+    if (kpm.kode) activeKpmIdSet.add(kpm.kode)
+  })
+
+  const validBnbaList = bnbaList.filter(item => activeKpmIdSet.has(item.kelompok_id))
+  const realisasiTotal = validBnbaList.length
+  const isOverAllocated = realisasiTotal > totalTargetPenerima && totalTargetPenerima > 0
+
+  const persentase = totalTargetPenerima > 0 
+    ? Math.min(Math.round((realisasiTotal / totalTargetPenerima) * 100), 100) 
     : 0
 
   // ─── Real-Time Portion Calculations (BGN Standard Rules) ──────────────
@@ -212,7 +223,7 @@ export default function BerandaOperasionalPage() {
 
   // ─── BNBA Helper Mapping by KPM ID & Kode ─────────────────────────────
   const bnbaCountMap = new Map<string, number>()
-  bnbaList.forEach(item => {
+  validBnbaList.forEach(item => {
     const key = item.kelompok_id
     bnbaCountMap.set(key, (bnbaCountMap.get(key) || 0) + 1)
   })
@@ -266,8 +277,8 @@ export default function BerandaOperasionalPage() {
     const posyanduCount = matchedKpms.length
     const targetCount = matchedKpms.reduce((a, b) => a + (b.jumlah_penerima || 0), 0)
 
-    // Calculate BNBA count directly for 3B category
-    const bnbaCount = bnbaList.filter(item => {
+    // Calculate BNBA count directly for 3B category from validBnbaList
+    const bnbaCount = validBnbaList.filter(item => {
       const pos = (item.posisi || '').toLowerCase()
       if (subKatKey === 'baduta' || subKatKey === 'balita') return pos.includes('balita')
       if (subKatKey === 'bumil') return pos.includes('bumil')
@@ -388,10 +399,10 @@ export default function BerandaOperasionalPage() {
               Realisasi BNBA Terdata
             </span>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 tracking-tight">
-              {realisasiBnba.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">BNBA</span>
+              {realisasiTotal.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">BNBA</span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              COUNT Data Riil Supabase
+              Data Valid KPM Supabase
             </p>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition duration-200">
@@ -400,19 +411,32 @@ export default function BerandaOperasionalPage() {
         </div>
 
         {/* KPI 4: Rasio Kelengkapan Data */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group">
+        <div className={`bg-white rounded-xl border p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group ${
+          isOverAllocated ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'
+        }`}>
           <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Kelengkapan BNBA
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Kelengkapan BNBA
+              </span>
+              {isOverAllocated && (
+                <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300">
+                  ⚠️ Kelebihan Input
+                </span>
+              )}
+            </div>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-baseline gap-1">
-              {rasioKelengkapan.toFixed(1)}%
+              {persentase}%
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              {realisasiBnba} dari {totalTargetPenerima} Terverifikasi
+              {realisasiTotal.toLocaleString('id-ID')} dari {totalTargetPenerima.toLocaleString('id-ID')} Jiwa ({persentase}%)
             </p>
           </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:bg-amber-500 group-hover:text-white transition duration-200">
+          <div className={`p-3 rounded-xl transition duration-200 ${
+            isOverAllocated 
+              ? 'bg-amber-100 text-amber-700 group-hover:bg-amber-600 group-hover:text-white' 
+              : 'bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white'
+          }`}>
             <ShieldCheck size={24} />
           </div>
         </div>
@@ -543,17 +567,19 @@ export default function BerandaOperasionalPage() {
             <div className="mt-5 space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div className="flex justify-between items-center text-xs font-bold text-slate-800">
                 <span>Status Kesiapan & Kelengkapan Data BNBA</span>
-                <span className="text-emerald-700 font-mono">{rasioKelengkapan.toFixed(1)}% Valid</span>
+                <span className={`font-mono ${isOverAllocated ? 'text-amber-700 font-bold' : 'text-emerald-700'}`}>
+                  {persentase}% Valid {isOverAllocated ? '(Kelebihan Input)' : ''}
+                </span>
               </div>
               <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
                 <div 
-                  className="bg-emerald-600 h-full rounded-full transition-all duration-500" 
-                  style={{ width: `${rasioKelengkapan}%` }}
+                  className={`h-full rounded-full transition-all duration-500 ${isOverAllocated ? 'bg-amber-500' : 'bg-emerald-600'}`} 
+                  style={{ width: `${persentase}%` }}
                 />
               </div>
               <p className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
-                <span>Data Riil: <strong>{realisasiBnba}</strong> terdaftar</span>
-                <span>Target: <strong>{totalTargetPenerima}</strong> alokasi</span>
+                <span>Data Riil Valid: <strong>{realisasiTotal.toLocaleString('id-ID')}</strong> terdaftar</span>
+                <span>Target: <strong>{totalTargetPenerima.toLocaleString('id-ID')}</strong> alokasi</span>
               </p>
             </div>
           </div>
