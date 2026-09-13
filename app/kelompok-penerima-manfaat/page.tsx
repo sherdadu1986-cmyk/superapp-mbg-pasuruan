@@ -115,6 +115,7 @@ export default function KelompokPenerimaManfaatPage() {
   const [bnbaList, setBnbaList] = useState<PenerimaManfaatBnba[]>([])
   const [bnbaSearch, setBnbaSearch] = useState('')
   const [showAddBnbaModal, setShowAddBnbaModal] = useState(false)
+  const [editingBnbaItem, setEditingBnbaItem] = useState<PenerimaManfaatBnba | null>(null)
   const [savingBnba, setSavingBnba] = useState(false)
 
   // BNBA Excel Import States
@@ -797,12 +798,53 @@ export default function KelompokPenerimaManfaatPage() {
     setBnbaKelas(is3B ? '-' : 'Kelas 4')
   }
 
+  // Logika Pengurutan Hierarkis (Students first by Class 1-6 & Alphabetical, then Tendik at bottom)
+  const sortBNBA = (a: PenerimaManfaatBnba, b: PenerimaManfaatBnba) => {
+    const posA = (a.posisi || '').toLowerCase()
+    const posB = (b.posisi || '').toLowerCase()
+    const isATendik = posA.includes('tendik') || posA.includes('guru')
+    const isBTendik = posB.includes('tendik') || posB.includes('guru')
+    const isAStudent = isATendik ? 1 : 0
+    const isBStudent = isBTendik ? 1 : 0
+
+    if (isAStudent !== isBStudent) return isAStudent - isBStudent
+
+    if (isAStudent === 0) {
+      const extractClassNum = (k?: string) => {
+        const match = (k || '').match(/\d+/)
+        return match ? parseInt(match[0], 10) : (parseInt(k || '') || 99)
+      }
+      const classA = extractClassNum(a.kelas)
+      const classB = extractClassNum(b.kelas)
+      if (classA !== classB) return classA - classB
+    }
+    return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '')
+  }
+
   const handleOpenAddBnbaModal = () => {
+    setEditingBnbaItem(null)
     setBnbaNisnNik(`${Math.floor(1000000000 + Math.random() * 9000000000)}`)
     setBnbaNama('')
-    setBnbaTglLahir('12-08-2015')
+    setBnbaTglLahir('2015-05-15')
     setBnbaJk('L')
     setBnbaOrtu('')
+    if (activeBnbaGroup) {
+      const is3B = activeBnbaGroup.jenis.includes('Ibu') || activeBnbaGroup.jenis.includes('Bayi') || activeBnbaGroup.jenis.includes('3B')
+      setBnbaPosisi(is3B ? (activeBnbaGroup.jenis.includes('Hamil') ? 'Bumil' : activeBnbaGroup.jenis.includes('Menyusui') ? 'Busui' : 'Balita') : 'Siswa')
+      setBnbaKelas(is3B ? '-' : 'Kelas 4')
+    }
+    setShowAddBnbaModal(true)
+  }
+
+  const handleOpenEditBnbaModal = (item: PenerimaManfaatBnba) => {
+    setEditingBnbaItem(item)
+    setBnbaNisnNik(item.nisn_nik || '')
+    setBnbaNama(item.nama_lengkap || '')
+    setBnbaTglLahir(normalizeBirthDate(item.tanggal_lahir))
+    setBnbaJk(item.jenis_kelamin || 'L')
+    setBnbaOrtu(item.nama_ortu === '-' ? '' : (item.nama_ortu || ''))
+    setBnbaPosisi(item.posisi || 'Siswa')
+    setBnbaKelas(item.kelas || '-')
     setShowAddBnbaModal(true)
   }
 
@@ -830,42 +872,72 @@ export default function KelompokPenerimaManfaatPage() {
         kelas: bnbaKelas
       }
 
-      const { data, error } = await supabase
-        .from('penerima_manfaat_bnba')
-        .insert(payload)
-        .select()
-        .single()
+      if (editingBnbaItem) {
+        const { data, error } = await supabase
+          .from('penerima_manfaat_bnba')
+          .update(payload)
+          .eq('id', editingBnbaItem.id)
+          .select()
+          .single()
 
-      if (error) {
-        console.error('Error inserting single BNBA to Supabase:', error)
-        alert('Gagal menyimpan BNBA: ' + error.message)
-        return
+        if (error) {
+          console.error('Error updating BNBA in Supabase:', error)
+          alert('Gagal meng-update BNBA: ' + error.message)
+          return
+        }
+
+        const updatedBnba: PenerimaManfaatBnba = {
+          ...editingBnbaItem,
+          ...payload,
+          id: data?.id || editingBnbaItem.id
+        }
+
+        await saveBnbaItem(updatedBnba)
+        const updatedList = await fetchBnbaList(activeBnbaGroup.id)
+        setBnbaList(updatedList)
+        setAllBnbaRecords(prev => prev.map(b => b.id === updatedBnba.id ? updatedBnba : b))
+
+        setShowAddBnbaModal(false)
+        setEditingBnbaItem(null)
+        triggerToast(`Penerima BNBA "${bnbaNama}" berhasil diperbarui.`)
+      } else {
+        const { data, error } = await supabase
+          .from('penerima_manfaat_bnba')
+          .insert(payload)
+          .select()
+          .single()
+
+        if (error) {
+          console.error('Error inserting single BNBA to Supabase:', error)
+          alert('Gagal menyimpan BNBA: ' + error.message)
+          return
+        }
+
+        const newBnba: PenerimaManfaatBnba = {
+          id: data?.id || `bnba-${Date.now()}`,
+          kelompok_id: activeBnbaGroup.id,
+          nisn_nik: payload.nisn_nik,
+          nama_lengkap: payload.nama_lengkap,
+          tanggal_lahir: payload.tanggal_lahir,
+          jenis_kelamin: payload.jenis_kelamin,
+          nama_ortu: payload.nama_ortu,
+          posisi: payload.posisi,
+          kelas: payload.kelas,
+          created_at: data?.created_at || new Date().toISOString()
+        }
+
+        await saveBnbaItem(newBnba)
+        const updatedList = await fetchBnbaList(activeBnbaGroup.id)
+        const finalList = updatedList.length > 0 ? updatedList : [newBnba, ...bnbaList]
+        setBnbaList(finalList)
+        setAllBnbaRecords(prev => [newBnba, ...prev.filter(b => b.id !== newBnba.id)])
+
+        // Update count on active group
+        setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: finalList.length } : null)
+
+        setShowAddBnbaModal(false)
+        triggerToast(`Penerima BNBA "${bnbaNama}" berhasil ditambahkan.`)
       }
-
-      const newBnba: PenerimaManfaatBnba = {
-        id: data?.id || `bnba-${Date.now()}`,
-        kelompok_id: activeBnbaGroup.id,
-        nisn_nik: payload.nisn_nik,
-        nama_lengkap: payload.nama_lengkap,
-        tanggal_lahir: payload.tanggal_lahir,
-        jenis_kelamin: payload.jenis_kelamin,
-        nama_ortu: payload.nama_ortu,
-        posisi: payload.posisi,
-        kelas: payload.kelas,
-        created_at: data?.created_at || new Date().toISOString()
-      }
-
-      await saveBnbaItem(newBnba)
-      const updatedList = await fetchBnbaList(activeBnbaGroup.id)
-      const finalList = updatedList.length > 0 ? updatedList : [newBnba, ...bnbaList]
-      setBnbaList(finalList)
-      setAllBnbaRecords(prev => [newBnba, ...prev.filter(b => b.id !== newBnba.id)])
-
-      // Update count on active group
-      setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: finalList.length } : null)
-
-      setShowAddBnbaModal(false)
-      triggerToast(`Penerima BNBA "${bnbaNama}" berhasil ditambahkan.`)
     } catch (err: any) {
       console.error('Exception saving BNBA item:', err)
       alert('Gagal menyimpan data BNBA: ' + (err.message || 'Terjadi kesalahan'))
@@ -1028,6 +1100,58 @@ export default function KelompokPenerimaManfaatPage() {
 
     XLSX.writeFile(wb, `Template_BNBA_${groupName}.xlsx`)
     triggerToast(`Template Excel BNBA "${groupName}" berhasil diunduh.`)
+  }
+
+  // Ekspor Data BNBA Terurut (Siswa Kelas 1-6 dulu, Tendik di paling bawah) ke Excel
+  const handleExportBnbaExcel = () => {
+    if (!activeBnbaGroup) return
+    const groupName = activeBnbaGroup.nama.replace(/[^a-zA-Z0-9_-]/g, '_')
+    const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '') // YYYYMMDD
+
+    const sortedRows = [...bnbaList].sort(sortBNBA)
+
+    const headers = [
+      'NO',
+      'NIK / NISN',
+      'NAMA PENERIMA',
+      'TANGGAL LAHIR',
+      'JK',
+      'NAMA ORTU',
+      'POSISI',
+      'KELAS'
+    ]
+
+    const dataRows = sortedRows.map((item, idx) => [
+      idx + 1,
+      item.nisn_nik,
+      item.nama_lengkap,
+      item.tanggal_lahir,
+      item.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
+      item.nama_ortu,
+      item.posisi,
+      item.kelas
+    ])
+
+    const wsData = [headers, ...dataRows]
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    ws['!cols'] = [
+      { wch: 6 },
+      { wch: 22 },
+      { wch: 30 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 25 },
+      { wch: 14 },
+      { wch: 14 }
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'BNBA')
+
+    const fileName = `BNBA_${groupName}_${dateStr}.xlsx`
+    XLSX.writeFile(wb, fileName)
+    triggerToast(`Ekspor Excel BNBA "${fileName}" berhasil diunduh.`)
   }
 
   // Handle File Input Change for Excel / CSV Import
@@ -1253,12 +1377,13 @@ export default function KelompokPenerimaManfaatPage() {
 
   const filteredBnbaList = useMemo(() => {
     const q = bnbaSearch.toLowerCase()
-    return bnbaList.filter(item => 
-      item.nama_lengkap.toLowerCase().includes(q) ||
-      item.nisn_nik.toLowerCase().includes(q) ||
-      item.nama_ortu.toLowerCase().includes(q) ||
-      item.posisi.toLowerCase().includes(q)
+    const list = bnbaList.filter(item => 
+      (item.nama_lengkap || '').toLowerCase().includes(q) ||
+      (item.nisn_nik || '').toLowerCase().includes(q) ||
+      (item.nama_ortu || '').toLowerCase().includes(q) ||
+      (item.posisi || '').toLowerCase().includes(q)
     )
+    return list.sort(sortBNBA)
   }, [bnbaList, bnbaSearch])
 
   return (
@@ -2218,6 +2343,16 @@ export default function KelompokPenerimaManfaatPage() {
                   <span>Download Template</span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={handleExportBnbaExcel}
+                  title="Ekspor Data BNBA ke File Excel (.xlsx)"
+                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  <FileSpreadsheet size={14} className="text-white" />
+                  <span>Ekspor Excel</span>
+                </button>
+
                 <label
                   htmlFor="bnba-excel-input"
                   title="Import Data dari File Excel/CSV"
@@ -2265,9 +2400,22 @@ export default function KelompokPenerimaManfaatPage() {
                           <td className="py-2.5 px-3 text-center">{row.posisi}</td>
                           <td className="py-2.5 px-3 text-center font-mono">{row.kelas}</td>
                           <td className="py-2.5 px-3 text-center">
-                            <button onClick={() => handleDeleteBnba(row.id)} className="p-1 text-slate-500 hover:text-rose-600">
-                              <Trash2 size={13} />
-                            </button>
+                            <div className="flex items-center justify-center gap-1">
+                              <button 
+                                onClick={() => handleOpenEditBnbaModal(row)} 
+                                title="Edit Data BNBA"
+                                className="p-1 text-slate-500 hover:text-amber-600 transition cursor-pointer"
+                              >
+                                <Edit size={13} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteBnba(row.id)} 
+                                title="Hapus Data BNBA"
+                                className="p-1 text-slate-500 hover:text-rose-600 transition cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -2284,13 +2432,15 @@ export default function KelompokPenerimaManfaatPage() {
         </div>
       )}
 
-      {/* Add BNBA Form Modal */}
+      {/* Add / Edit BNBA Form Modal */}
       {showAddBnbaModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200">
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-sm">Tambah Data BNBA</h3>
-              <button onClick={() => setShowAddBnbaModal(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+              <h3 className="font-bold text-slate-900 text-sm">
+                {editingBnbaItem ? 'Edit Data BNBA' : 'Tambah Data BNBA'}
+              </h3>
+              <button onClick={() => { setShowAddBnbaModal(false); setEditingBnbaItem(null); }} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
             </div>
             <form onSubmit={handleSaveBnbaItem} className="p-4 space-y-3 text-xs">
               <div>
@@ -2298,19 +2448,19 @@ export default function KelompokPenerimaManfaatPage() {
                 <input type="text" required value={bnbaNisnNik} onChange={(e) => setBnbaNisnNik(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono" />
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nama Lengkap *</label>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Penerima *</label>
                 <input type="text" required value={bnbaNama} onChange={(e) => setBnbaNama(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-bold" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tgl Lahir *</label>
-                  <input type="text" required value={bnbaTglLahir} onChange={(e) => setBnbaTglLahir(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono" />
+                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Lahir *</label>
+                  <input type="date" required value={bnbaTglLahir} onChange={(e) => setBnbaTglLahir(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono bg-white" />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Jenis Kelamin *</label>
-                  <select value={bnbaJk} onChange={(e) => setBnbaJk(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold">
-                    <option value="L">Laki-laki</option>
-                    <option value="P">Perempuan</option>
+                  <label className="block font-semibold text-slate-700 mb-1">Jenis Kelamin (JK) *</label>
+                  <select value={bnbaJk} onChange={(e) => setBnbaJk(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white">
+                    <option value="L">L - Laki-laki</option>
+                    <option value="P">P - Perempuan</option>
                   </select>
                 </div>
               </div>
@@ -2321,9 +2471,9 @@ export default function KelompokPenerimaManfaatPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Posisi *</label>
-                  <select value={bnbaPosisi} onChange={(e) => setBnbaPosisi(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold">
+                  <select value={bnbaPosisi} onChange={(e) => setBnbaPosisi(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white">
                     <option value="Siswa">Siswa</option>
-                    <option value="Tendik">Tendik</option>
+                    <option value="Tendik">Tendik / Guru</option>
                     <option value="Balita">Balita</option>
                     <option value="Bumil">Bumil</option>
                     <option value="Busui">Busui</option>
@@ -2335,8 +2485,11 @@ export default function KelompokPenerimaManfaatPage() {
                 </div>
               </div>
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button type="button" onClick={() => setShowAddBnbaModal(false)} className="px-3 py-1.5 bg-white border border-slate-300 rounded text-slate-700 font-semibold">Batal</button>
-                <button type="submit" disabled={savingBnba} className="px-4 py-1.5 bg-slate-900 text-white rounded font-bold">{savingBnba ? 'Menyimpan...' : 'Simpan'}</button>
+                <button type="button" onClick={() => { setShowAddBnbaModal(false); setEditingBnbaItem(null); }} className="px-3 py-1.5 bg-white border border-slate-300 rounded text-slate-700 font-semibold cursor-pointer">Batal</button>
+                <button type="submit" disabled={savingBnba} className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded font-bold cursor-pointer flex items-center gap-1.5">
+                  {savingBnba && <RotateCw size={13} className="animate-spin" />}
+                  <span>{savingBnba ? 'Menyimpan...' : editingBnbaItem ? 'Simpan Perubahan' : 'Simpan'}</span>
+                </button>
               </div>
             </form>
           </div>
