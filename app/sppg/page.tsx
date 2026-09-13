@@ -190,7 +190,7 @@ export default function SppgProfilePage() {
             className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-2xs transition cursor-pointer flex items-center gap-1.5 border border-emerald-700 disabled:opacity-50"
           >
             {saving ? <RotateCw size={14} className="animate-spin" /> : <Save size={14} />}
-            <span>Simpan Profil SPPG</span>
+            <span>{saving ? 'Menyimpan...' : 'Simpan'}</span>
           </button>
         </div>
       </form>

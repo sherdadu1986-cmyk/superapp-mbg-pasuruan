@@ -3,8 +3,9 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { 
   Search, RotateCw, Plus, X, Check, Building2, Info, Eye, Edit, Trash2, 
   Bookmark, FileSpreadsheet, FileText, Printer, ChevronLeft, 
-  ChevronRight, UserPlus, ShieldAlert, HeartHandshake
+  ChevronRight, UserPlus, ShieldAlert, HeartHandshake, FileDown, Upload
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import { 
   fetchKelompokPenerimaManfaatList, 
@@ -12,6 +13,7 @@ import {
   deleteKelompokPenerimaManfaat,
   fetchBnbaList,
   saveBnbaItem,
+  saveBnbaBulk,
   deleteBnbaItem,
   type KelompokPenerimaManfaat,
   type PenerimaManfaatBnba
@@ -109,6 +111,11 @@ export default function KelompokPenerimaManfaatPage() {
   const [bnbaSearch, setBnbaSearch] = useState('')
   const [showAddBnbaModal, setShowAddBnbaModal] = useState(false)
   const [savingBnba, setSavingBnba] = useState(false)
+
+  // BNBA Excel Import States
+  const [importPreviewData, setImportPreviewData] = useState<PenerimaManfaatBnba[]>([])
+  const [showImportConfirmModal, setShowImportConfirmModal] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
 
   // BNBA Form Fields
   const [bnbaNisnNik, setBnbaNisnNik] = useState('')
@@ -694,6 +701,185 @@ export default function KelompokPenerimaManfaatPage() {
     setBnbaList(updatedList)
     setAllBnbaRecords(prev => prev.filter(b => b.id !== bnbaId))
     triggerToast('Data perorangan BNBA berhasil dihapus.')
+  }
+
+  // ─── BNBA Excel Import & Template Download Helpers ───
+  const parseExcelDate = (val: any): string => {
+    if (!val) return '2015-01-01'
+    if (typeof val === 'number') {
+      const dateObj = XLSX.SSF.parse_date_code(val)
+      if (dateObj) {
+        const yyyy = dateObj.y
+        const mm = String(dateObj.m).padStart(2, '0')
+        const dd = String(dateObj.d).padStart(2, '0')
+        return `${yyyy}-${mm}-${dd}`
+      }
+    }
+    const str = String(val).trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
+    const parts = str.split(/[-/.]/)
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
+      if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+    }
+    return str
+  }
+
+  const parsePosisi = (val: any): 'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui' => {
+    const s = String(val || '').trim().toLowerCase()
+    if (s.includes('guru') || s.includes('tendik')) return 'Tendik'
+    if (s.includes('balita') || s.includes('bayi')) return 'Balita'
+    if (s.includes('bumil') || s.includes('hamil')) return 'Bumil'
+    if (s.includes('busui') || s.includes('menyusui')) return 'Busui'
+    return 'Siswa'
+  }
+
+  const parseJk = (val: any): 'L' | 'P' => {
+    const s = String(val || '').trim().toUpperCase()
+    if (s.startsWith('L') || s.includes('PRIA') || s.includes('LAKI')) return 'L'
+    return 'P'
+  }
+
+  // Download BNBA Excel Template
+  const handleDownloadTemplate = () => {
+    if (!activeBnbaGroup) return
+    const groupName = activeBnbaGroup.nama.replace(/[^a-zA-Z0-9_-]/g, '_')
+
+    const headers = [
+      'NIK / NISN',
+      'Nama Lengkap',
+      'Tanggal Lahir (YYYY-MM-DD)',
+      'Jenis Kelamin (Laki-laki / Perempuan)',
+      'Nama Ortu / Wali',
+      'Posisi (Siswa / Guru / Tendik / Balita / Bumil / Busui)',
+      'Kelas / Sasaran'
+    ]
+
+    const dummyData = [
+      [
+        '3514011508150001',
+        'AHMAD FADILAH',
+        '2015-08-15',
+        'Laki-laki',
+        'BUDI SANTOSO',
+        'Siswa',
+        'Kelas 4'
+      ],
+      [
+        '3514015210160002',
+        'SITI AMINAH',
+        '2016-10-22',
+        'Perempuan',
+        'AHMAD RIFAI',
+        'Siswa',
+        'Kelas 3'
+      ]
+    ]
+
+    const wsData = [headers, ...dummyData]
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    ws['!cols'] = [
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 25 },
+      { wch: 35 },
+      { wch: 25 },
+      { wch: 45 },
+      { wch: 18 }
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Template BNBA')
+
+    XLSX.writeFile(wb, `Template_BNBA_${groupName}.xlsx`)
+    triggerToast(`Template Excel BNBA "${groupName}" berhasil diunduh.`)
+  }
+
+  // Handle File Input Change for Excel / CSV Import
+  const handleFileImportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !activeBnbaGroup) return
+
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true })
+        const wsname = wb.SheetNames[0]
+        const ws = wb.Sheets[wsname]
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })
+
+        if (!rows || rows.length < 2) {
+          alert('File Excel kosong atau tidak memiliki baris data.')
+          return
+        }
+
+        const dataRows = rows.slice(1)
+        const parsedItems: PenerimaManfaatBnba[] = []
+
+        dataRows.forEach((row, idx) => {
+          const nisnNik = String(row[0] || '').trim()
+          const namaLengkap = String(row[1] || '').trim().toUpperCase()
+          if (!nisnNik || !namaLengkap) return
+
+          const tglLahir = parseExcelDate(row[2])
+          const jk = parseJk(row[3])
+          const ortu = String(row[4] || '-').trim().toUpperCase()
+          const posisi = parsePosisi(row[5])
+          const kelas = String(row[6] || '-').trim()
+
+          parsedItems.push({
+            id: `bnba-imp-${Date.now()}-${idx}`,
+            kelompok_id: activeBnbaGroup.id,
+            nisn_nik: nisnNik,
+            nama_lengkap: namaLengkap,
+            tanggal_lahir: tglLahir,
+            jenis_kelamin: jk,
+            nama_ortu: ortu,
+            posisi: posisi,
+            kelas: kelas,
+            created_at: new Date().toISOString()
+          })
+        })
+
+        if (parsedItems.length === 0) {
+          alert('Tidak ditemukan data valid dalam file Excel (pastikan NIK/NISN & Nama Lengkap terisi).')
+          return
+        }
+
+        setImportPreviewData(parsedItems)
+        setShowImportConfirmModal(true)
+      } catch (err: any) {
+        console.error('Error parsing Excel file:', err)
+        alert('Gagal membaca file Excel/CSV: ' + (err.message || 'Format file tidak sesuai'))
+      } finally {
+        e.target.value = ''
+      }
+    }
+    reader.readAsBinaryString(file)
+  }
+
+  // Execute Bulk Import to Supabase & Update local state
+  const confirmExecuteImport = async () => {
+    if (!activeBnbaGroup || importPreviewData.length === 0) return
+    setIsImporting(true)
+
+    try {
+      await saveBnbaBulk(importPreviewData)
+
+      const updatedList = await fetchBnbaList(activeBnbaGroup.id)
+      setBnbaList(updatedList)
+      setAllBnbaRecords(prev => [...importPreviewData, ...prev.filter(b => !importPreviewData.some(imp => imp.id === b.id))])
+
+      triggerToast(`Berhasil mengimpor ${importPreviewData.length} data BNBA.`)
+      setShowImportConfirmModal(false)
+      setImportPreviewData([])
+    } catch (err: any) {
+      console.error('Error importing BNBA:', err)
+      alert('Gagal mengimpor data ke Supabase: ' + (err.message || 'Error server'))
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   const filteredBnbaList = useMemo(() => {
@@ -1525,7 +1711,7 @@ export default function KelompokPenerimaManfaatPage() {
                   className="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-bold shadow-2xs transition flex items-center gap-1.5"
                 >
                   {saving ? <RotateCw size={14} className="animate-spin" /> : <Plus size={14} />}
-                  <span>{editingItem ? 'Simpan Perubahan' : 'Simpan ke Supabase'}</span>
+                  <span>{saving ? 'Menyimpan...' : 'Simpan'}</span>
                 </button>
               </div>
             </form>
@@ -1597,7 +1783,7 @@ export default function KelompokPenerimaManfaatPage() {
                 Terisi: <strong className="text-slate-900">{bnbaList.length}</strong> / Target: <strong className="text-slate-900">{activeBnbaGroup.totalTarget}</strong>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   value={bnbaSearch}
@@ -1605,7 +1791,39 @@ export default function KelompokPenerimaManfaatPage() {
                   placeholder="Cari NIK / Nama..."
                   className="px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white"
                 />
-                <button onClick={handleOpenAddBnbaModal} className="px-3 py-1.5 bg-slate-900 text-white rounded-md text-xs font-semibold flex items-center gap-1">
+
+                {/* Hidden File Input for Excel Import */}
+                <input
+                  type="file"
+                  id="bnba-excel-input"
+                  accept=".xlsx, .xls, .csv"
+                  onChange={handleFileImportChange}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  title="Unduh Template Excel BNBA"
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  <FileDown size={14} className="text-slate-600" />
+                  <span>Download Template</span>
+                </button>
+
+                <label
+                  htmlFor="bnba-excel-input"
+                  title="Import Data dari File Excel/CSV"
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  <Upload size={14} className="text-slate-600" />
+                  <span>Import Excel</span>
+                </label>
+
+                <button 
+                  onClick={handleOpenAddBnbaModal} 
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
                   <UserPlus size={13} /> + Tambah BNBA
                 </button>
               </div>
@@ -1714,6 +1932,87 @@ export default function KelompokPenerimaManfaatPage() {
                 <button type="submit" disabled={savingBnba} className="px-4 py-1.5 bg-slate-900 text-white rounded font-bold">{savingBnba ? 'Menyimpan...' : 'Simpan'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Preview & Confirmation Modal */}
+      {showImportConfirmModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 animate-fadeIn my-auto max-h-[85vh] flex flex-col text-xs">
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet size={18} className="text-slate-800" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Konfirmasi Import Data BNBA</h3>
+                  <p className="text-[11px] text-slate-500">Ditemukan <strong className="text-slate-900">{importPreviewData.length}</strong> baris data BNBA yang valid.</p>
+                </div>
+              </div>
+              <button onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); }} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto space-y-3 bg-slate-50">
+              <p className="text-slate-600 font-medium">
+                Preview 5 baris pertama data yang akan diimpor ke kelompok <strong>{activeBnbaGroup?.nama}</strong>:
+              </p>
+
+              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase">
+                      <th className="py-2 px-2.5 text-center">#</th>
+                      <th className="py-2 px-2.5">NIK / NISN</th>
+                      <th className="py-2 px-2.5">Nama Lengkap</th>
+                      <th className="py-2 px-2.5">Tgl Lahir</th>
+                      <th className="py-2 px-2.5 text-center">JK</th>
+                      <th className="py-2 px-2.5">Ortu / Wali</th>
+                      <th className="py-2 px-2.5 text-center">Posisi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {importPreviewData.slice(0, 5).map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 font-medium">
+                        <td className="py-2 px-2.5 text-slate-400 text-center">{idx + 1}</td>
+                        <td className="py-2 px-2.5 font-mono font-bold">{row.nisn_nik}</td>
+                        <td className="py-2 px-2.5 font-bold text-slate-900">{row.nama_lengkap}</td>
+                        <td className="py-2 px-2.5 font-mono">{row.tanggal_lahir}</td>
+                        <td className="py-2 px-2.5 text-center font-bold">{row.jenis_kelamin}</td>
+                        <td className="py-2 px-2.5">{row.nama_ortu}</td>
+                        <td className="py-2 px-2.5 text-center">{row.posisi}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {importPreviewData.length > 5 && (
+                <p className="text-[11px] text-slate-500 italic text-center">
+                  ... dan {importPreviewData.length - 5} baris data lainnya.
+                </p>
+              )}
+            </div>
+
+            <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); }}
+                disabled={isImporting}
+                className="px-4 py-1.5 bg-white border border-slate-300 rounded-md font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmExecuteImport}
+                disabled={isImporting}
+                className="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isImporting ? <RotateCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                <span>{isImporting ? 'Mengimpor Data...' : `Ya, Impor ${importPreviewData.length} Data`}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

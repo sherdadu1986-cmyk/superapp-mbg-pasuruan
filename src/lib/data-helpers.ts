@@ -652,6 +652,28 @@ export async function saveBnbaItem(item: PenerimaManfaatBnba): Promise<PenerimaM
   return item
 }
 
+export async function saveBnbaBulk(items: PenerimaManfaatBnba[]): Promise<boolean> {
+  if (!items || items.length === 0) return true
+  const currentList = await fetchBnbaList()
+  const newIds = new Set(items.map(i => i.id))
+  const updatedList = [...items, ...currentList.filter(i => !newIds.has(i.id))]
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LS_BNBA, JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    const { error } = await supabase.from('penerima_manfaat_bnba').insert(items)
+    if (error) {
+      console.error('Error inserting bulk BNBA to Supabase:', error.message)
+    }
+  } catch (err) {
+    console.error('Exception bulk BNBA Supabase:', err)
+  }
+  return true
+}
+
 export async function deleteBnbaItem(id: string): Promise<boolean> {
   const currentList = await fetchBnbaList()
   const updatedList = currentList.filter(i => i.id !== id)
