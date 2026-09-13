@@ -393,6 +393,10 @@ export interface KelompokPenerimaManfaat {
   identitas_npsn_tmp: string
   kode: string
   wilayah: string
+  target_pria?: number
+  target_wanita?: number
+  target_guru?: number
+  target_tendik?: number
   jumlah_penerima: number
   status: string
   created_at?: string
