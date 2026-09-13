@@ -55,17 +55,30 @@ export default function KelolaMenuHarianPage() {
     setTimeout(() => setToastMsg(null), 4000)
   }
 
+  const getTodayYmd = () => {
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   const loadCurrentMenu = async () => {
     const data = await fetchMenuHariIniDB()
     if (data) {
       if (data.nama_menu) setNamaMenu(data.nama_menu)
-      if (data.tanggal) setTanggal(data.tanggal)
+      setTanggal(data.tanggal || getTodayYmd())
       if (data.target_porsi) setTargetPorsi(data.target_porsi)
       if (data.kalori) setKalori(data.kalori)
       if (data.status) setStatus(data.status)
       if (data.komposisi_gizi && data.komposisi_gizi.length > 0) setTags(data.komposisi_gizi)
       if (data.foto_url) setFotoUrl(data.foto_url)
       if (data.catatan) setCatatanMenu(data.catatan)
+    } else {
+      setTanggal(getTodayYmd())
+      setStatus('Siap Distribusi')
+      setTargetPorsi(4850)
+      setKalori('~650 kkal')
     }
   }
 
@@ -94,7 +107,9 @@ export default function KelolaMenuHarianPage() {
     // 1. Validasi Ukuran File: Maksimal 3MB
     const MAX_SIZE = 3 * 1024 * 1024 // 3MB
     if (file.size > MAX_SIZE) {
-      triggerToast('Ukuran file terlalu besar, maksimal 3MB', 'error')
+      const msg = 'Ukuran file terlalu besar, maksimal 3MB'
+      triggerToast(msg, 'error')
+      alert(msg)
       e.target.value = ''
       return
     }
@@ -104,7 +119,9 @@ export default function KelolaMenuHarianPage() {
     const fileExt = file.name.split('.').pop()?.toLowerCase() || ''
     const isAllowedFormat = allowedExtensions.includes(fileExt) || file.type.startsWith('image/')
     if (!isAllowedFormat) {
-      triggerToast('Format file tidak didukung. Harap unggah gambar (.jpg, .jpeg, .png, .webp)', 'error')
+      const msg = 'Format file tidak didukung. Harap unggah gambar (.jpg, .jpeg, .png, .webp)'
+      triggerToast(msg, 'error')
+      alert(msg)
       e.target.value = ''
       return
     }
@@ -112,12 +129,10 @@ export default function KelolaMenuHarianPage() {
     setIsUploading(true)
 
     try {
-      // 3. Nama file unik berbasis timestamp agar tidak bentrok
       const fileName = `menu_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt || 'png'}`
 
-      // 4. Unggah ke Supabase Storage (Bucket public 'menu_photos' atau 'menu-images')
       let publicUrl = ''
-      let uploadError: any = null
+      let uploadErrMessage = ''
 
       // Try 'menu_photos' bucket first
       const { data: upload1, error: err1 } = await supabase
@@ -126,9 +141,11 @@ export default function KelolaMenuHarianPage() {
         .upload(fileName, file, { cacheControl: '3600', upsert: true })
 
       if (!err1 && upload1) {
-        const { data: urlData } = supabase.storage.from('menu_photos').getPublicUrl(fileName)
+        const { data: urlData } = supabase.storage.from('menu_photos').getPublicUrl(upload1.path || fileName)
         publicUrl = urlData?.publicUrl || ''
       } else {
+        if (err1) uploadErrMessage += `[menu_photos: ${err1.message}] `
+
         // Fallback to 'menu-images' bucket
         const { data: upload2, error: err2 } = await supabase
           .storage
@@ -136,10 +153,10 @@ export default function KelolaMenuHarianPage() {
           .upload(fileName, file, { cacheControl: '3600', upsert: true })
 
         if (!err2 && upload2) {
-          const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(fileName)
+          const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(upload2.path || fileName)
           publicUrl = urlData?.publicUrl || ''
-        } else {
-          uploadError = err1 || err2
+        } else if (err2) {
+          uploadErrMessage += `[menu-images: ${err2.message}]`
         }
       }
 
@@ -147,7 +164,7 @@ export default function KelolaMenuHarianPage() {
         setFotoUrl(publicUrl)
         triggerToast('Foto menu berhasil diunggah ke Supabase Storage!', 'success')
       } else {
-        console.warn('Storage upload notice:', uploadError?.message || 'Fallback to base64')
+        console.warn('Storage upload notice:', uploadErrMessage || 'Fallback to base64')
         const reader = new FileReader()
         reader.onloadend = () => {
           const base64 = reader.result as string
@@ -158,7 +175,9 @@ export default function KelolaMenuHarianPage() {
       }
     } catch (err: any) {
       console.error('Error uploading image:', err)
-      triggerToast(`Gagal mengunggah foto: ${err.message || 'Terjadi kesalahan'}`, 'error')
+      const errMsg = err?.message || String(err)
+      triggerToast(`Gagal mengunggah foto: ${errMsg}`, 'error')
+      alert(`Gagal mengunggah foto ke Storage:\n${errMsg}`)
     } finally {
       setIsUploading(false)
       e.target.value = ''
@@ -173,34 +192,45 @@ export default function KelolaMenuHarianPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // 1. Validasi Field Wajib
+    if (!namaMenu || !namaMenu.trim() || !tanggal || !tanggal.trim()) {
+      const msg = 'Harap isi Nama Menu dan pilih Tanggal!'
+      triggerToast(msg, 'error')
+      alert(msg)
+      return
+    }
+
     setSaving(true)
 
     try {
       const payload: MenuHarianDB = {
-        tanggal,
-        nama_menu: namaMenu,
-        foto_url: fotoUrl,
-        komposisi_gizi: tags,
-        kalori,
-        target_porsi: Number(targetPorsi),
-        status,
-        catatan: catatanMenu
+        tanggal: tanggal.trim(),
+        nama_menu: namaMenu.trim(),
+        foto_url: fotoUrl || '',
+        komposisi_gizi: tags || [],
+        kalori: kalori || '~650 kkal',
+        target_porsi: Number(targetPorsi) || 4850,
+        status: status || 'Siap Distribusi',
+        catatan: catatanMenu || ''
       }
 
       await saveMenuHariIniDB(payload)
       setSavedSuccess(true)
-      triggerToast('Menu harian berhasil disimpan ke database!', 'success')
+      triggerToast('Menu berhasil dipublikasikan!', 'success')
 
-      // Refresh history list dynamically
-      loadHistoryMenu()
+      // Refresh history list dynamically & immediately
+      await loadHistoryMenu()
 
       setTimeout(() => {
         setSavedSuccess(false)
         router.push('/')
-      }, 1200)
+      }, 1000)
     } catch (err: any) {
       console.error('Error saving menu:', err)
-      triggerToast(`Gagal menyimpan menu: ${err.message || 'Error'}`, 'error')
+      const errMsg = err?.message || err?.error_description || String(err)
+      triggerToast(`Gagal menyimpan menu: ${errMsg}`, 'error')
+      alert(`Gagal menyimpan menu ke Supabase database:\n${errMsg}`)
     } finally {
       setSaving(false)
     }

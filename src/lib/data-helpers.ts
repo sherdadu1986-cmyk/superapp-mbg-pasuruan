@@ -529,12 +529,11 @@ export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
     const { data, error } = await supabase
       .from('menu_harian')
       .select('*')
-      .order('tanggal', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
     if (!error && data && data.length > 0) return data[0]
-  } catch {
-    // fallback
+  } catch (err) {
+    console.warn('fetchMenuHariIniDB notice:', err)
   }
   const history = await fetchMenuHistoryDB()
   return history && history.length > 0 ? history[0] : null
@@ -545,11 +544,11 @@ export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {
     const { data, error } = await supabase
       .from('menu_harian')
       .select('*')
-      .order('tanggal', { ascending: false })
       .order('created_at', { ascending: false })
     if (error || !data) return []
     return data
-  } catch {
+  } catch (err) {
+    console.warn('fetchMenuHistoryDB notice:', err)
     const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_menu_history_list') : null
     if (stored) {
       try {
@@ -562,22 +561,41 @@ export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {
 }
 
 export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianDB> {
+  const isValidUuid = (id?: string) => Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
+
+  const insertRecord: Record<string, any> = {
+    tanggal: menu.tanggal,
+    nama_menu: menu.nama_menu,
+    foto_url: menu.foto_url || null,
+    komposisi_gizi: menu.komposisi_gizi || [],
+    kalori: menu.kalori || null,
+    target_porsi: menu.target_porsi || 4850,
+    status: menu.status || 'Siap Distribusi',
+    catatan: menu.catatan || null
+  }
+
+  if (isValidUuid(menu.id)) {
+    insertRecord.id = menu.id
+  } else if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    insertRecord.id = crypto.randomUUID()
+  }
+
   const newRecord: MenuHarianDB = {
-    ...menu,
-    id: menu.id || `menu-${Date.now()}`,
+    id: insertRecord.id || `menu-${Date.now()}`,
+    ...insertRecord as any,
     created_at: menu.created_at || new Date().toISOString()
   }
 
-  const localFormat = {
-    namaMenu: menu.nama_menu,
-    tanggal: menu.tanggal,
-    targetPorsi: `${(menu.target_porsi || 4850).toLocaleString('id-ID')} Porsi`,
-    kalori: menu.kalori,
-    status: menu.status,
-    tags: menu.komposisi_gizi || [],
-    fotoUrl: menu.foto_url
-  }
   if (typeof window !== 'undefined') {
+    const localFormat = {
+      namaMenu: menu.nama_menu,
+      tanggal: menu.tanggal,
+      targetPorsi: `${(menu.target_porsi || 4850).toLocaleString('id-ID')} Porsi`,
+      kalori: menu.kalori,
+      status: menu.status,
+      tags: menu.komposisi_gizi || [],
+      fotoUrl: menu.foto_url
+    }
     localStorage.setItem('sppg_menu_hari_ini', JSON.stringify(localFormat))
     
     // Save to history list in localStorage
@@ -588,13 +606,18 @@ export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianD
     window.dispatchEvent(new Event('storage'))
   }
 
-  try {
-    const { data, error } = await supabase.from('menu_harian').insert(newRecord).select().single()
-    if (!error && data) return data
-  } catch {
-    // fallback
+  const { data, error } = await supabase
+    .from('menu_harian')
+    .insert(insertRecord)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Supabase menu_harian insert error:', error.message, error)
+    throw new Error(`Gagal menyimpan ke Supabase: ${error.message} (${error.code || 'DB_ERROR'})`)
   }
-  return newRecord
+
+  return data || newRecord
 }
 
 // ─── BNBA (By Name By Address) Types & Helpers ───────────────────────
