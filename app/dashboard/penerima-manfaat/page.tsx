@@ -35,14 +35,7 @@ export const DEFAULT_MENU_DATA: MenuHariIniData = {
   fotoUrl: '/menu-today.png'
 }
 
-interface ActivityLog {
-  id: string
-  waktu: string
-  entri: string
-  kategori: string
-  wilayah: string
-  status: string
-}
+
 
 function OperationalDashboardSkeleton() {
   return (
@@ -99,6 +92,9 @@ export default function BerandaOperasionalPage() {
   const [targetPenerima, setTargetPenerima] = useState<number | null>(null)
   const [menuDb, setMenuDb] = useState<MenuHarianDB | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Real-Time BNBA Fulfillment Recap Filter State
+  const [bnbaFilter, setBnbaFilter] = useState<'perlu' | 'belum' | 'kurang' | 'lengkap'>('perlu')
 
   // Real-Time Clock Timer
   useEffect(() => {
@@ -381,13 +377,70 @@ export default function BerandaOperasionalPage() {
     get3BRowStats('busui', 'Ibu Menyusui (Busui)', 'busui'),
   ]
 
-  const activityLogs: ActivityLog[] = [
-    { id: '1', waktu: 'Hari ini, 10:45', entri: 'Update Data Siswa SDN Wonorejo V', kategori: 'SD / MI', wilayah: 'Wonorejo', status: 'Diperbarui' },
-    { id: '2', waktu: 'Hari ini, 09:15', entri: 'Penambahan Data Posyandu Mawar', kategori: 'POSYANDU', wilayah: 'Wonorejo', status: 'Terdaftar' },
-    { id: '3', waktu: 'Kemarin, 16:30', entri: 'Verifikasi Data MTSN 4 Pasuruan', kategori: 'SMP / MTs', wilayah: 'Wonorejo', status: 'Tervalidasi' },
-    { id: '4', waktu: 'Kemarin, 14:00', entri: 'Sinkronisasi Data Bumil Posyandu Melati', kategori: '3B (Bumil)', wilayah: 'Wonorejo', status: 'Diperbarui' },
-    { id: '5', waktu: '11 Sep 2026', entri: 'Registrasi RA Uswatun Hasanah', kategori: 'RA', wilayah: 'Wonorejo', status: 'Terdaftar' },
-  ]
+  // Helper to calculate exact BNBA count for a KPM group by matching all possible identifiers (UUID, kode, npsnReg, nama)
+  const getBnbaCountForGroup = (group: { id?: string; kode?: string; identitas_npsn_tmp?: string; nama?: string }) => {
+    const possibleKeys = new Set<string>()
+    if (group.id) possibleKeys.add(String(group.id).trim().toLowerCase())
+    if (group.kode) possibleKeys.add(String(group.kode).trim().toLowerCase())
+    if (group.identitas_npsn_tmp) possibleKeys.add(String(group.identitas_npsn_tmp).trim().toLowerCase())
+    if (group.nama) possibleKeys.add(String(group.nama).trim().toLowerCase())
+
+    return validBnbaList.filter(b => {
+      if (!b.kelompok_id) return false
+      const kId = String(b.kelompok_id).trim().toLowerCase()
+      return possibleKeys.has(kId)
+    }).length
+  }
+
+  // ─── Real-Time BNBA Fulfillment Recap Dataset ─────────────────────────────
+  const sortedBnbaRecapList = React.useMemo(() => {
+    const mapped = kpmList.map(kpm => {
+      const target = kpm.jumlah_penerima || (kpm.target_pria || 0) + (kpm.target_wanita || 0) + (kpm.target_guru || 0) + (kpm.target_tendik || 0) || 0
+      const terisi = getBnbaCountForGroup(kpm)
+      const selisih = terisi - target
+      const kekurangan = Math.max(0, target - terisi)
+      const pct = target > 0 ? Math.min(Math.round((terisi / target) * 100), 100) : 0
+
+      return {
+        ...kpm,
+        target,
+        terisi,
+        selisih,
+        kekurangan,
+        pct
+      }
+    })
+
+    // Default Priority Sort:
+    // 1. Belum Ada Detail (0 terisi) with largest shortage first
+    // 2. Kurang dari Kuota (terisi < target) with largest shortage first
+    // 3. Sudah Lengkap (terisi >= target)
+    return mapped.sort((a, b) => {
+      const getPriority = (item: typeof a) => {
+        if (item.terisi === 0) return 0
+        if (item.terisi < item.target) return 1
+        return 2
+      }
+
+      const pA = getPriority(a)
+      const pB = getPriority(b)
+      if (pA !== pB) return pA - pB
+
+      if (a.kekurangan !== b.kekurangan) return b.kekurangan - a.kekurangan
+
+      return a.nama.localeCompare(b.nama)
+    })
+  }, [kpmList, validBnbaList])
+
+  const filteredBnbaRecap = React.useMemo(() => {
+    return sortedBnbaRecapList.filter(item => {
+      if (bnbaFilter === 'perlu') return item.terisi < item.target
+      if (bnbaFilter === 'belum') return item.terisi === 0
+      if (bnbaFilter === 'kurang') return item.terisi > 0 && item.terisi < item.target
+      if (bnbaFilter === 'lengkap') return item.terisi >= item.target
+      return true
+    })
+  }, [sortedBnbaRecapList, bnbaFilter])
 
   if (loading) {
     return <OperationalDashboardSkeleton />
@@ -840,55 +893,198 @@ export default function BerandaOperasionalPage() {
         </div>
       </div>
 
-      {/* 5. Log Aktivitas / Ringkasan Cepat Terkini (Baris Bawah) */}
+      {/* 5. Real-Time BNBA Fulfillment Recap Widget (Menggantikan Log Aktivitas Dummy) */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 hover:shadow-md transition duration-200">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
-            <h3 className="font-bold text-slate-900 text-sm tracking-tight">
-              Catatan Aktivitas Operasional Terkini
+            <h3 className="font-bold text-slate-900 text-sm sm:text-base tracking-tight flex items-center gap-2">
+              <Activity size={18} className="text-slate-800" />
+              <span>Monitoring & Rekapitulasi Kelengkapan Data BNBA</span>
             </h3>
-            <p className="text-[11px] text-slate-500">
-              Riwayat pembaruan data KPM dan verifikasi alokasi penerima manfaat.
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Daftar sekolah dan sasaran 3B yang belum melengkapi atau masih memiliki kekurangan data BNBA riil.
             </p>
           </div>
-          <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-            Audit Trail BGN
-          </span>
+
+          {/* Quick Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setBnbaFilter('perlu')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                bnbaFilter === 'perlu'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span>Semua Perlu Tindakan</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                bnbaFilter === 'perlu' ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
+              }`}>
+                {sortedBnbaRecapList.filter(i => i.terisi < i.target).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setBnbaFilter('belum')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                bnbaFilter === 'belum'
+                  ? 'bg-rose-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span>Belum Ada Detail (0)</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                bnbaFilter === 'belum' ? 'bg-white text-rose-700' : 'bg-slate-800 text-white'
+              }`}>
+                {sortedBnbaRecapList.filter(i => i.terisi === 0).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setBnbaFilter('kurang')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                bnbaFilter === 'kurang'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span>Kurang dari Kuota</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                bnbaFilter === 'kurang' ? 'bg-white text-amber-800' : 'bg-slate-800 text-white'
+              }`}>
+                {sortedBnbaRecapList.filter(i => i.terisi > 0 && i.terisi < i.target).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setBnbaFilter('lengkap')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                bnbaFilter === 'lengkap'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span>Sudah Lengkap</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                bnbaFilter === 'lengkap' ? 'bg-white text-emerald-800' : 'bg-slate-800 text-white'
+              }`}>
+                {sortedBnbaRecapList.filter(i => i.terisi >= i.target).length}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                <th className="py-2.5 px-4 min-w-[130px]">WAKTU</th>
-                <th className="py-2.5 px-4 min-w-[240px]">ENTRI PERUBAHAN</th>
-                <th className="py-2.5 px-4 min-w-[120px]">KATEGORI</th>
-                <th className="py-2.5 px-4 min-w-[120px]">WILAYAH</th>
-                <th className="py-2.5 px-4 text-center min-w-[110px]">STATUS</th>
+                <th className="py-2.5 px-3 text-center w-10">#</th>
+                <th className="py-2.5 px-3 min-w-[200px]">NAMA LEMBAGA / KPM & KATEGORI</th>
+                <th className="py-2.5 px-3 text-right min-w-[110px]">TARGET ALOKASI</th>
+                <th className="py-2.5 px-3 text-right min-w-[110px]">REALISASI BNBA</th>
+                <th className="py-2.5 px-3 min-w-[140px]">PROGRESS BNBA</th>
+                <th className="py-2.5 px-3 text-right min-w-[100px]">SELISIH</th>
+                <th className="py-2.5 px-3 text-center min-w-[130px]">STATUS</th>
+                <th className="py-2.5 px-3 text-center min-w-[110px]">AKSI</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-              {activityLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3 px-4 text-slate-500 text-[11px]">
-                    {log.waktu}
-                  </td>
-                  <td className="py-3 px-4 font-semibold text-slate-900">
-                    {log.entri}
-                  </td>
-                  <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
-                    {log.kategori}
-                  </td>
-                  <td className="py-3 px-4 text-slate-500">
-                    {log.wilayah}
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className="bg-slate-100 text-slate-700 rounded-full px-2.5 py-0.5 text-xs font-medium border border-slate-200 inline-block">
-                      {log.status}
-                    </span>
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              {filteredBnbaRecap.length > 0 ? (
+                filteredBnbaRecap.map((row, idx) => {
+                  const isZero = row.terisi === 0
+                  const isShortage = row.terisi < row.target
+                  const isOver = row.terisi > row.target
+
+                  return (
+                    <tr key={row.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3 text-center font-bold text-slate-400 font-mono">
+                        {idx + 1}
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <span className="font-bold text-slate-900 block">{row.nama}</span>
+                            <span className="text-[10px] text-slate-500 font-mono block">
+                              [{row.identitas_npsn_tmp || row.kode || row.id}]
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-700 rounded border border-slate-200 shrink-0">
+                            {row.kategori}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-slate-900 font-mono">
+                        {row.target.toLocaleString('id-ID')} Jiwa
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono font-bold">
+                        <span className={isZero ? 'text-rose-600' : isShortage ? 'text-amber-600' : 'text-emerald-700'}>
+                          {row.terisi.toLocaleString('id-ID')} Jiwa
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[10px] font-bold">
+                            <span className="text-slate-500 font-mono">{row.pct}%</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isZero ? 'bg-slate-300' : isShortage ? 'bg-amber-500' : 'bg-emerald-600'
+                              }`}
+                              style={{ width: `${Math.min(row.pct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono font-bold">
+                        {isZero ? (
+                          <span className="text-rose-600 font-extrabold">-{row.target} jiwa</span>
+                        ) : isShortage ? (
+                          <span className="text-amber-600 font-bold">-{row.target - row.terisi} jiwa</span>
+                        ) : isOver ? (
+                          <span className="text-sky-600 font-bold">+{row.terisi - row.target} jiwa</span>
+                        ) : (
+                          <span className="text-emerald-600 font-bold">0 jiwa</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {isZero ? (
+                          <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">
+                            Belum Diisi
+                          </span>
+                        ) : isShortage ? (
+                          <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">
+                            Kurang {row.target - row.terisi} Jiwa
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-block">
+                            ✓ Lengkap
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <Link
+                          href="/kelompok-penerima-manfaat"
+                          className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded transition cursor-pointer shadow-2xs"
+                        >
+                          <span>Isi BNBA</span>
+                          <ArrowRight size={11} />
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })
+              ) : (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
+                    Tidak ada data kelompok penerima manfaat yang sesuai dengan filter ini.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
