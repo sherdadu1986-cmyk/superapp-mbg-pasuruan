@@ -867,11 +867,13 @@ export async function fetchRelawanSppgList(): Promise<RelawanSppg[]> {
       .select('*')
       .order('created_at', { ascending: true })
 
-    if (!error && data) {
+    if (error) {
+      console.error('Fetch Relawan Error:', error)
+    } else if (data) {
       return data
     }
   } catch (err) {
-    console.error('Error fetching relawan_sppg:', err)
+    console.error('Exception fetching relawan_sppg:', err)
   }
 
   if (typeof window !== 'undefined') {
@@ -908,19 +910,21 @@ export async function saveRelawanSppg(item: Partial<RelawanSppg>): Promise<Relaw
 
   try {
     if (isEdit) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('relawan_sppg')
         .update(payload)
         .eq('id', payload.id)
         .select()
         .single()
+      if (error) console.error('Error updating relawan:', error)
       if (data) return data
     } else {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('relawan_sppg')
         .insert(payload)
         .select()
         .single()
+      if (error) console.error('Error inserting relawan:', error)
       if (data) return data
     }
   } catch (err) {
@@ -944,7 +948,8 @@ export async function deleteRelawanSppg(id: string): Promise<boolean> {
   }
 
   try {
-    await supabase.from('relawan_sppg').delete().or(`id.eq.${id},nik.eq.${id}`)
+    const { error } = await supabase.from('relawan_sppg').delete().or(`id.eq.${id},nik.eq.${id}`)
+    if (error) console.error('Error deleting relawan:', error)
   } catch (err) {
     console.warn('Supabase relawan_sppg delete warning:', err)
   }
@@ -952,14 +957,36 @@ export async function deleteRelawanSppg(id: string): Promise<boolean> {
   return true
 }
 
-export async function bulkSaveRelawanSppg(items: Partial<RelawanSppg>[]): Promise<boolean> {
-  if (!items || items.length === 0) return false
+export async function bulkSaveRelawanSppg(items: Partial<RelawanSppg>[]): Promise<{ success: boolean; error?: any; data?: RelawanSppg[] }> {
+  if (!items || items.length === 0) return { success: false }
 
-  const processedItems = items.map((item, idx) => ({
-    ...item,
-    id: item.id || `rel-${Date.now()}-${idx}`
-  }))
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+  const cleanedRows = items.map((item) => {
+    const { id, ...rest } = item
+    const cleanNik = String(item.nik || '').replace(/[^0-9]/g, '').trim()
+    const cleanHp = String(item.no_hp || '').replace(/[^0-9]/g, '').trim()
+    const cleanBpjstk = String(item.no_bpjstk || '').replace(/[^0-9]/g, '').trim()
+    const cleanRekening = String(item.no_rekening_bni || '').replace(/[^0-9]/g, '').trim()
+
+    const payload: any = {
+      ...rest,
+      nik: cleanNik,
+      no_hp: cleanHp,
+      no_bpjstk: cleanBpjstk,
+      no_rekening_bni: cleanRekening,
+      status: item.status || 'Aktif',
+      divisi: item.divisi || 'PENGOLAHAN'
+    }
+
+    if (id && uuidRegex.test(id)) {
+      payload.id = id
+    }
+
+    return payload
+  })
+
+  // Sync to local storage for local fallback
   if (typeof window !== 'undefined') {
     const currentList = await fetchRelawanSppgList()
     const existingMap = new Map<string, RelawanSppg>()
@@ -967,8 +994,8 @@ export async function bulkSaveRelawanSppg(items: Partial<RelawanSppg>[]): Promis
       const key = r.nik || r.id
       if (key) existingMap.set(key, r)
     })
-    processedItems.forEach(r => {
-      const key = r.nik || r.id
+    cleanedRows.forEach(r => {
+      const key = r.nik || r.id || `rel-${Date.now()}`
       if (key) {
         const prev = existingMap.get(key)
         existingMap.set(key, { ...prev, ...r } as RelawanSppg)
@@ -980,14 +1007,30 @@ export async function bulkSaveRelawanSppg(items: Partial<RelawanSppg>[]): Promis
   }
 
   try {
-    const { error } = await supabase.from('relawan_sppg').upsert(processedItems)
-    if (error) {
-      await supabase.from('relawan_sppg').insert(processedItems)
-    }
-  } catch (err) {
-    console.warn('Supabase bulk relawan_sppg save warning:', err)
-  }
+    const { data: insertedData, error: insertError } = await supabase
+      .from('relawan_sppg')
+      .insert(cleanedRows)
+      .select()
 
-  return true
+    if (insertError) {
+      console.error('Gagal Insert Relawan Supabase:', insertError)
+      const { data: upsertData, error: upsertError } = await supabase
+        .from('relawan_sppg')
+        .upsert(cleanedRows)
+        .select()
+
+      if (upsertError) {
+        console.error('Gagal Upsert Relawan Supabase:', upsertError)
+        return { success: false, error: insertError }
+      }
+      return { success: true, data: upsertData || [] }
+    }
+
+    return { success: true, data: insertedData || [] }
+  } catch (err) {
+    console.error('Exception bulkSaveRelawanSppg:', err)
+    return { success: false, error: err }
+  }
 }
+
 

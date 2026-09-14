@@ -584,14 +584,30 @@ export default function DataRelawanSppgPage() {
     try {
       const cleanPayload: Partial<RelawanSppg>[] = validItems.map(item => {
         const { _rowIdx, _isValid, _warningMsg, ...rest } = item
-        return rest
+        return {
+          ...rest,
+          nik: String(rest.nik || '').replace(/[^0-9]/g, '').trim(),
+          no_hp: String(rest.no_hp || '').replace(/[^0-9]/g, '').trim(),
+          no_bpjstk: String(rest.no_bpjstk || '').replace(/[^0-9]/g, '').trim(),
+          no_rekening_bni: String(rest.no_rekening_bni || '').replace(/[^0-9]/g, '').trim(),
+          tanggal_lahir: normalizeDateStr(rest.tanggal_lahir),
+          mulai_bekerja: normalizeDateStr(rest.mulai_bekerja)
+        }
       })
 
-      await bulkSaveRelawanSppg(cleanPayload)
+      const res = await bulkSaveRelawanSppg(cleanPayload)
+      if (res.error) {
+        console.error('Gagal Import Relawan:', res.error)
+        alert('Gagal menyimpan ke database: ' + res.error.message)
+      } else {
+        const importedCount = res.data?.length || cleanPayload.length
+        alert(`Berhasil mengimpor ${importedCount} data relawan!`)
+      }
+
       await loadRelawanData()
       setIsImportModalOpen(false)
-      alert(`Berhasil mengimpor ${validItems.length} data relawan ke database!`)
     } catch (err: any) {
+      console.error('Gagal Import Relawan Catch:', err)
       alert(`Gagal menyimpan data import: ${err?.message || 'Error server'}`)
     } finally {
       setImporting(false)
