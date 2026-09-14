@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { 
   Users, Plus, Download, Upload, Search, Edit3, Trash2, X, Phone, Mail, 
   Building2, ShieldCheck, UserCheck, CheckCircle2, Clock, AlertCircle, Filter, 
-  FileSpreadsheet, FileText, Check, AlertTriangle
+  FileSpreadsheet, FileText, Check, AlertTriangle, Truck
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { 
@@ -14,27 +14,72 @@ import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
-// 18 Divisi Resmi Operasional SPPG BGN
-export const DIVISI_OPTIONS = [
-  'KEPALA SPPG',
-  'PENGAWAS GIZI',
-  'PENGAWAS KEUANGAN',
-  'ADMIN',
-  'KOORDINATOR PERSIAPAN',
-  'PERSIAPAN',
-  'KOORDINATOR PENGOLAHAN',
-  'PENGOLAHAN',
-  'JURU UTAMA MASAK',
-  'KOKI',
-  'KOORDINATOR PEMORSIAN',
-  'PACKING',
-  'PEMORSIAN',
-  'KOORDINATOR CUCI OMPRENG',
-  'CUCI OMPRENG',
-  'KEBERSIHAN',
-  'KOORDINATOR KEBERSIHAN',
-  'KEAMANAN'
+// Structure 7 Kelompok Operasional Hierarkis (21 Divisi Resmi BGN)
+export interface DivisiGroup {
+  groupName: string
+  options: string[]
+}
+
+export const HIERARCHICAL_DIVISI_GROUPS: DivisiGroup[] = [
+  {
+    groupName: '1. MANAJEMEN & PENGAWASAN',
+    options: [
+      'KEPALA SPPG',
+      'PENGAWAS GIZI',
+      'PENGAWAS KEUANGAN',
+      'ASISTEN LAPANGAN',
+      'ADMIN'
+    ]
+  },
+  {
+    groupName: '2. PERSIAPAN BAHAN',
+    options: [
+      'KOORDINATOR PERSIAPAN',
+      'PERSIAPAN'
+    ]
+  },
+  {
+    groupName: '3. PENGOLAHAN & MASAK',
+    options: [
+      'KOORDINATOR PENGOLAHAN',
+      'PENGOLAHAN',
+      'JURU UTAMA MASAK',
+      'KOKI'
+    ]
+  },
+  {
+    groupName: '4. PEMORSIAN & PACKING',
+    options: [
+      'KOORDINATOR PEMORSIAN',
+      'PEMORSIAN',
+      'PACKING'
+    ]
+  },
+  {
+    groupName: '5. LOGISTIK & DISTRIBUSI',
+    options: [
+      'DRIVER',
+      'HELPER'
+    ]
+  },
+  {
+    groupName: '6. SANITASI & KEBERSIHAN',
+    options: [
+      'KOORDINATOR CUCI OMPRENG',
+      'CUCI OMPRENG',
+      'KOORDINATOR KEBERSIHAN',
+      'KEBERSIHAN'
+    ]
+  },
+  {
+    groupName: '7. PENGAMANAN',
+    options: [
+      'KEAMANAN'
+    ]
+  }
 ]
+
+export const ALL_DIVISI_OPTIONS: string[] = HIERARCHICAL_DIVISI_GROUPS.flatMap(g => g.options)
 
 const STATUS_OPTIONS: Array<'Aktif' | 'Cuti' | 'Non-Aktif'> = ['Aktif', 'Cuti', 'Non-Aktif']
 const PENDIDIKAN_OPTIONS = ['SMA/SMK', 'D3', 'S1', 'S2', 'Lainnya']
@@ -191,12 +236,12 @@ export default function DataRelawanSppgPage() {
     }
   }, [])
 
-  // 1. Download Template Excel dengan Catatan 18 Divisi Resmi
+  // 1. Download Template Excel dengan Optgroup Referensi Divisi
   const handleDownloadTemplate = () => {
     const templateHeaders = [
       'NO',
       'NAMA LENGKAP',
-      'DIVISI (18 Pilihan Resmi)',
+      'DIVISI RESMI (Lihat Sheet 2)',
       'NIK',
       'EMAIL',
       'TEMPAT LAHIR',
@@ -229,37 +274,61 @@ export default function DataRelawanSppgPage() {
 
     const sampleRow2 = [
       2,
-      'Budi Santoso',
-      'KOKI',
-      '3514122003920002',
-      'budi.santoso@gmail.com',
+      'Slamet Riyadi',
+      'DRIVER',
+      '3514121206910008',
+      'slamet.driver@gmail.com',
       'Pasuruan',
-      '1992-03-20',
+      '1991-06-12',
       'Aktif',
-      '082134567891',
+      '081298761234',
       'SMA/SMK',
       '2025-01-05',
-      'Desa Wonorejo RT 02 RW 01, Pasuruan',
-      '24018892020',
-      '0891234568'
+      'Desa Wonorejo RT 03 RW 02, Pasuruan',
+      '24018892026',
+      '0891234574'
     ]
 
-    const wsData = [templateHeaders, sampleRow, sampleRow2]
+    const sampleRow3 = [
+      3,
+      'Agus Setiawan',
+      'HELPER',
+      '3514122508940009',
+      'agus.helper@gmail.com',
+      'Pasuruan',
+      '1994-08-25',
+      'Aktif',
+      '085698765432',
+      'SMA/SMK',
+      '2025-01-08',
+      'Dusun Kiduldalem RT 01 RW 04, Wonorejo, Pasuruan',
+      '24018892027',
+      '0891234575'
+    ]
+
+    const wsData = [templateHeaders, sampleRow, sampleRow2, sampleRow3]
     const ws = XLSX.utils.aoa_to_sheet(wsData)
 
     // Column widths
     const colWidths = templateHeaders.map(h => ({ wch: Math.max(h.length + 4, 18) }))
     ws['!cols'] = colWidths
 
-    // Sheet 2: Daftar Referensi Divisi
-    const refSheetHeaders = ['NO', 'NAMA DIVISI RESMI SPPG BGN']
-    const refSheetRows = DIVISI_OPTIONS.map((d, i) => [i + 1, d])
+    // Sheet 2: Daftar Referensi Divisi Berdasarkan 7 Kelompok Operasional
+    const refSheetHeaders = ['NO', 'KELOMPOK OPERASIONAL', 'NAMA DIVISI RESMI SPPG BGN']
+    const refSheetRows: any[] = []
+    let counter = 1
+    HIERARCHICAL_DIVISI_GROUPS.forEach(group => {
+      group.options.forEach(opt => {
+        refSheetRows.push([counter++, group.groupName, opt])
+      })
+    })
+
     const refWs = XLSX.utils.aoa_to_sheet([refSheetHeaders, ...refSheetRows])
-    refWs['!cols'] = [{ wch: 6 }, { wch: 35 }]
+    refWs['!cols'] = [{ wch: 6 }, { wch: 30 }, { wch: 35 }]
 
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template Relawan')
-    XLSX.utils.book_append_sheet(wb, refWs, 'Daftar 18 Divisi Resmi')
+    XLSX.utils.book_append_sheet(wb, refWs, 'Hierarki 7 Kelompok Divisi')
     XLSX.writeFile(wb, 'Template_Data_Relawan_SPPG.xlsx')
   }
 
@@ -317,7 +386,7 @@ export default function DataRelawanSppgPage() {
     XLSX.writeFile(wb, `Data_Relawan_SPPG_${dateStr}.xlsx`)
   }
 
-  // 3. Import Excel Cerdas (Smart Column Matcher & Divisi Normalizer)
+  // 3. Import Excel Cerdas (Smart Column Matcher & Normalizer DRIVER/HELPER/dll)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -408,12 +477,15 @@ export default function DataRelawanSppgPage() {
                 else item.status = 'Aktif'
               } else if (field === 'divisi') {
                 const rawDiv = cleanTextStr(cellVal).trim().toUpperCase()
-                const exactMatch = DIVISI_OPTIONS.find(opt => opt === rawDiv)
+                const exactMatch = ALL_DIVISI_OPTIONS.find(opt => opt === rawDiv)
                 if (exactMatch) {
                   item.divisi = exactMatch
                 } else {
-                  // Smart Fuzzy Matcher untuk 18 Divisi Resmi
-                  if (rawDiv.includes('KEPALA')) item.divisi = 'KEPALA SPPG'
+                  // Smart Fuzzy Matcher (Termasuk DRIVER, SOPIR, HELPER, KERNET, ASISTEN LAPANGAN)
+                  if (rawDiv.includes('DRIVER') || rawDiv.includes('SOPIR') || rawDiv.includes('SUPIR')) item.divisi = 'DRIVER'
+                  else if (rawDiv.includes('HELPER') || rawDiv.includes('KERNET') || rawDiv.includes('ASISTEN DISTRIBUSI')) item.divisi = 'HELPER'
+                  else if (rawDiv.includes('ASISTEN LAPANGAN') || rawDiv.includes('LAPANGAN')) item.divisi = 'ASISTEN LAPANGAN'
+                  else if (rawDiv.includes('KEPALA')) item.divisi = 'KEPALA SPPG'
                   else if (rawDiv.includes('GIZI')) item.divisi = 'PENGAWAS GIZI'
                   else if (rawDiv.includes('KEUANGAN')) item.divisi = 'PENGAWAS KEUANGAN'
                   else if (rawDiv.includes('ADMIN')) item.divisi = 'ADMIN'
@@ -423,7 +495,7 @@ export default function DataRelawanSppgPage() {
                   else if (rawDiv.includes('PENGOLAHAN')) item.divisi = 'PENGOLAHAN'
                   else if (rawDiv.includes('JURU')) item.divisi = 'JURU UTAMA MASAK'
                   else if (rawDiv.includes('KOKI') || rawDiv.includes('DAPUR')) item.divisi = 'KOKI'
-                  else if (rawDiv.includes('KOORDINATOR PEMORSIAN') || rawDiv.includes('DISTRIBUSI')) item.divisi = 'KOORDINATOR PEMORSIAN'
+                  else if (rawDiv.includes('KOORDINATOR PEMORSIAN')) item.divisi = 'KOORDINATOR PEMORSIAN'
                   else if (rawDiv.includes('PACKING')) item.divisi = 'PACKING'
                   else if (rawDiv.includes('PEMORSIAN')) item.divisi = 'PEMORSIAN'
                   else if (rawDiv.includes('KOORDINATOR CUCI')) item.divisi = 'KOORDINATOR CUCI OMPRENG'
@@ -587,17 +659,33 @@ export default function DataRelawanSppgPage() {
   const stats = useMemo(() => {
     const total = relawanList.length
     const aktif = relawanList.filter(r => r.status === 'Aktif').length
-    const pimpinan = relawanList.filter(r => (r.divisi || '').includes('KEPALA') || (r.divisi || '').includes('PENGAWAS')).length
-    const koordinator = relawanList.filter(r => (r.divisi || '').includes('KOORDINATOR')).length
-    const pengolahan = relawanList.filter(r => (r.divisi || '').includes('PENGOLAHAN') || (r.divisi || '').includes('KOKI') || (r.divisi || '').includes('MASAK') || (r.divisi || '').includes('PERSIAPAN')).length
-    return { total, aktif, pimpinan, koordinator, pengolahan }
+    const manajemen = relawanList.filter(r => 
+      (r.divisi || '').includes('KEPALA') || 
+      (r.divisi || '').includes('PENGAWAS') || 
+      (r.divisi || '').includes('ADMIN') ||
+      (r.divisi || '').includes('ASISTEN LAPANGAN')
+    ).length
+    const pengolahan = relawanList.filter(r => 
+      (r.divisi || '').includes('PENGOLAHAN') || 
+      (r.divisi || '').includes('KOKI') || 
+      (r.divisi || '').includes('MASAK') || 
+      (r.divisi || '').includes('PERSIAPAN')
+    ).length
+    const logistik = relawanList.filter(r => 
+      (r.divisi || '').includes('DRIVER') || 
+      (r.divisi || '').includes('HELPER') ||
+      (r.divisi || '').includes('PEMORSIAN') ||
+      (r.divisi || '').includes('PACKING')
+    ).length
+
+    return { total, aktif, manajemen, pengolahan, logistik }
   }, [relawanList])
 
-  // Badge Divisi Styling Hierarkis & Elegan per Divisi Resmi
+  // Badge Divisi Styling Hierarkis per Kelompok Operasional
   const getDivisiBadge = (divisi: string) => {
     const d = (divisi || '').toUpperCase()
 
-    if (d.includes('KEPALA') || d.includes('PENGAWAS')) {
+    if (d.includes('KEPALA') || d.includes('PENGAWAS') || d.includes('ASISTEN LAPANGAN')) {
       return 'bg-purple-900 text-purple-100 border-purple-950 font-black'
     }
     if (d.includes('KOORDINATOR') || d.includes('ADMIN')) {
@@ -609,11 +697,11 @@ export default function DataRelawanSppgPage() {
     if (d.includes('PEMORSIAN') || d.includes('PACKING')) {
       return 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold'
     }
-    if (d.includes('CUCI') || d.includes('OMPRENG')) {
-      return 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold'
+    if (d.includes('DRIVER') || d.includes('HELPER')) {
+      return 'bg-blue-100 text-blue-900 border-blue-300 font-bold'
     }
-    if (d.includes('KEBERSIHAN')) {
-      return 'bg-teal-100 text-teal-900 border-teal-300 font-bold'
+    if (d.includes('CUCI') || d.includes('OMPRENG') || d.includes('KEBERSIHAN')) {
+      return 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold'
     }
     if (d.includes('KEAMANAN')) {
       return 'bg-slate-800 text-slate-100 border-slate-900 font-bold'
@@ -661,7 +749,7 @@ export default function DataRelawanSppgPage() {
             Data Relawan SPPG Kiduldalem
           </h1>
           <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Manajemen data personil, operasional, dan kepesertaan relawan BGN SPPG Pasuruan (18 Divisi Resmi).
+            Manajemen data personil & kepesertaan relawan BGN SPPG Pasuruan (7 Kelompok Hierarki Divisi Operasional).
           </p>
         </div>
 
@@ -671,7 +759,7 @@ export default function DataRelawanSppgPage() {
           <button
             onClick={handleDownloadTemplate}
             className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition flex items-center gap-1.5 cursor-pointer"
-            title="Unduh File Template .xlsx (18 Divisi Resmi)"
+            title="Unduh File Template .xlsx (7 Kelompok Divisi)"
           >
             <Download size={15} className="text-slate-600" />
             <span>Download Template</span>
@@ -723,21 +811,21 @@ export default function DataRelawanSppgPage() {
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Kepala & Pengawas</div>
-          <div className="text-2xl font-black text-purple-900 mt-0.5 font-mono">{stats.pimpinan}</div>
-          <div className="text-[11px] text-purple-700 mt-0.5">Pimpinan Operasional</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Manajemen & Admin</div>
+          <div className="text-2xl font-black text-purple-900 mt-0.5 font-mono">{stats.manajemen}</div>
+          <div className="text-[11px] text-purple-700 mt-0.5">Kepala, Gizi, Admin</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Koordinator Divisi</div>
-          <div className="text-2xl font-black text-indigo-700 mt-0.5 font-mono">{stats.koordinator}</div>
-          <div className="text-[11px] text-indigo-600 mt-0.5">Penanggung Jawab</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Olah & Masak</div>
+          <div className="text-2xl font-black text-amber-800 mt-0.5 font-mono">{stats.pengolahan}</div>
+          <div className="text-[11px] text-amber-700 mt-0.5">Koki & Dapur SPPG</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Tim Olah & Masak</div>
-          <div className="text-2xl font-black text-amber-800 mt-0.5 font-mono">{stats.pengolahan}</div>
-          <div className="text-[11px] text-amber-700 mt-0.5">Dapur & Koki SPPG</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Logistik & Distribusi</div>
+          <div className="text-2xl font-black text-blue-800 mt-0.5 font-mono">{stats.logistik}</div>
+          <div className="text-[11px] text-blue-700 mt-0.5">Driver, Helper, Packing</div>
         </div>
       </div>
 
@@ -763,19 +851,23 @@ export default function DataRelawanSppgPage() {
           )}
         </div>
 
-        {/* Dropdown Filters (18 Divisi Resmi) */}
+        {/* Dropdown Filters (Hierarchical optgroups) */}
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
           <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600">
             <Filter size={14} className="text-slate-400" />
-            <span className="font-semibold text-slate-500 text-[11px]">Divisi (18):</span>
+            <span className="font-semibold text-slate-500 text-[11px]">Divisi:</span>
             <select
               value={divisiFilter}
               onChange={e => setDivisiFilter(e.target.value)}
-              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer text-xs max-w-[200px] truncate"
+              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer text-xs max-w-[240px] truncate"
             >
-              <option value="ALL">Semua 18 Divisi</option>
-              {DIVISI_OPTIONS.map(d => (
-                <option key={d} value={d}>{d}</option>
+              <option value="ALL">Semua Divisi Operasional</option>
+              {HIERARCHICAL_DIVISI_GROUPS.map(grp => (
+                <optgroup key={grp.groupName} label={grp.groupName}>
+                  {grp.options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
@@ -804,7 +896,7 @@ export default function DataRelawanSppgPage() {
               <tr className="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider">
                 <th className="py-3 px-3.5 text-center w-12 border-b border-slate-800">NO</th>
                 <th className="py-3 px-3.5 border-b border-slate-800 min-w-[180px]">NAMA LENGKAP</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 min-w-[170px]">DIVISI PENUGASAN</th>
+                <th className="py-3 px-3.5 border-b border-slate-800 min-w-[180px]">DIVISI PENUGASAN</th>
                 <th className="py-3 px-3.5 border-b border-slate-800 font-mono">NIK</th>
                 <th className="py-3 px-3.5 border-b border-slate-800">EMAIL</th>
                 <th className="py-3 px-3.5 border-b border-slate-800">TEMPAT LAHIR</th>
@@ -944,7 +1036,7 @@ export default function DataRelawanSppgPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-base">
-                    Pratinjau Import Data Relawan (Smart 18 Divisi Parser)
+                    Pratinjau Import Data Relawan (Smart Normalizer DRIVER & HELPER)
                   </h3>
                   <p className="text-xs text-amber-200">
                     Periksa kelengkapan data dan pencocokan divisi resmi sebelum disimpan.
@@ -977,7 +1069,7 @@ export default function DataRelawanSppgPage() {
                 )}
               </div>
               <p className="text-[11px] text-slate-500 italic">
-                * Divisi otomatis dicocokkan ke 18 daftar divisi resmi operasional.
+                * Input Driver/Sopir & Helper/Kernet otomatis dinormalisasi ke divisi resmi.
               </p>
             </div>
 
@@ -1050,7 +1142,7 @@ export default function DataRelawanSppgPage() {
         </div>
       )}
 
-      {/* Modal Form Tambah / Edit Data Relawan (18 Divisi Select Dropdown) */}
+      {/* Modal Form Tambah / Edit Data Relawan (Hierarchical optgroups) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200">
@@ -1065,7 +1157,7 @@ export default function DataRelawanSppgPage() {
                     {editingItem ? 'Edit Data Relawan SPPG' : 'Tambah Relawan SPPG Baru'}
                   </h3>
                   <p className="text-xs text-slate-300">
-                    Formulir registrasi personil operasional SPPG (Pilihan 18 Divisi Resmi BGN)
+                    Formulir registrasi personil operasional SPPG (7 Kelompok Divisi Hierarkis)
                   </p>
                 </div>
               </div>
@@ -1111,18 +1203,22 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* Divisi Dropdown 18 Resmi */}
+                {/* Divisi Dropdown 7 Kelompok Optgroup */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">
-                    Divisi Penugasan (18 Divisi Resmi) <span className="text-rose-500">*</span>
+                    Divisi Penugasan (7 Kelompok Operasional) <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={formData.divisi || 'PENGOLAHAN'}
                     onChange={e => setFormData({ ...formData, divisi: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
-                    {DIVISI_OPTIONS.map(d => (
-                      <option key={d} value={d}>{d}</option>
+                    {HIERARCHICAL_DIVISI_GROUPS.map(grp => (
+                      <optgroup key={grp.groupName} label={grp.groupName}>
+                        {grp.options.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>

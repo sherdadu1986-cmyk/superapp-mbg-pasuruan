@@ -970,6 +970,38 @@ export const INITIAL_RELAWAN_DATA: RelawanSppg[] = [
     alamat: 'Jl. Pahlawan No. 34, Wonorejo, Pasuruan',
     no_bpjstk: '24018892025',
     no_rekening_bni: '0891234573'
+  },
+  {
+    id: 'rel-008',
+    nama_lengkap: 'Slamet Riyadi',
+    nik: '3514121206910008',
+    divisi: 'DRIVER',
+    email: 'slamet.driver@gmail.com',
+    tempat_lahir: 'Pasuruan',
+    tanggal_lahir: '1991-06-12',
+    status: 'Aktif',
+    no_hp: '081298761234',
+    pendidikan_terakhir: 'SMA/SMK',
+    mulai_bekerja: '2025-01-05',
+    alamat: 'Desa Wonorejo RT 03 RW 02, Pasuruan',
+    no_bpjstk: '24018892026',
+    no_rekening_bni: '0891234574'
+  },
+  {
+    id: 'rel-009',
+    nama_lengkap: 'Agus Setiawan',
+    nik: '3514122508940009',
+    divisi: 'HELPER',
+    email: 'agus.helper@gmail.com',
+    tempat_lahir: 'Pasuruan',
+    tanggal_lahir: '1994-08-25',
+    status: 'Aktif',
+    no_hp: '085698765432',
+    pendidikan_terakhir: 'SMA/SMK',
+    mulai_bekerja: '2025-01-08',
+    alamat: 'Dusun Kiduldalem RT 01 RW 04, Wonorejo, Pasuruan',
+    no_bpjstk: '24018892027',
+    no_rekening_bni: '0891234575'
   }
 ]
 
