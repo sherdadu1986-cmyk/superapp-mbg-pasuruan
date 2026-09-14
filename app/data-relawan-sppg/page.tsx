@@ -81,6 +81,43 @@ export const HIERARCHICAL_DIVISI_GROUPS: DivisiGroup[] = [
 
 export const ALL_DIVISI_OPTIONS: string[] = HIERARCHICAL_DIVISI_GROUPS.flatMap(g => g.options)
 
+export const DIVISION_ORDER: Record<string, number> = {
+  // Kelompok 1: Manajemen & Pengawasan
+  'KEPALA SPPG': 1,
+  'PENGAWAS GIZI': 2,
+  'PENGAWAS KEUANGAN': 3,
+  'ASISTEN LAPANGAN': 3.5,
+  'ADMIN': 4,
+
+  // Kelompok 2: Persiapan Bahan
+  'KOORDINATOR PERSIAPAN': 5,
+  'PERSIAPAN': 6,
+
+  // Kelompok 3: Pengolahan & Masak
+  'KOORDINATOR PENGOLAHAN': 7,
+  'JURU UTAMA MASAK': 8,
+  'KOKI': 9,
+  'PENGOLAHAN': 10,
+
+  // Kelompok 4: Pemorsian & Packing
+  'KOORDINATOR PEMORSIAN': 11,
+  'PEMORSIAN': 12,
+  'PACKING': 13,
+
+  // Kelompok 5: Logistik & Distribusi
+  'DRIVER': 14,
+  'HELPER': 15,
+
+  // Kelompok 6: Sanitasi & Kebersihan
+  'KOORDINATOR CUCI OMPRENG': 16,
+  'CUCI OMPRENG': 17,
+  'KOORDINATOR KEBERSIHAN': 18,
+  'KEBERSIHAN': 19,
+
+  // Kelompok 7: Pengamanan
+  'KEAMANAN': 20
+}
+
 const DUMMY_NIKS_TO_PURGE = [
   '3514121508960001', '3514122003920002', '3514125211950003',
   '3514121004980004', '3514126507970005', '3514121809930006',
@@ -682,9 +719,9 @@ export default function DataRelawanSppgPage() {
     }
   }
 
-  // Filtered List
+  // Filtered & Hierarchically Sorted List
   const filteredList = useMemo(() => {
-    return relawanList.filter(item => {
+    const list = relawanList.filter(item => {
       const matchSearch = 
         (item.nama_lengkap || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.nik || '').includes(searchTerm) ||
@@ -696,6 +733,22 @@ export default function DataRelawanSppgPage() {
       const matchStatus = statusFilter === 'ALL' || item.status === statusFilter
 
       return matchSearch && matchDivisi && matchStatus
+    })
+
+    return list.sort((a, b) => {
+      const divA = (a.divisi || '').trim().toUpperCase()
+      const divB = (b.divisi || '').trim().toUpperCase()
+
+      const rankA = DIVISION_ORDER[divA] ?? 99
+      const rankB = DIVISION_ORDER[divB] ?? 99
+
+      // 1. Urutkan berdasarkan hierarki divisi
+      if (rankA !== rankB) {
+        return rankA - rankB
+      }
+
+      // 2. Jika divisinya sama, urutkan alfabetis berdasarkan Nama Lengkap
+      return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '')
     })
   }, [relawanList, searchTerm, divisiFilter, statusFilter])
 
