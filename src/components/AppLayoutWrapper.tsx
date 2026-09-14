@@ -37,30 +37,28 @@ interface MenuSection {
 }
 
 function BgnLogo() {
-  const [imgSrc, setImgSrc] = useState('/logo-bgn.png')
-  const [hasError, setHasError] = useState(false)
-
-  if (hasError) {
-    return (
-      <div className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[11px] tracking-wider font-mono shadow-2xs flex items-center justify-center">
-        BGN
-      </div>
-    )
-  }
-
   return (
-    <img
-      src={imgSrc}
-      alt="Badan Gizi Nasional"
-      className="h-8 w-auto object-contain font-bold"
-      onError={() => {
-        if (imgSrc === '/logo-bgn.png') {
-          setImgSrc('/logo.png')
-        } else {
-          setHasError(true)
-        }
-      }}
-    />
+    <div className="flex items-center gap-2">
+      <img
+        src="/logo-bgn.png"
+        alt="Badan Gizi Nasional"
+        className="h-9 w-9 object-contain shrink-0"
+        onError={(e) => {
+          const target = e.currentTarget
+          if (!target.src.includes('favicon')) {
+            target.src = '/favicon.ico'
+          }
+        }}
+      />
+      <div className="flex flex-col">
+        <span className="font-bold text-sm leading-tight text-slate-800">
+          BGN
+        </span>
+        <span className="text-[11px] text-slate-500 font-medium">
+          Manajemen Penerima Manfaat
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -255,11 +253,6 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           
           <div className="flex items-center gap-2">
             <BgnLogo />
-            <h1 className="font-extrabold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
-              <span>BGN</span>
-              <span className="text-slate-400 font-normal">·</span>
-              <span className="text-slate-600 font-medium text-xs">Manajemen Penerima Manfaat</span>
-            </h1>
           </div>
         </div>
 

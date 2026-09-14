@@ -15,10 +15,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SPPG Super App — Kiduldalem",
-  description: "Super App Operasional Satuan Pelayanan Pemenuhan Gizi (SPPG) Kiduldalem — Sistem Manajemen Penerima Manfaat, Dapur, dan Distribusi Terintegrasi",
-  metadataBase: new URL("https://dapur-sppg.pasuruankab.go.id"),
-  keywords: ["SPPG", "Super App", "Kiduldalem", "Penerima Manfaat", "Makanan Bergizi Gratis", "Pasuruan"],
+  title: 'SPPG Pasuruan - Sistem Operasional BGN Kiduldalem',
+  description: 'Sistem operasional dan manajemen penerima manfaat MBG SPPG Wonorejo Pasuruan',
+  metadataBase: new URL('https://dapur-sppg.pasuruankab.go.id'),
+  keywords: ['SPPG', 'Super App', 'Kiduldalem', 'Penerima Manfaat', 'Makanan Bergizi Gratis', 'Pasuruan', 'BGN'],
+  icons: {
+    icon: [
+      { url: '/logo-bgn.png', href: '/logo-bgn.png' },
+      { url: '/favicon.ico', href: '/favicon.ico' }
+    ],
+    apple: '/logo-bgn.png',
+  },
 };
 
 export default function RootLayout({
