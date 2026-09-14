@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { 
   Search, RotateCw, Plus, X, Check, Building2, Info, Eye, Edit, Trash2, 
   Bookmark, FileSpreadsheet, FileText, FileCheck, Printer, ChevronLeft, 
-  ChevronRight, UserPlus, ShieldAlert, HeartHandshake, FileDown, Upload,
+  ChevronRight, UserPlus, ShieldAlert, HeartHandshake, FileDown, Download, Upload,
   ChevronUp, ChevronDown
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -131,10 +131,53 @@ export default function KelompokPenerimaManfaatPage() {
   const [showImportConfirmModal, setShowImportConfirmModal] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
-  // KPM Document Upload States & Handlers
+  // KPM Document Upload & Preview States
   const docFileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingDocItem, setUploadingDocItem] = useState<{ item: DetailKpmItem; type: 'surat_pernyataan' | 'mou' } | null>(null)
   const [isUploadingDoc, setIsUploadingDoc] = useState(false)
+
+  // In-App Document Preview & Direct Download States
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; title: string; filename: string; isPdf: boolean } | null>(null)
+  const [isPreviewLoading, setIsPreviewLoading] = useState(true)
+
+  const handleDownloadDocument = async (url: string, suggestedName: string) => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = suggestedName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(blobUrl)
+      triggerToast(`Mengunduh berkas: ${suggestedName}`)
+    } catch (err) {
+      console.warn('CORS blob download fallback:', err)
+      window.open(url, '_blank')
+    }
+  }
+
+  const handleOpenPreviewDoc = (item: DetailKpmItem, type: 'surat_pernyataan' | 'mou') => {
+    const url = type === 'surat_pernyataan' ? item.suratPernyataanUrl : item.mouUrl
+    if (!url) return
+
+    const docTypeLabel = type === 'surat_pernyataan' ? 'Surat Pernyataan MBG' : 'MoU MBG'
+    const cleanName = (item.nama || 'Lembaga').replace(/[^a-zA-Z0-9]/g, '_')
+    const rawExt = url.split('?')[0].split('.').pop() || 'pdf'
+    const ext = rawExt.toLowerCase()
+    const filename = `${docTypeLabel.replace(/\s+/g, '_')}_${cleanName}.${ext}`
+    const isPdf = ext === 'pdf'
+
+    setIsPreviewLoading(true)
+    setPreviewDoc({
+      url,
+      title: `${docTypeLabel} - ${item.nama}`,
+      filename,
+      isPdf
+    })
+  }
 
   const triggerFileUpload = (item: DetailKpmItem, type: 'surat_pernyataan' | 'mou') => {
     setUploadingDocItem({ item, type })
@@ -2200,31 +2243,51 @@ const getBnbaCountForGroup = (
                         {/* A. Surat Pernyataan */}
                         {row.suratPernyataanUrl ? (
                           <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
-                            <a
-                              href={row.suratPernyataanUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:underline flex items-center gap-1 text-emerald-800"
-                              title="Klik untuk membuka/preview Surat Pernyataan"
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPreviewDoc(row, 'surat_pernyataan')}
+                              className="hover:underline flex items-center gap-1 text-emerald-800 cursor-pointer"
+                              title="Lihat / Preview Surat Pernyataan"
                             >
                               <Check size={12} className="text-emerald-600 shrink-0" />
                               <span>✓ Surat Pernyataan</span>
-                            </a>
+                            </button>
+                            <div className="h-3 w-px bg-emerald-300/60 mx-0.5" />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPreviewDoc(row, 'surat_pernyataan')}
+                              title="Lihat / Preview Dokumen"
+                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
+                            >
+                              <Eye size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cleanName = (row.nama || 'Lembaga').replace(/[^a-zA-Z0-9]/g, '_')
+                                const rawExt = row.suratPernyataanUrl!.split('?')[0].split('.').pop() || 'pdf'
+                                handleDownloadDocument(row.suratPernyataanUrl!, `Surat_Pernyataan_MBG_${cleanName}.${rawExt}`)
+                              }}
+                              title="Unduh / Download Direct"
+                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
+                            >
+                              <Download size={12} />
+                            </button>
                             <button
                               type="button"
                               onClick={() => triggerFileUpload(row, 'surat_pernyataan')}
-                              title="Ganti / Upload Ulang Surat Pernyataan"
-                              className="p-0.5 text-slate-500 hover:text-slate-900 ml-0.5 cursor-pointer"
+                              title="Ganti / Upload Ulang Berkas"
+                              className="p-0.5 text-slate-500 hover:text-slate-900 transition cursor-pointer"
                             >
-                              <Upload size={11} />
+                              <RotateCw size={11} />
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteDoc(row, 'surat_pernyataan')}
                               title="Hapus Surat Pernyataan"
-                              className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                              className="p-0.5 text-slate-400 hover:text-rose-600 transition cursor-pointer"
                             >
-                              <X size={11} />
+                              <Trash2 size={11} />
                             </button>
                           </div>
                         ) : (
@@ -2246,31 +2309,51 @@ const getBnbaCountForGroup = (
                         {/* B. MoU MBG */}
                         {row.mouUrl ? (
                           <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
-                            <a
-                              href={row.mouUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:underline flex items-center gap-1 text-emerald-800"
-                              title="Klik untuk membuka/preview MoU MBG"
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPreviewDoc(row, 'mou')}
+                              className="hover:underline flex items-center gap-1 text-emerald-800 cursor-pointer"
+                              title="Lihat / Preview MoU MBG"
                             >
                               <Check size={12} className="text-emerald-600 shrink-0" />
                               <span>✓ MoU MBG</span>
-                            </a>
+                            </button>
+                            <div className="h-3 w-px bg-emerald-300/60 mx-0.5" />
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPreviewDoc(row, 'mou')}
+                              title="Lihat / Preview Dokumen"
+                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
+                            >
+                              <Eye size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cleanName = (row.nama || 'Lembaga').replace(/[^a-zA-Z0-9]/g, '_')
+                                const rawExt = row.mouUrl!.split('?')[0].split('.').pop() || 'pdf'
+                                handleDownloadDocument(row.mouUrl!, `MoU_MBG_${cleanName}.${rawExt}`)
+                              }}
+                              title="Unduh / Download Direct"
+                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
+                            >
+                              <Download size={12} />
+                            </button>
                             <button
                               type="button"
                               onClick={() => triggerFileUpload(row, 'mou')}
-                              title="Ganti / Upload Ulang MoU MBG"
-                              className="p-0.5 text-slate-500 hover:text-slate-900 ml-0.5 cursor-pointer"
+                              title="Ganti / Upload Ulang Berkas"
+                              className="p-0.5 text-slate-500 hover:text-slate-900 transition cursor-pointer"
                             >
-                              <Upload size={11} />
+                              <RotateCw size={11} />
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteDoc(row, 'mou')}
                               title="Hapus MoU MBG"
-                              className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                              className="p-0.5 text-slate-400 hover:text-rose-600 transition cursor-pointer"
                             >
-                              <X size={11} />
+                              <Trash2 size={11} />
                             </button>
                           </div>
                         ) : (
@@ -3227,6 +3310,65 @@ const getBnbaCountForGroup = (
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
       />
+
+      {/* In-App Document Preview Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh]">
+            {/* Header Modal */}
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText size={18} className="text-slate-800 shrink-0" />
+                <h3 className="font-bold text-slate-900 text-sm truncate" title={previewDoc.title}>
+                  {previewDoc.title}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadDocument(previewDoc.url, previewDoc.filename)}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Download size={14} />
+                  <span className="hidden sm:inline">Unduh Berkas</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md transition cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content Viewer */}
+            <div className="p-3 flex-1 bg-slate-100 overflow-y-auto flex items-center justify-center relative min-h-[50vh]">
+              {isPreviewLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-xs z-10 gap-2">
+                  <RotateCw size={24} className="animate-spin text-slate-700" />
+                  <span className="text-xs font-semibold text-slate-600">Memuat berkas dokumen...</span>
+                </div>
+              )}
+
+              {previewDoc.isPdf ? (
+                <iframe
+                  src={previewDoc.url}
+                  className="w-full h-[72vh] rounded-lg border border-slate-300 bg-white shadow-xs"
+                  onLoad={() => setIsPreviewLoading(false)}
+                />
+              ) : (
+                <img
+                  src={previewDoc.url}
+                  alt="Preview Dokumen"
+                  className="max-h-[72vh] max-w-full mx-auto object-contain rounded-lg shadow-md border border-slate-200 bg-white"
+                  onLoad={() => setIsPreviewLoading(false)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
