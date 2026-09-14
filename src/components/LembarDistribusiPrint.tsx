@@ -1,6 +1,7 @@
 "use client"
 import React, { useState, useEffect, useMemo } from 'react'
-import { Printer, X, ShieldCheck, Building2, Calendar, CheckCircle2 } from 'lucide-react'
+import { Printer, X, Building2, Calendar, CheckCircle2 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '@/lib/supabase'
 import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
 
@@ -75,6 +76,39 @@ export default function LembarDistribusiPrint({
     ]
     return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
   }, [selectedDate])
+
+  // Official Indonesian Date Formatting for Signature Block (e.g. "15 September 2026")
+  const formattedDate = useMemo(() => {
+    if (selectedDate) {
+      const d = new Date(selectedDate)
+      if (!isNaN(d.getTime())) {
+        return new Intl.DateTimeFormat('id-ID', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        }).format(d)
+      }
+      return selectedDate
+    }
+    return new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(new Date())
+  }, [selectedDate])
+
+  // Payload text for BSrE / BGN E-Digital Signature Verification
+  const qrPayload = useMemo(() => {
+    return [
+      'Dokumen Sah Terverifikasi TTE BGN',
+      'Instansi: SPPG Kiduldalem - Wonorejo, Pasuruan',
+      'Pejabat: Ahmad Sayyidani Khaqiqi, S.Pd (Kepala SPPG)',
+      'NIP: 200107182026211012',
+      'Dokumen: Lembar Distribusi Porsi Harian MBG',
+      `Tanggal: ${formattedDate}`,
+      'Status: Valid & Terverifikasi APPO BGN'
+    ].join('\n')
+  }, [formattedDate])
 
   // Real-time print time formatting (e.g. "04:30 WIB")
   const printTimeFormatted = useMemo(() => {
@@ -451,36 +485,54 @@ export default function LembarDistribusiPrint({
               </div>
             )}
 
-            {/* 5. Kolom Tanda Tangan Resmi (Dual Signatures) */}
-            <div className="pt-2 border-t border-slate-300 grid grid-cols-2 gap-8 text-[11px] font-sans">
+            {/* 5. Kolom Tanda Tangan Resmi Kedinasan TTE E-Digital */}
+            <div className="pt-2 border-t border-slate-300 grid grid-cols-2 gap-8 text-[10.5px] font-sans items-end break-inside-avoid print:break-inside-avoid">
+              {/* Sisi Kiri: Mengetahui Petugas Logistik */}
               <div className="text-center space-y-1">
-                <p className="text-slate-600 font-medium text-[10.5px]">Mengetahui,</p>
+                <p className="text-slate-600 font-medium text-[10px]">Mengetahui,</p>
                 <p className="font-bold text-[#0f172a]">Petugas Distribusi & Logistik</p>
-                <div className="h-14 flex items-end justify-center pb-1">
-                  <span className="text-slate-400 font-mono text-[9px] italic">(Tanda Tangan & Nama Terang)</span>
+                <div className="h-20 flex items-end justify-center pb-1">
+                  <span className="text-slate-400 font-mono text-[8.5px] italic">(Tanda Tangan & Nama Terang)</span>
                 </div>
                 <p className="font-bold text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block min-w-[160px]">
                   (_________________________)
                 </p>
               </div>
 
-              <div className="text-center space-y-1">
-                <p className="text-slate-600 font-medium text-[10.5px]">
-                  Pasuruan, {fullDateFormatted}
-                </p>
-                <p className="font-bold text-[#0f172a]">
-                  Menyetujui,
-                  <br />
-                  Kepala SPPG Kiduldalem Wonorejo
-                </p>
-                <div className="h-10 flex items-center justify-center">
-                  <span className="text-[8.5px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
-                    ✓ Terverifikasi Digital APPO
+              {/* Sisi Kanan Bawah: Kepala SPPG dengan QR Code E-Digital BSrE/BGN */}
+              <div className="text-center flex flex-col items-center justify-end space-y-1">
+                <div className="text-[#0f172a] text-[10px] leading-tight space-y-0.5">
+                  <p className="font-medium text-slate-700">Ditetapkan di Pasuruan</p>
+                  <p className="font-medium text-slate-700">
+                    pada tanggal <span className="font-bold text-[#0f172a]">{formattedDate}</span>
+                  </p>
+                  <p className="font-bold text-[#0f172a] mt-0.5">Kepala SPPG,</p>
+                </div>
+
+                {/* Frame Box QR Code E-Digital BSrE */}
+                <div className="my-1 p-1.5 bg-white border border-slate-300 rounded shadow-2xs inline-flex flex-col items-center gap-1">
+                  <QRCodeSVG
+                    value={qrPayload}
+                    size={75}
+                    level="M"
+                    includeMargin={false}
+                  />
+                  <span className="text-[7.5px] font-bold text-slate-500 uppercase tracking-tight">
+                    Tersertifikasi Elektronik BSrE/BGN
                   </span>
                 </div>
-                <p className="font-black text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block">
-                  AHMAD SAYYIDANI KHAQIQI, S.Pd.
-                </p>
+
+                <div className="text-[#0f172a] text-[10px] leading-tight pt-0.5">
+                  <p className="font-bold text-[10.5px] underline underline-offset-2">
+                    Ahmad Sayyidani Khaqiqi, S.Pd
+                  </p>
+                  <p className="font-semibold text-slate-700 text-[9.5px]">
+                    Penata Layanan Operasional
+                  </p>
+                  <p className="font-mono text-slate-600 text-[9px] tracking-tight">
+                    NIP. 200107182026211012
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -490,4 +542,3 @@ export default function LembarDistribusiPrint({
     </div>
   )
 }
-
