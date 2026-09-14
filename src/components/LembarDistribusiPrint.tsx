@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { FileDown, Loader2, X, Building2, CheckCircle2, Printer } from 'lucide-react'
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
+import { toPng } from 'html-to-image'
 import { supabase } from '@/lib/supabase'
 import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
 
@@ -113,46 +113,62 @@ export default function LembarDistribusiPrint({
     return `${hh}:${mm} WIB`
   }, [])
 
-  // High-Resolution Direct PDF Export Handler (jsPDF + html2canvas)
+  // High-Resolution Direct PDF Export Handler (jsPDF + html-to-image)
   const handleDownloadPDF = async () => {
     const element = document.getElementById('area-dokumen-a4-bgn')
-    if (!element) return
+    if (!element) {
+      alert('Elemen dokumen tidak ditemukan.')
+      return
+    }
 
     try {
       setIsExporting(true)
 
-      // Tangkap kontainer sebagai canvas dengan skala resolusi tinggi
-      const canvas = await html2canvas(element, {
-        scale: 2.5, // Menghasilkan cetakan teks dan logo yang sangat tajam
-        useCORS: true, // Memastikan gambar/logo dari URL publik termuat
-        logging: false,
-        backgroundColor: '#ffffff'
+      // Render DOM ke PNG Base64 menggunakan html-to-image
+      const dataUrl = await toPng(element, {
+        quality: 0.98,
+        pixelRatio: 2, // Menjaga teks dan tabel tetap sangat tajam
+        cacheBust: true,
+        backgroundColor: '#ffffff',
       })
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.98)
-
-      // Inisialisasi jsPDF format A4 Portrait (210 x 297 mm)
+      // Buat instance dokumen PDF A4
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
+      })
+
+      const img = new Image()
+      img.src = dataUrl
+      await new Promise((resolve) => {
+        img.onload = resolve
       })
 
       const pdfWidth = 210
-      const marginX = 6
-      const marginY = 6
-      const contentWidth = pdfWidth - (marginX * 2)
-      const contentHeight = (canvas.height * contentWidth) / canvas.width
+      const pdfHeight = 297
+      const marginX = 8
+      const marginY = 8
+      const printableWidth = pdfWidth - marginX * 2
+      const printableHeight = (img.height * printableWidth) / img.width
 
-      // Tambahkan gambar ke lembar A4 tunggal
-      pdf.addImage(imgData, 'JPEG', marginX, marginY, contentWidth, contentHeight)
+      // Masukkan gambar ke 1 halaman A4
+      pdf.addImage(
+        dataUrl,
+        'PNG',
+        marginX,
+        marginY,
+        printableWidth,
+        Math.min(printableHeight, pdfHeight - marginY * 2)
+      )
 
-      // Format penamaan file resmi: Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_YYYYMMDD.pdf
-      const dateSlug = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      pdf.save(`Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_${dateSlug}.pdf`)
+      // Penamaan file resmi
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      pdf.save(`Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_${dateStr}.pdf`)
+
     } catch (error) {
-      console.error('Gagal generate PDF:', error)
-      alert('Terjadi kesalahan saat membuat file PDF.')
+      console.error('Error detail ekspor PDF:', error)
+      alert('Gagal mengekspor PDF: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setIsExporting(false)
     }
@@ -468,6 +484,7 @@ export default function LembarDistribusiPrint({
                 <img
                   src="/logo-bgn.png"
                   alt="Logo BGN"
+                  crossOrigin="anonymous"
                   className="h-11 sm:h-12 w-auto object-contain shrink-0"
                 />
                 <div>
