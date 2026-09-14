@@ -839,8 +839,20 @@ const getBnbaCountForGroup = (
   const handleOpenBnbaModal = async (group: DetailKpmItem) => {
     setActiveBnbaGroup(group)
     setSelectedBnbaIds([])
-    const list = await fetchBnbaList(group.id)
-    setBnbaList(list)
+    const activeKelompokUuid = await resolveSupabaseKelompokUuid(group)
+    const selectedKelompokId = activeKelompokUuid || group.id
+
+    const { data, error } = await supabase
+      .from('penerima_manfaat_bnba')
+      .select('*')
+      .eq('kelompok_id', selectedKelompokId)
+
+    if (!error && data) {
+      setBnbaList(data)
+    } else {
+      const list = await fetchBnbaList(selectedKelompokId)
+      setBnbaList(list)
+    }
 
     const is3B = group.jenis.includes('Ibu') || group.jenis.includes('Bayi')
     setBnbaPosisi(is3B ? (group.jenis.includes('Hamil') ? 'Bumil' : group.jenis.includes('Menyusui') ? 'Busui' : 'Balita') : 'Siswa')
@@ -887,12 +899,12 @@ const getBnbaCountForGroup = (
 
   const handleOpenEditBnbaModal = (item: PenerimaManfaatBnba) => {
     setEditingBnbaItem(item)
-    setBnbaNisnNik(item.nisn_nik || '')
-    setBnbaNama(item.nama_lengkap || '')
+    setBnbaNisnNik(item.nisn_nik || item.nik || item.nisn || '')
+    setBnbaNama(item.nama_lengkap || item.nama_penerima || item.nama || '')
     setBnbaTglLahir(normalizeBirthDate(item.tanggal_lahir))
-    setBnbaJk(item.jenis_kelamin || 'L')
+    setBnbaJk(parseJk(item.jenis_kelamin || item.jk))
     setBnbaOrtu(item.nama_ortu === '-' ? '' : (item.nama_ortu || ''))
-    setBnbaPosisi(item.posisi || 'Siswa')
+    setBnbaPosisi(parsePosisi(item.posisi))
     setBnbaKelas(item.kelas || '-')
     setShowAddBnbaModal(true)
   }
@@ -1284,46 +1296,86 @@ const getBnbaCountForGroup = (
     if (!file || !activeBnbaGroup) return
 
     const reader = new FileReader()
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result
         const wb = XLSX.read(bstr, { type: 'binary', cellDates: true })
         const wsname = wb.SheetNames[0]
         const ws = wb.Sheets[wsname]
-        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })
 
-        if (!rows || rows.length < 2) {
+        const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
+        const selectedKelompokId = activeKelompokUuid || activeBnbaGroup.id
+
+        // Parse Excel rows as JSON objects with header keys
+        const jsonRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+        // Fallback parse as raw 2D array
+        const arrayRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })
+
+        if ((!jsonRows || jsonRows.length === 0) && (!arrayRows || arrayRows.length < 2)) {
           alert('File Excel kosong atau tidak memiliki baris data.')
           return
         }
 
-        const dataRows = rows.slice(1)
         const parsedItems: PenerimaManfaatBnba[] = []
 
-        dataRows.forEach((row, idx) => {
-          const nisnNik = String(row[0] || '').trim()
-          const namaLengkap = String(row[1] || '').trim().toUpperCase()
-          if (!nisnNik || !namaLengkap) return
+        if (jsonRows && jsonRows.length > 0) {
+          jsonRows.forEach((row: any, idx: number) => {
+            const nama_lengkap = String(row['NAMA LENGKAP'] || row['NAMA PENERIMA'] || row['NAMA'] || row.nama_lengkap || row.nama_penerima || row.nama || '').trim().toUpperCase()
+            const nisn_nik = String(row['NIK / NISN'] || row['NIK/NISN'] || row['NIK'] || row['NISN'] || row.nisn_nik || row.nik || row.nisn || '').trim()
 
-          const tglLahir = normalizeBirthDate(row[2])
-          const jk = parseJk(row[3])
-          const ortu = String(row[4] || '-').trim().toUpperCase()
-          const posisi = parsePosisi(row[5])
-          const kelas = String(row[6] || '-').trim()
+            if (!nama_lengkap && !nisn_nik) return
 
-          parsedItems.push({
-            id: `bnba-imp-${Date.now()}-${idx}`,
-            kelompok_id: activeBnbaGroup.id,
-            nisn_nik: nisnNik,
-            nama_lengkap: namaLengkap,
-            tanggal_lahir: tglLahir,
-            jenis_kelamin: jk,
-            nama_ortu: ortu,
-            posisi: posisi,
-            kelas: kelas,
-            created_at: new Date().toISOString()
+            const tglLahirRaw = row['TANGGAL LAHIR'] || row['TANGGAL_LAHIR'] || row.tanggal_lahir || ''
+            const tanggal_lahir = normalizeBirthDate(tglLahirRaw)
+
+            const jkRaw = row['JK'] || row['JENIS KELAMIN'] || row['JENIS_KELAMIN'] || row.jenis_kelamin || row.jk || ''
+            const jenis_kelamin = parseJk(jkRaw)
+
+            const ortuRaw = row['NAMA ORTU'] || row['ORANG TUA'] || row['NAMA_ORTU'] || row.nama_ortu || ''
+            const nama_ortu = String(ortuRaw || '-').trim().toUpperCase()
+
+            const posisiRaw = row['POSISI'] || row.posisi || 'Murid'
+            const posisi = parsePosisi(posisiRaw)
+
+            const kelasRaw = row['KELAS'] || row.kelas || ''
+            const kelas = String(kelasRaw || '-').trim()
+
+            parsedItems.push({
+              id: `bnba-imp-${Date.now()}-${idx}`,
+              kelompok_id: selectedKelompokId,
+              nama_lengkap,
+              nisn_nik,
+              tanggal_lahir,
+              jenis_kelamin,
+              nama_ortu,
+              posisi,
+              kelas,
+              created_at: new Date().toISOString()
+            })
           })
-        })
+        }
+
+        if (parsedItems.length === 0 && arrayRows && arrayRows.length >= 2) {
+          const dataRows = arrayRows.slice(1)
+          dataRows.forEach((row, idx) => {
+            const nisnNik = String(row[0] || row[1] || '').trim()
+            const namaLengkap = String(row[1] || row[0] || '').trim().toUpperCase()
+            if (!nisnNik && !namaLengkap) return
+
+            parsedItems.push({
+              id: `bnba-imp-${Date.now()}-${idx}`,
+              kelompok_id: selectedKelompokId,
+              nisn_nik: nisnNik,
+              nama_lengkap: namaLengkap,
+              tanggal_lahir: normalizeBirthDate(row[2]),
+              jenis_kelamin: parseJk(row[3]),
+              nama_ortu: String(row[4] || '-').trim().toUpperCase(),
+              posisi: parsePosisi(row[5] || 'Murid'),
+              kelas: String(row[6] || '-').trim(),
+              created_at: new Date().toISOString()
+            })
+          })
+        }
 
         if (parsedItems.length === 0) {
           alert('Tidak ditemukan data valid dalam file Excel (pastikan NIK/NISN & Nama Lengkap terisi).')
@@ -1396,6 +1448,7 @@ const getBnbaCountForGroup = (
 
     try {
       const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
+      const selectedKelompokId = activeKelompokUuid || activeBnbaGroup.id
 
       const payload = importPreviewData.map(item => {
         let sanitizedDate: string | null = normalizeBirthDate(item.tanggal_lahir)
@@ -1403,22 +1456,22 @@ const getBnbaCountForGroup = (
           sanitizedDate = '2015-01-01'
         }
 
-        const rowPayload: any = {
-          kelompok_id: activeKelompokUuid,
-          nisn_nik: String(item.nisn_nik || '').trim(),
-          nama_lengkap: String(item.nama_lengkap || '').trim().toUpperCase(),
+        const bnbaRow: any = {
+          kelompok_id: selectedKelompokId,
+          nama_lengkap: String(item.nama_lengkap || item.nama_penerima || item.nama || '').trim().toUpperCase(),
+          nisn_nik: String(item.nisn_nik || item.nik || item.nisn || '').trim(),
           tanggal_lahir: sanitizedDate,
-          jenis_kelamin: parseJk(item.jenis_kelamin),
+          jenis_kelamin: parseJk(item.jenis_kelamin || item.jk),
           nama_ortu: String(item.nama_ortu || '-').trim().toUpperCase(),
-          posisi: parsePosisi(item.posisi),
+          posisi: parsePosisi(item.posisi || 'Murid'),
           kelas: String(item.kelas || '-').trim()
         }
 
         if (item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
-          rowPayload.id = item.id
+          bnbaRow.id = item.id
         }
 
-        return rowPayload
+        return bnbaRow
       })
 
       console.log('Sending BNBA Bulk Import Payload to Supabase:', payload)
@@ -1438,7 +1491,7 @@ const getBnbaCountForGroup = (
 
       const localItems: PenerimaManfaatBnba[] = (data || []).map((d: any, idx: number) => ({
         id: d.id || `bnba-imp-${Date.now()}-${idx}`,
-        kelompok_id: activeBnbaGroup.id,
+        kelompok_id: selectedKelompokId,
         nisn_nik: d.nisn_nik,
         nama_lengkap: d.nama_lengkap,
         tanggal_lahir: d.tanggal_lahir,
@@ -1451,18 +1504,18 @@ const getBnbaCountForGroup = (
 
       await saveBnbaBulk(localItems.length > 0 ? localItems : importPreviewData)
 
-      const updatedList = await fetchBnbaList(activeBnbaGroup.id)
+      const updatedList = await fetchBnbaList(selectedKelompokId)
       const finalList = updatedList.length > 0 ? updatedList : (data || [])
       setBnbaList(finalList)
 
       setAllBnbaRecords(prev => [
         ...finalList,
-        ...prev.filter(b => b.kelompok_id !== activeBnbaGroup.id && b.kelompok_id !== activeKelompokUuid)
+        ...prev.filter(b => b.kelompok_id !== activeBnbaGroup.id && b.kelompok_id !== selectedKelompokId)
       ])
 
       const updatedCount = finalList.length
       setKpmItems(prev => prev.map(k => {
-        if (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === activeKelompokUuid) {
+        if (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === selectedKelompokId) {
           const totalTarget = k.totalTarget
           let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'
           let ketMsg = '✓ Sesuai'
@@ -2559,8 +2612,16 @@ const getBnbaCountForGroup = (
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {filteredBnbaList.length > 0 ? (
-                      filteredBnbaList.map((row, idx) => {
+                      filteredBnbaList.map((row: PenerimaManfaatBnba, idx) => {
                         const isSelected = selectedBnbaIds.includes(row.id)
+                        const nama = row.nama_lengkap || row.nama_penerima || row.nama || '-'
+                        const nisnNik = row.nisn_nik || row.nik || row.nisn || '-'
+                        const tglLahir = row.tanggal_lahir || '-'
+                        const jk = row.jenis_kelamin || row.jk || '-'
+                        const ortu = row.nama_ortu || '-'
+                        const posisi = row.posisi || '-'
+                        const kelas = row.kelas || '-'
+
                         return (
                           <tr key={row.id} className={`hover:bg-slate-50 transition ${isSelected ? 'bg-amber-50/60' : ''}`}>
                             <td className="py-2.5 px-3 text-center">
@@ -2578,13 +2639,13 @@ const getBnbaCountForGroup = (
                               />
                             </td>
                             <td className="py-2.5 px-3 text-center text-slate-500">{idx + 1}</td>
-                            <td className="py-2.5 px-3 font-mono font-semibold">{row.nisn_nik}</td>
-                            <td className="py-2.5 px-3 font-bold text-slate-900">{row.nama_lengkap}</td>
-                            <td className="py-2.5 px-3 font-mono">{row.tanggal_lahir}</td>
-                            <td className="py-2.5 px-3 text-center">{row.jenis_kelamin}</td>
-                            <td className="py-2.5 px-3">{row.nama_ortu}</td>
-                            <td className="py-2.5 px-3 text-center">{row.posisi}</td>
-                            <td className="py-2.5 px-3 text-center font-mono">{row.kelas}</td>
+                            <td className="py-2.5 px-3 font-mono font-semibold">{nisnNik}</td>
+                            <td className="py-2.5 px-3 font-bold text-slate-900">{nama}</td>
+                            <td className="py-2.5 px-3 font-mono">{tglLahir}</td>
+                            <td className="py-2.5 px-3 text-center">{jk}</td>
+                            <td className="py-2.5 px-3">{ortu}</td>
+                            <td className="py-2.5 px-3 text-center">{posisi}</td>
+                            <td className="py-2.5 px-3 text-center font-mono">{kelas}</td>
                             <td className="py-2.5 px-3 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <button 

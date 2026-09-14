@@ -724,11 +724,16 @@ export interface PenerimaManfaatBnba {
   nisn_nik: string
   nama_lengkap: string
   tanggal_lahir: string
-  jenis_kelamin: 'L' | 'P'
+  jenis_kelamin: string
   nama_ortu: string
-  posisi: 'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'
+  posisi: string
   kelas: string
   created_at?: string
+  nama_penerima?: string
+  nama?: string
+  nik?: string
+  nisn?: string
+  jk?: string
 }
 
 const LS_BNBA = 'sppg_penerima_bnba'
@@ -738,24 +743,11 @@ export const INITIAL_BNBA_DATA: PenerimaManfaatBnba[] = []
 
 export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaatBnba[]> {
   try {
-    let query = supabase.from('penerima_manfaat_bnba').select('*').limit(10000).order('created_at', { ascending: false })
+    let query = supabase.from('penerima_manfaat_bnba').select('*').order('created_at', { ascending: false })
     if (kelompokId) {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      if (uuidRegex.test(kelompokId)) {
-        query = query.or(`kelompok_id.eq.${kelompokId},kpm_id.eq.${kelompokId},sekolah_id.eq.${kelompokId}`)
-      } else {
-        const { data: kpm } = await supabase
-          .from('kelompok_penerima_manfaat')
-          .select('id, kode, identitas_npsn_tmp')
-          .or(`kode.eq.${kelompokId},identitas_npsn_tmp.eq.${kelompokId},id.eq.${kelompokId}`)
-          .limit(1)
-          .maybeSingle()
-        if (kpm?.id) {
-          query = query.or(`kelompok_id.eq.${kelompokId},kelompok_id.eq.${kpm.id},kpm_id.eq.${kpm.id},npsn.eq.${kpm.identitas_npsn_tmp || kelompokId}`)
-        } else {
-          query = query.or(`kelompok_id.eq.${kelompokId},npsn.eq.${kelompokId},kode.eq.${kelompokId}`)
-        }
-      }
+      query = query.eq('kelompok_id', kelompokId)
+    } else {
+      query = query.limit(10000)
     }
     const { data, error } = await query
     if (error || !data) return []
