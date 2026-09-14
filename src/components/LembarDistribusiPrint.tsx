@@ -9,6 +9,7 @@ interface LembarDistribusiPrintProps {
   onClose: () => void
   initialKpmList?: KelompokPenerimaManfaat[]
   selectedDate?: string
+  liburKpmIds?: string[]
 }
 
 function calculateKpmPortion(item: KelompokPenerimaManfaat) {
@@ -58,7 +59,8 @@ export default function LembarDistribusiPrint({
   isOpen,
   onClose,
   initialKpmList,
-  selectedDate
+  selectedDate,
+  liburKpmIds
 }: LembarDistribusiPrintProps) {
   const [kpmData, setKpmData] = useState<KelompokPenerimaManfaat[]>([])
 
@@ -102,16 +104,36 @@ export default function LembarDistribusiPrint({
     }
   }, [isOpen, initialKpmList])
 
-  // Aggregate breakdown per KPM & grand totals
-  const { rows, totals } = useMemo(() => {
+  // Aggregate breakdown per KPM & grand totals (excluding holiday KPMs)
+  const { rows, totals, holidayKpmNames } = useMemo(() => {
     let grandTotal = 0
     let grandKecil = 0
     let grandBesar = 0
     let grandTendik = 0
+    const holidayNames: string[] = []
 
     const sortedData = sortKpmList(kpmData)
 
     const processed = sortedData.map((item, idx) => {
+      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
+      const isLibur = liburKpmIds?.includes(itemKey) || (Boolean(item.id) && liburKpmIds?.includes(item.id!))
+
+      if (isLibur) {
+        holidayNames.push(item.nama)
+        return {
+          no: idx + 1,
+          id: itemKey,
+          nama: item.nama,
+          kode: item.identitas_npsn_tmp || item.kode || item.id,
+          kategori: item.kategori,
+          total: 0,
+          porsiKecil: 0,
+          porsiBesar: 0,
+          guruTendik: 0,
+          isLibur: true
+        }
+      }
+
       const breakdown = calculateKpmPortion(item)
       grandTotal += breakdown.total
       grandKecil += breakdown.porsiKecil
@@ -120,14 +142,15 @@ export default function LembarDistribusiPrint({
 
       return {
         no: idx + 1,
-        id: item.id || item.kode || String(idx),
+        id: itemKey,
         nama: item.nama,
         kode: item.identitas_npsn_tmp || item.kode || item.id,
         kategori: item.kategori,
         total: breakdown.total,
         porsiKecil: breakdown.porsiKecil,
         porsiBesar: breakdown.porsiBesar,
-        guruTendik: breakdown.guruTendik
+        guruTendik: breakdown.guruTendik,
+        isLibur: false
       }
     })
 
@@ -138,9 +161,10 @@ export default function LembarDistribusiPrint({
         grandKecil,
         grandBesar,
         grandTendik
-      }
+      },
+      holidayKpmNames: holidayNames
     }
-  }, [kpmData])
+  }, [kpmData, liburKpmIds])
 
   if (!isOpen) return null
 
@@ -286,24 +310,35 @@ export default function LembarDistribusiPrint({
                 <tbody className="divide-y divide-slate-200 font-semibold text-slate-900 bg-white">
                   {rows.length > 0 ? (
                     rows.map((row) => (
-                      <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                      <tr key={row.id} className={`transition-colors ${row.isLibur ? 'bg-rose-50/20 text-slate-400' : 'hover:bg-slate-50'}`}>
                         <td className="py-1.5 px-2.5 text-center font-mono text-slate-500 text-[11px]">
                           {row.no}
                         </td>
                         <td className="py-1.5 px-2.5">
-                          <span className="font-bold text-slate-900 block">{row.nama}</span>
+                          {row.isLibur ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-400 line-through">{row.nama}</span>
+                              <span className="text-[9px] font-black text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 uppercase">[LIBUR - 0 PORSI]</span>
+                            </div>
+                          ) : (
+                            <span className="font-bold text-slate-900 block">{row.nama}</span>
+                          )}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-bold text-slate-900 font-mono">
-                          {row.total.toLocaleString('id-ID')}
+                        <td className="py-1.5 px-2.5 text-right font-bold font-mono">
+                          {row.isLibur ? (
+                            <span className="text-slate-400 font-bold">0</span>
+                          ) : (
+                            <span className="text-slate-900">{row.total.toLocaleString('id-ID')}</span>
+                          )}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-bold text-amber-800">
-                          {row.porsiKecil > 0 ? row.porsiKecil.toLocaleString('id-ID') : '-'}
+                        <td className="py-1.5 px-2.5 text-right font-mono font-bold">
+                          {row.isLibur ? <span className="text-slate-300">-</span> : (row.porsiKecil > 0 ? <span className="text-amber-800">{row.porsiKecil.toLocaleString('id-ID')}</span> : '-')}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-bold text-indigo-950">
-                          {row.porsiBesar > 0 ? row.porsiBesar.toLocaleString('id-ID') : '-'}
+                        <td className="py-1.5 px-2.5 text-right font-mono font-bold">
+                          {row.isLibur ? <span className="text-slate-300">-</span> : (row.porsiBesar > 0 ? <span className="text-indigo-950">{row.porsiBesar.toLocaleString('id-ID')}</span> : '-')}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-semibold text-slate-600">
-                          {row.guruTendik > 0 ? row.guruTendik.toLocaleString('id-ID') : '-'}
+                        <td className="py-1.5 px-2.5 text-right font-mono font-semibold">
+                          {row.isLibur ? <span className="text-slate-300">-</span> : (row.guruTendik > 0 ? <span className="text-slate-600">{row.guruTendik.toLocaleString('id-ID')}</span> : '-')}
                         </td>
                       </tr>
                     ))
@@ -336,6 +371,16 @@ export default function LembarDistribusiPrint({
                 </tfoot>
               </table>
             </div>
+
+            {/* Holiday Notes Section */}
+            {holidayKpmNames.length > 0 && (
+              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-[10px] text-amber-950 font-medium leading-relaxed">
+                <strong className="font-bold text-amber-900 uppercase tracking-wider block mb-0.5">
+                  Catatan KPM Libur Hari Ini ({holidayKpmNames.length} Lembaga):
+                </strong>
+                <span>{holidayKpmNames.join(', ')}. Alokasi porsi telah disesuaikan (0 porsi).</span>
+              </div>
+            )}
 
             {/* Signature & Electronic Authorization Block */}
             <div className="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">

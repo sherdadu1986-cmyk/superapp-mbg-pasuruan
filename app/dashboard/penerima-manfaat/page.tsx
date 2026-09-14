@@ -129,6 +129,56 @@ export default function BerandaOperasionalPage() {
   // Real-Time BNBA Fulfillment Recap Filter State
   const [bnbaFilter, setBnbaFilter] = useState<'perlu' | 'belum' | 'kurang' | 'lengkap'>('perlu')
 
+  // Operational Holiday Toggle State (Stored locally per date)
+  const [liburKpmIds, setLiburKpmIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const saved = localStorage.getItem(`sppg_kpm_libur_${todayStr}`)
+      return saved ? JSON.parse(saved) : []
+    }
+    return []
+  })
+
+  const toggleLibur = (id: string) => {
+    setLiburKpmIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      if (typeof window !== 'undefined') {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        localStorage.setItem(`sppg_kpm_libur_${todayStr}`, JSON.stringify(next))
+      }
+      return next
+    })
+  }
+
+  // Recalculation for active (non-holiday) KPMs
+  const ringkasanOperasional = React.useMemo(() => {
+    let total = 0
+    let kecil = 0
+    let besar = 0
+    let tendik = 0
+    let aktifCount = 0
+    let liburCount = 0
+
+    kpmList.forEach((item) => {
+      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || ''
+      const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
+
+      if (isLibur) {
+        liburCount += 1
+        return
+      }
+
+      const breakdown = calculateKpmPortion(item)
+      total += breakdown.total
+      kecil += breakdown.porsiKecil
+      besar += breakdown.porsiBesar
+      tendik += breakdown.guruTendik
+      aktifCount += 1
+    })
+
+    return { total, kecil, besar, tendik, aktifCount, liburCount }
+  }, [kpmList, liburKpmIds])
+
   // Real-Time Clock Timer
   useEffect(() => {
     setMounted(true)
@@ -811,11 +861,11 @@ export default function BerandaOperasionalPage() {
                   <span>Kebutuhan Porsi Harian (Real-Time BGN)</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Ringkasan alokasi porsi kecil dan porsi besar per KPM dari data Supabase.
+                  Ringkasan alokasi porsi kecil dan porsi besar per KPM dari data Supabase. Klik status untuk meliburkan KPM.
                 </p>
               </div>
               <span className="bg-slate-100 text-slate-700 text-xs font-mono font-bold px-2.5 py-1 rounded-md border border-slate-200 shrink-0">
-                {totalTargetPenerima.toLocaleString('id-ID')} Total Porsi
+                {ringkasanOperasional.total.toLocaleString('id-ID')} Total Porsi ({ringkasanOperasional.aktifCount} Aktif{ringkasanOperasional.liburCount > 0 ? `, ${ringkasanOperasional.liburCount} Libur` : ''})
               </span>
             </div>
 
@@ -826,6 +876,7 @@ export default function BerandaOperasionalPage() {
                   <tr>
                     <th className="py-2.5 px-3 text-center w-10 border-b border-slate-800">NO</th>
                     <th className="py-2.5 px-3 border-b border-slate-800">NAMA KPM / LEMBAGA</th>
+                    <th className="py-2.5 px-3 text-center border-b border-slate-800">STATUS HARIAN</th>
                     <th className="py-2.5 px-3 text-right border-b border-slate-800">TOTAL</th>
                     <th className="py-2.5 px-3 text-right border-b border-slate-800">KECIL</th>
                     <th className="py-2.5 px-3 text-right border-b border-slate-800">BESAR</th>
@@ -835,35 +886,86 @@ export default function BerandaOperasionalPage() {
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
                   {kpmList.length > 0 ? (
                     kpmList.map((item, idx) => {
+                      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
+                      const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
                       const breakdown = calculateKpmPortion(item)
+
                       return (
-                        <tr key={item.id || item.kode || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <tr
+                          key={itemKey}
+                          className={`transition-colors ${isLibur ? 'bg-rose-50/30' : 'hover:bg-slate-50/80'}`}
+                        >
                           <td className="py-2.5 px-3 text-center font-mono text-slate-400 text-[11px] font-bold">
                             {idx + 1}
                           </td>
                           <td className="py-2.5 px-3">
-                            <span className="font-semibold text-slate-900 block truncate max-w-[200px]" title={item.nama}>
+                            <span
+                              className={`font-semibold block truncate max-w-[180px] ${
+                                isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
+                              }`}
+                              title={item.nama}
+                            >
                               {item.nama}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">
-                            {breakdown.total.toLocaleString('id-ID')}
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleLibur(itemKey)}
+                              title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
+                                isLibur
+                                  ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
+                              }`}
+                            >
+                              {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
+                            </button>
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-700">
-                            {breakdown.porsiKecil > 0 ? breakdown.porsiKecil.toLocaleString('id-ID') : '-'}
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            {isLibur ? (
+                              <span className="font-bold text-slate-400">
+                                0 <span className="text-[9px] text-rose-500 font-normal">(Libur)</span>
+                              </span>
+                            ) : (
+                              <span className="font-bold text-slate-900">
+                                {breakdown.total.toLocaleString('id-ID')}
+                              </span>
+                            )}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-indigo-900">
-                            {breakdown.porsiBesar > 0 ? breakdown.porsiBesar.toLocaleString('id-ID') : '-'}
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            {isLibur ? (
+                              <span className="font-bold text-slate-300">-</span>
+                            ) : (
+                              <span className="font-bold text-amber-700">
+                                {breakdown.porsiKecil > 0 ? breakdown.porsiKecil.toLocaleString('id-ID') : '-'}
+                              </span>
+                            )}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-600">
-                            {breakdown.guruTendik > 0 ? breakdown.guruTendik.toLocaleString('id-ID') : '-'}
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            {isLibur ? (
+                              <span className="font-bold text-slate-300">-</span>
+                            ) : (
+                              <span className="font-bold text-indigo-900">
+                                {breakdown.porsiBesar > 0 ? breakdown.porsiBesar.toLocaleString('id-ID') : '-'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            {isLibur ? (
+                              <span className="font-semibold text-slate-300">-</span>
+                            ) : (
+                              <span className="font-semibold text-slate-600">
+                                {breakdown.guruTendik > 0 ? breakdown.guruTendik.toLocaleString('id-ID') : '-'}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       )
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
+                      <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
                         Belum ada data KPM terdaftar.
                       </td>
                     </tr>
@@ -871,20 +973,20 @@ export default function BerandaOperasionalPage() {
                 </tbody>
                 <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs shadow-2xs">
                   <tr>
-                    <td colSpan={2} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
-                      TOTAL KESELURUHAN
+                    <td colSpan={3} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
+                      TOTAL KESELURUHAN ({ringkasanOperasional.aktifCount} KPM AKTIF)
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black">
-                      {totalTargetPenerima.toLocaleString('id-ID')}
+                      {ringkasanOperasional.total.toLocaleString('id-ID')}
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
-                      {totalPorsiKecil.toLocaleString('id-ID')}
+                      {ringkasanOperasional.kecil.toLocaleString('id-ID')}
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono text-indigo-950 font-black">
-                      {totalPorsiBesar.toLocaleString('id-ID')}
+                      {ringkasanOperasional.besar.toLocaleString('id-ID')}
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold">
-                      {totalTendik.toLocaleString('id-ID')}
+                      {ringkasanOperasional.tendik.toLocaleString('id-ID')}
                     </td>
                   </tr>
                 </tfoot>
@@ -1153,6 +1255,7 @@ export default function BerandaOperasionalPage() {
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
         initialKpmList={kpmList}
+        liburKpmIds={liburKpmIds}
       />
     </div>
   )
