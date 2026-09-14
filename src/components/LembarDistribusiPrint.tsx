@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect, useMemo } from 'react'
-import { Printer, X, ShieldCheck, Building2, Package, Calendar } from 'lucide-react'
+import { Printer, X, ShieldCheck, Building2, Calendar, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
 
@@ -64,7 +64,7 @@ export default function LembarDistribusiPrint({
 }: LembarDistribusiPrintProps) {
   const [kpmData, setKpmData] = useState<KelompokPenerimaManfaat[]>([])
 
-  // Dynamic Indonesian full date formatting (e.g. "Senin, 14 September 2026")
+  // Dynamic Indonesian full date formatting (e.g. "Senin, 15 September 2026")
   const fullDateFormatted = useMemo(() => {
     if (selectedDate) return selectedDate
     const d = new Date()
@@ -75,6 +75,14 @@ export default function LembarDistribusiPrint({
     ]
     return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
   }, [selectedDate])
+
+  // Real-time print time formatting (e.g. "04:30 WIB")
+  const printTimeFormatted = useMemo(() => {
+    const d = new Date()
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${hh}:${mm} WIB`
+  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -105,11 +113,12 @@ export default function LembarDistribusiPrint({
   }, [isOpen, initialKpmList])
 
   // Aggregate breakdown per KPM & grand totals (excluding holiday KPMs)
-  const { rows, totals, holidayKpmNames } = useMemo(() => {
+  const { rows, totals, holidayKpmNames, aktifCount } = useMemo(() => {
     let grandTotal = 0
     let grandKecil = 0
     let grandBesar = 0
     let grandTendik = 0
+    let active = 0
     const holidayNames: string[] = []
 
     const sortedData = sortKpmList(kpmData)
@@ -134,6 +143,7 @@ export default function LembarDistribusiPrint({
         }
       }
 
+      active += 1
       const breakdown = calculateKpmPortion(item)
       grandTotal += breakdown.total
       grandKecil += breakdown.porsiKecil
@@ -162,7 +172,8 @@ export default function LembarDistribusiPrint({
         grandBesar,
         grandTendik
       },
-      holidayKpmNames: holidayNames
+      holidayKpmNames: holidayNames,
+      aktifCount: active
     }
   }, [kpmData, liburKpmIds])
 
@@ -170,12 +181,21 @@ export default function LembarDistribusiPrint({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      {/* Dynamic CSS Print Styles */}
+      {/* Dynamic CSS Print Styles for Exact A4 1-Page Layout */}
       <style jsx global>{`
         @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           @page {
             size: A4 portrait;
-            margin: 10mm;
+            margin: 8mm 10mm 8mm 10mm;
+          }
+          body {
+            background: #ffffff !important;
+            font-family: 'Arial', 'Helvetica', sans-serif !important;
+            color: #0f172a !important;
           }
           body * {
             visibility: hidden !important;
@@ -191,7 +211,7 @@ export default function LembarDistribusiPrint({
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-            background: white !important;
+            background: #ffffff !important;
             box-shadow: none !important;
             border: none !important;
           }
@@ -202,7 +222,7 @@ export default function LembarDistribusiPrint({
       `}</style>
 
       {/* Modal Container */}
-      <div className="bg-slate-100 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-300">
+      <div className="bg-slate-100 rounded-2xl max-w-4xl w-full max-h-[95vh] flex flex-col overflow-hidden shadow-2xl border border-slate-300">
         
         {/* Modal Top Bar (No Print) */}
         <div className="no-print bg-slate-900 text-white p-4 flex items-center justify-between shadow-md">
@@ -212,10 +232,10 @@ export default function LembarDistribusiPrint({
             </div>
             <div>
               <h2 className="font-bold text-sm sm:text-base leading-tight">
-                Pratinjau Lembar Distribusi Operasional MBG
+                Pratinjau Lembar Rekapitulasi Resmi BGN
               </h2>
               <p className="text-xs text-slate-300">
-                Dokumen resmi kendali distribusi porsi bergizi SPPG Pasuruan
+                Dokumen rekapitulasi kebutuhan porsi distribusi harian MBG SPPG Pasuruan
               </p>
             </div>
           </div>
@@ -226,7 +246,7 @@ export default function LembarDistribusiPrint({
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <Printer size={15} />
-              <span>Cetak Dokumen</span>
+              <span>Cetak Dokumen (A4)</span>
             </button>
             <button
               onClick={onClose}
@@ -240,131 +260,178 @@ export default function LembarDistribusiPrint({
         {/* Printable Document Sheet Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center">
           
-          {/* Print Sheet Container */}
+          {/* Print Sheet Container (A4 Printable Box) */}
           <div
             id="print-lembar-distribusi"
-            className="bg-white border border-slate-300 rounded-xl shadow-lg p-6 w-full max-w-[210mm] space-y-4 text-slate-900 font-sans"
+            className="bg-white border border-slate-300 rounded-xl shadow-lg p-5 sm:p-6 w-full max-w-[210mm] text-[#0f172a] font-sans text-xs space-y-3.5"
           >
-            {/* Header Dokumen Cetak Resmi */}
-            <div className="bg-[#0f2e5a] text-white p-4 rounded-lg shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-[#0b2347]">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 block">
-                  BADAN GIZI NASIONAL · REPUBLIK INDONESIA
-                </span>
-                <h1 className="text-base sm:text-lg font-black tracking-tight uppercase mt-0.5 leading-snug">
-                  REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG
-                </h1>
-                <p className="text-xs font-semibold text-slate-200 mt-0.5 flex items-center gap-1.5">
-                  <Building2 size={13} className="text-amber-400 shrink-0" />
-                  <span>SPPG KIDULDALEM - WONOREJO, PASURUAN</span>
-                </p>
+            {/* 1. Kop Surat Resmi Kedinasan BGN */}
+            <div className="flex items-center justify-between gap-3 pb-2">
+              <div className="flex items-center gap-3.5">
+                <img
+                  src="/logo-bgn.png"
+                  alt="Logo BGN"
+                  className="h-[55px] w-auto object-contain shrink-0"
+                />
+                <div>
+                  <h3 className="font-bold text-[12pt] text-[#1e3a8a] leading-tight tracking-wide">
+                    BADAN GIZI NASIONAL (BGN) REPUBLIK INDONESIA
+                  </h3>
+                  <h2 className="font-extrabold text-[13.5pt] text-[#0f172a] leading-tight mt-0.5 tracking-tight">
+                    SATUAN PELAYANAN PROGRAM GIZI (SPPG) KIDULDALEM - WONOREJO, PASURUAN
+                  </h2>
+                  <p className="font-semibold text-[9.5pt] text-[#475569] leading-tight mt-0.5 uppercase tracking-wider">
+                    LEMBAR REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-blue-950/80 border border-blue-800 p-2.5 rounded-md text-right text-xs font-mono shrink-0">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TANGGAL OPERASIONAL</div>
-                <div className="font-extrabold text-amber-300 text-xs sm:text-sm mt-0.5 flex items-center justify-end gap-1">
-                  <Calendar size={13} className="text-amber-400" />
-                  <span>{fullDateFormatted}</span>
+              {/* Box Tanggal Operasional Sisi Kanan */}
+              <div className="bg-[#f8fafc] border border-slate-300 rounded-md p-2 text-right shrink-0 min-w-[170px]">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">TANGGAL OPERASIONAL</div>
+                <div className="font-black text-[#0f172a] text-[10.5pt] mt-0.5 leading-snug">
+                  {fullDateFormatted}
                 </div>
-                <div className="text-[11px] font-black text-white mt-1 pt-1 border-t border-blue-800/80">
-                  TOTAL: {totals.grandTotal.toLocaleString('id-ID')} PORSI
+                <div className="text-[8.5pt] font-medium text-slate-500 mt-0.5">
+                  Waktu Cetak: <span className="font-bold text-slate-700">{printTimeFormatted}</span>
                 </div>
               </div>
             </div>
 
-            {/* Sub-Header Metadata Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs font-medium">
+            {/* Garis Pembatas Kop Ganda Elegan */}
+            <div className="space-y-0.5">
+              <div className="h-[2px] bg-[#0f172a]" />
+              <div className="h-[1px] bg-slate-400" />
+            </div>
+
+            {/* 2. Ringkasan Informasi Singkat (Info Baris 4 Kolom) */}
+            <div className="grid grid-cols-4 gap-2 bg-[#f8fafc] border border-[#e2e8f0] p-2 rounded-md text-[10.5px]">
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">UNIT LAYANAN</span>
-                <span className="font-bold text-slate-900">SPPG Kiduldalem</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase block">UNIT LAYANAN</span>
+                <span className="font-extrabold text-[#0f172a]">SPPG Kiduldalem</span>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">KECAMATAN / KABUPATEN</span>
-                <span className="font-bold text-slate-900">Wonorejo, Pasuruan</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase block">WILAYAH</span>
+                <span className="font-extrabold text-[#0f172a]">Wonorejo, Pasuruan</span>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">TOTAL SASARAN KPM</span>
-                <span className="font-extrabold text-slate-900 font-mono">{rows.length} Titik KPM</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase block">TOTAL TITIK KPM</span>
+                <span className="font-black text-[#0f172a] font-mono">
+                  {rows.length} Titik ({aktifCount} Aktif, {holidayKpmNames.length} Libur)
+                </span>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">STATUS VERIFIKASI</span>
-                <span className="font-extrabold text-emerald-700 flex items-center gap-1">
-                  <ShieldCheck size={13} /> Terverifikasi APPO
+                <span className="text-[9px] font-bold text-slate-400 uppercase block">STATUS OPERASIONAL</span>
+                <span className="font-black text-emerald-700 flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                  <span>Terverifikasi APPO</span>
                 </span>
               </div>
             </div>
 
-            {/* Tabel Ringkas Kendali Distribusi (Identik 100% dengan Beranda) */}
-            <div className="border border-slate-300 rounded-lg overflow-hidden">
-              <table className="w-full text-left border-collapse text-xs">
+            {/* 3. Tabel Rekapitulasi Porsi (Kompak & High-Contrast for 1 A4 Page) */}
+            <div className="border border-slate-300 rounded-md overflow-hidden">
+              <table className="w-full text-left border-collapse text-[10.5px] leading-tight">
                 <thead>
-                  <tr className="bg-[#0f2e5a] text-white text-[10px] font-bold uppercase tracking-wider">
-                    <th className="py-2 px-2.5 text-center w-8 border-b border-slate-700">NO</th>
-                    <th className="py-2 px-2.5 border-b border-slate-700">NAMA KPM / LEMBAGA</th>
-                    <th className="py-2 px-2.5 text-right border-b border-slate-700">TOTAL</th>
-                    <th className="py-2 px-2.5 text-right border-b border-slate-700">KECIL</th>
-                    <th className="py-2 px-2.5 text-right border-b border-slate-700">BESAR</th>
-                    <th className="py-2 px-2.5 text-right border-b border-slate-700">TENDIK</th>
+                  <tr className="bg-[#0f172a] text-white text-[10px] font-bold uppercase tracking-wider">
+                    <th className="py-1.5 px-2 text-center w-8 border-b border-slate-700">NO</th>
+                    <th className="py-1.5 px-2 border-b border-slate-700">NAMA KPM / LEMBAGA</th>
+                    <th className="py-1.5 px-2 text-right border-b border-slate-700 w-24">TOTAL PORSI</th>
+                    <th className="py-1.5 px-2 text-right border-b border-slate-700 w-24">PORSI KECIL</th>
+                    <th className="py-1.5 px-2 text-right border-b border-slate-700 w-24">PORSI BESAR</th>
+                    <th className="py-1.5 px-2 text-right border-b border-slate-700 w-28">TENDIK/KADER</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 font-semibold text-slate-900 bg-white">
+                <tbody className="divide-y divide-slate-200 font-semibold text-[#0f172a]">
                   {rows.length > 0 ? (
-                    rows.map((row) => (
-                      <tr key={row.id} className={`transition-colors ${row.isLibur ? 'bg-rose-50/20 text-slate-400' : 'hover:bg-slate-50'}`}>
-                        <td className="py-1.5 px-2.5 text-center font-mono text-slate-500 text-[11px]">
-                          {row.no}
-                        </td>
-                        <td className="py-1.5 px-2.5">
-                          {row.isLibur ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-400 line-through">{row.nama}</span>
-                              <span className="text-[9px] font-black text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 uppercase">[LIBUR - 0 PORSI]</span>
-                            </div>
-                          ) : (
-                            <span className="font-bold text-slate-900 block">{row.nama}</span>
-                          )}
-                        </td>
-                        <td className="py-1.5 px-2.5 text-right font-bold font-mono">
-                          {row.isLibur ? (
-                            <span className="text-slate-400 font-bold">0</span>
-                          ) : (
-                            <span className="text-slate-900">{row.total.toLocaleString('id-ID')}</span>
-                          )}
-                        </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-bold">
-                          {row.isLibur ? <span className="text-slate-300">-</span> : (row.porsiKecil > 0 ? <span className="text-amber-800">{row.porsiKecil.toLocaleString('id-ID')}</span> : '-')}
-                        </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-bold">
-                          {row.isLibur ? <span className="text-slate-300">-</span> : (row.porsiBesar > 0 ? <span className="text-indigo-950">{row.porsiBesar.toLocaleString('id-ID')}</span> : '-')}
-                        </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-semibold">
-                          {row.isLibur ? <span className="text-slate-300">-</span> : (row.guruTendik > 0 ? <span className="text-slate-600">{row.guruTendik.toLocaleString('id-ID')}</span> : '-')}
-                        </td>
-                      </tr>
-                    ))
+                    rows.map((row, idx) => {
+                      const isEven = idx % 2 === 0
+                      return (
+                        <tr
+                          key={row.id}
+                          className={
+                            row.isLibur
+                              ? 'bg-[#fef2f2] text-slate-400'
+                              : isEven
+                              ? 'bg-white hover:bg-slate-50'
+                              : 'bg-[#f8fafc] hover:bg-slate-50'
+                          }
+                        >
+                          <td className="py-1 px-2 text-center font-mono text-slate-500 text-[10px]">
+                            {row.no}
+                          </td>
+                          <td className="py-1 px-2">
+                            {row.isLibur ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-slate-400 line-through">{row.nama}</span>
+                                <span className="text-[8.5px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-1 py-0.2 rounded uppercase">
+                                  [LIBUR - 0 PORSI]
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="font-extrabold text-[#0f172a] block">{row.nama}</span>
+                            )}
+                          </td>
+                          <td className="py-1 px-2 text-right font-black font-mono">
+                            {row.isLibur ? (
+                              <span className="text-slate-400 font-normal">0</span>
+                            ) : (
+                              <span className="text-[#0f172a] font-black">{row.total.toLocaleString('id-ID')}</span>
+                            )}
+                          </td>
+                          <td className="py-1 px-2 text-right font-mono font-bold">
+                            {row.isLibur ? (
+                              <span className="text-slate-300 font-normal">-</span>
+                            ) : row.porsiKecil > 0 ? (
+                              <span className="text-[#b45309] font-black">{row.porsiKecil.toLocaleString('id-ID')}</span>
+                            ) : (
+                              <span className="text-slate-300 font-normal">-</span>
+                            )}
+                          </td>
+                          <td className="py-1 px-2 text-right font-mono font-bold">
+                            {row.isLibur ? (
+                              <span className="text-slate-300 font-normal">-</span>
+                            ) : row.porsiBesar > 0 ? (
+                              <span className="text-[#1d4ed8] font-black">{row.porsiBesar.toLocaleString('id-ID')}</span>
+                            ) : (
+                              <span className="text-slate-300 font-normal">-</span>
+                            )}
+                          </td>
+                          <td className="py-1 px-2 text-right font-mono font-semibold">
+                            {row.isLibur ? (
+                              <span className="text-slate-300 font-normal">-</span>
+                            ) : row.guruTendik > 0 ? (
+                              <span className="text-slate-700 font-bold">{row.guruTendik.toLocaleString('id-ID')}</span>
+                            ) : (
+                              <span className="text-slate-300 font-normal">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="py-6 text-center text-slate-400 italic">
+                      <td colSpan={6} className="py-4 text-center text-slate-400 italic">
                         Belum ada data KPM terdaftar.
                       </td>
                     </tr>
                   )}
                 </tbody>
-                <tfoot className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-800 text-xs">
+                <tfoot className="bg-[#1e293b] text-white font-bold border-t-2 border-[#0f172a] text-[11px]">
                   <tr>
-                    <td colSpan={2} className="py-2 px-2.5 font-extrabold uppercase tracking-wider text-slate-900 text-[11px]">
+                    <td colSpan={2} className="py-1.5 px-2 font-black uppercase tracking-wider text-white">
                       TOTAL KESELURUHAN
                     </td>
-                    <td className="py-2 px-2.5 text-right font-mono text-slate-950 font-black text-sm">
+                    <td className="py-1.5 px-2 text-right font-mono text-white font-black text-[12px]">
                       {totals.grandTotal.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-2 px-2.5 text-right font-mono text-amber-900 font-black text-sm">
+                    <td className="py-1.5 px-2 text-right font-mono text-amber-300 font-black text-[12px]">
                       {totals.grandKecil.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-2.5 px-2.5 text-right font-mono text-indigo-950 font-black text-sm">
+                    <td className="py-1.5 px-2 text-right font-mono text-blue-200 font-black text-[12px]">
                       {totals.grandBesar.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-2 px-2.5 text-right font-mono text-slate-800 font-extrabold">
+                    <td className="py-1.5 px-2 text-right font-mono text-slate-200 font-bold text-[11px]">
                       {totals.grandTendik.toLocaleString('id-ID')}
                     </td>
                   </tr>
@@ -372,44 +439,46 @@ export default function LembarDistribusiPrint({
               </table>
             </div>
 
-            {/* Holiday Notes Section */}
+            {/* 4. Catatan Kaki Jika Ada Sekolah Libur */}
             {holidayKpmNames.length > 0 && (
-              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg text-[10px] text-amber-950 font-medium leading-relaxed">
-                <strong className="font-bold text-amber-900 uppercase tracking-wider block mb-0.5">
+              <div className="p-2 bg-[#fef2f2] border border-rose-200 rounded-md text-[9.5px] text-rose-950 font-medium leading-normal">
+                <strong className="font-bold text-rose-900 uppercase tracking-wider block mb-0.5">
                   Catatan KPM Libur Hari Ini ({holidayKpmNames.length} Lembaga):
                 </strong>
-                <span>{holidayKpmNames.join(', ')}. Alokasi porsi telah disesuaikan (0 porsi).</span>
+                <span>
+                  <strong>{holidayKpmNames.join(', ')}</strong> libur hari ini, alokasi porsi dialihkan/ditiadakan.
+                </span>
               </div>
             )}
 
-            {/* Signature & Electronic Authorization Block */}
-            <div className="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-              <div className="border border-slate-300 rounded-lg p-3 bg-slate-50 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-emerald-800 font-bold text-xs">
-                  <ShieldCheck size={15} className="text-emerald-600" />
-                  <span>Pengesahan Elektronik (APPO BGN)</span>
+            {/* 5. Kolom Tanda Tangan Resmi (Dual Signatures) */}
+            <div className="pt-2 border-t border-slate-300 grid grid-cols-2 gap-8 text-[11px] font-sans">
+              <div className="text-center space-y-1">
+                <p className="text-slate-600 font-medium text-[10.5px]">Mengetahui,</p>
+                <p className="font-bold text-[#0f172a]">Petugas Distribusi & Logistik</p>
+                <div className="h-14 flex items-end justify-center pb-1">
+                  <span className="text-slate-400 font-mono text-[9px] italic">(Tanda Tangan & Nama Terang)</span>
                 </div>
-                <p className="text-[10px] text-slate-600 leading-tight">
-                  Dokumen diterbitkan dan terverifikasi secara sah melalui Sistem Aplikasi Pelayanan Pengelolaan Operasional MBG.
+                <p className="font-bold text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block min-w-[160px]">
+                  (_________________________)
                 </p>
-                <div className="text-[9px] font-mono text-slate-400 pt-0.5">
-                  ID DOKUMEN: BGN-WONOREJO-{Date.now().toString(36).toUpperCase()}
-                </div>
               </div>
 
-              <div className="text-center space-y-1 text-xs sm:text-right sm:pr-4">
-                <p className="text-slate-500 font-medium text-[11px]">
+              <div className="text-center space-y-1">
+                <p className="text-slate-600 font-medium text-[10.5px]">
                   Pasuruan, {fullDateFormatted}
                 </p>
-                <p className="font-bold text-slate-800">
-                  Kepala SPPG Pasuruan Wonorejo
+                <p className="font-bold text-[#0f172a]">
+                  Menyetujui,
+                  <br />
+                  Kepala SPPG Kiduldalem Wonorejo
                 </p>
-                <div className="h-12 flex items-center justify-center sm:justify-end">
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-300">
-                    ✓ Tanda Tangan Digital Terverifikasi
+                <div className="h-10 flex items-center justify-center">
+                  <span className="text-[8.5px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
+                    ✓ Terverifikasi Digital APPO
                   </span>
                 </div>
-                <p className="font-black text-slate-900 border-t border-slate-300 pt-1 inline-block">
+                <p className="font-black text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block">
                   AHMAD SAYYIDANI KHAQIQI, S.Pd.
                 </p>
               </div>
@@ -421,3 +490,4 @@ export default function LembarDistribusiPrint({
     </div>
   )
 }
+
