@@ -114,54 +114,59 @@ export default function LembarDistribusiPrint({
   const handleCetakDokumenMandiri = () => {
     const printContent = document.getElementById('area-dokumen-a4-bgn')
     if (!printContent) {
-      alert('Area dokumen tidak ditemukan')
+      alert('Elemen dokumen tidak ditemukan')
       return
     }
 
-    // Ambil semua tag CSS/Tailwind dari halaman aktif
-    const styleSheets = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-      .map((el) => el.outerHTML)
+    const printWindow = window.open('', '_blank', 'width=850,height=1100')
+    if (!printWindow) {
+      alert('Mohon izinkan pop-up peramban untuk mencetak.')
+      return
+    }
+
+    // Ambil seluruh link stylesheet Tailwind/Next.js
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((el) => `<link rel="stylesheet" href="${(el as HTMLLinkElement).href}">`)
       .join('\n')
 
-    // Buka window khusus print
-    const printWindow = window.open('', '_blank', 'width=900,height=1100')
-    if (!printWindow) {
-      alert('Mohon izinkan pop-up browser untuk mencetak.')
-      return
-    }
+    // Ambil style tag internal
+    const inlineStyles = Array.from(document.querySelectorAll('style'))
+      .map((el) => el.innerHTML)
+      .join('\n')
 
-    printWindow.document.open()
-    printWindow.document.write(`
+    const htmlContent = `
       <!DOCTYPE html>
       <html lang="id">
         <head>
-          <meta charset="UTF-8">
+          <meta charset="utf-8" />
           <title>Lembar Rekapitulasi Distribusi MBG - BGN</title>
-          ${styleSheets}
+          ${links}
           <style>
+            ${inlineStyles}
             @page {
               size: A4 portrait;
-              margin: 6mm 8mm 6mm 8mm;
+              margin: 5mm 7mm 5mm 7mm !important;
             }
             * {
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
+              box-sizing: border-box !important;
             }
-            body {
-              background-color: #ffffff !important;
+            html, body {
+              background: #ffffff !important;
               color: #0f172a !important;
               margin: 0 !important;
               padding: 0 !important;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+              height: 100% !important;
             }
             #area-dokumen-a4-bgn {
               width: 100% !important;
               max-width: none !important;
-              box-shadow: none !important;
-              border: none !important;
-              border-radius: 0 !important;
               padding: 0 !important;
               margin: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
             }
           </style>
         </head>
@@ -169,19 +174,21 @@ export default function LembarDistribusiPrint({
           <div id="area-dokumen-a4-bgn">
             ${printContent.innerHTML}
           </div>
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.focus();
-                window.print();
-                window.close();
-              }, 350);
-            };
-          </script>
         </body>
       </html>
-    `)
+    `
+
+    printWindow.document.open()
+    printWindow.document.write(htmlContent)
     printWindow.document.close()
+
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.focus()
+        printWindow.print()
+        printWindow.close()
+      }, 300)
+    }
   }
 
   useEffect(() => {
@@ -336,7 +343,7 @@ export default function LembarDistribusiPrint({
             max-width: 210mm !important;
             min-height: 297mm !important;
             height: auto !important;
-            padding: 10mm 12mm !important;
+            padding: 5mm 7mm !important;
             margin: 0 auto !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
@@ -351,7 +358,7 @@ export default function LembarDistribusiPrint({
 
           @page {
             size: A4 portrait;
-            margin: 0; /* Margin fisik ditangani oleh padding #area-dokumen-a4-bgn */
+            margin: 5mm 7mm 5mm 7mm !important;
           }
         }
       `}</style>
@@ -393,72 +400,72 @@ export default function LembarDistribusiPrint({
         </div>
 
         {/* Printable Document Sheet Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-slate-100 flex justify-center">
           
           {/* Printable Sheet Container (Edge-to-Edge A4 Document) */}
           <div
             id="area-dokumen-a4-bgn"
-            className="bg-white border border-slate-300 rounded-xl shadow-lg p-6 sm:p-7 w-full max-w-[210mm] text-[#0f172a] font-sans text-xs flex flex-col justify-between h-full min-h-[265mm]"
+            className="bg-white border border-slate-300 rounded-xl shadow-lg p-4 sm:p-5 w-full max-w-[210mm] text-[#0f172a] font-sans text-xs flex flex-col justify-between h-full min-h-[265mm]"
           >
             {/* Top Section Wrapper */}
-            <div className="space-y-2.5">
+            <div>
               {/* 1. Kop Surat Resmi Kedinasan BGN */}
-              <div className="flex items-center justify-between gap-4 pb-1.5">
-                <div className="flex items-center gap-3.5">
+              <div className="flex items-center justify-between gap-4 pb-1">
+                <div className="flex items-center gap-3">
                   <img
                     src="/logo-bgn.png"
                     alt="Logo BGN"
-                    className="h-[48px] w-auto object-contain shrink-0"
+                    className="h-10 sm:h-11 w-auto object-contain shrink-0"
                   />
                   <div>
-                    <h3 className="font-bold text-[11.5pt] text-[#1e3a8a] leading-tight tracking-wide">
+                    <h3 className="font-bold text-xs text-[#1e3a8a] leading-tight tracking-wide">
                       BADAN GIZI NASIONAL (BGN) REPUBLIK INDONESIA
                     </h3>
-                    <h2 className="font-extrabold text-[13pt] text-[#0f172a] leading-tight mt-0.5 tracking-tight">
+                    <h2 className="font-black text-sm text-[#0f172a] leading-tight mt-0.5 tracking-tight">
                       SATUAN PELAYANAN PROGRAM GIZI (SPPG) KIDULDALEM - WONOREJO, PASURUAN
                     </h2>
-                    <p className="font-semibold text-[9pt] text-[#475569] leading-tight mt-0.5 uppercase tracking-wider">
+                    <p className="font-semibold text-[8.5px] text-[#475569] leading-tight mt-0.5 uppercase tracking-wider">
                       LEMBAR REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG
                     </p>
                   </div>
                 </div>
 
                 {/* Box Tanggal Operasional Sisi Kanan */}
-                <div className="bg-[#f8fafc] border border-slate-300 rounded-md p-2 text-right shrink-0 min-w-[165px]">
-                  <div className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider">TANGGAL OPERASIONAL</div>
-                  <div className="font-black text-[#0f172a] text-[10pt] mt-0.5 leading-snug">
+                <div className="bg-[#f8fafc] border border-slate-300 rounded-md p-1.5 text-right shrink-0 min-w-[155px]">
+                  <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">TANGGAL OPERASIONAL</div>
+                  <div className="font-black text-[#0f172a] text-[9.5pt] mt-0.5 leading-snug">
                     {fullDateFormatted}
                   </div>
-                  <div className="text-[8pt] font-medium text-slate-500 mt-0.5">
+                  <div className="text-[7.5pt] font-medium text-slate-500 mt-0.5">
                     Waktu Cetak: <span className="font-bold text-slate-700">{printTimeFormatted}</span>
                   </div>
                 </div>
               </div>
 
               {/* Garis Pembatas Kop Ganda Elegan */}
-              <div className="space-y-0.5">
+              <div className="my-1.5 space-y-0.5">
                 <div className="h-[2px] bg-[#0f172a]" />
                 <div className="h-[1px] bg-slate-400" />
               </div>
 
               {/* 2. Ringkasan Informasi Singkat (Info Baris 4 Kolom) */}
-              <div className="grid grid-cols-4 gap-2 bg-[#f8fafc] border border-[#e2e8f0] py-1.5 px-2.5 rounded-md text-[10px]">
+              <div className="grid grid-cols-4 gap-2 bg-[#f8fafc] border border-[#e2e8f0] py-1 px-2 mb-1.5 rounded-md text-[9.5px]">
                 <div>
-                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">UNIT LAYANAN</span>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase block">UNIT LAYANAN</span>
                   <span className="font-extrabold text-[#0f172a]">SPPG Kiduldalem</span>
                 </div>
                 <div>
-                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">WILAYAH</span>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase block">WILAYAH</span>
                   <span className="font-extrabold text-[#0f172a]">Wonorejo, Pasuruan</span>
                 </div>
                 <div>
-                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">TOTAL TITIK KPM</span>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase block">TOTAL TITIK KPM</span>
                   <span className="font-black text-[#0f172a] font-mono">
                     {rows.length} Titik ({aktifCount} Aktif, {holidayKpmNames.length} Libur)
                   </span>
                 </div>
                 <div>
-                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">STATUS OPERASIONAL</span>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase block">STATUS OPERASIONAL</span>
                   <span className="font-black text-emerald-700 flex items-center gap-1">
                     <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
                     <span>Terverifikasi APPO</span>
@@ -468,15 +475,15 @@ export default function LembarDistribusiPrint({
 
               {/* 3. Tabel Rekapitulasi Porsi (25 KPM - Scale Fitted for 1 A4 Page) */}
               <div className="border border-slate-300 rounded-md overflow-hidden">
-                <table className="w-full text-left border-collapse text-[10.5px] leading-tight">
+                <table className="w-full text-left border-collapse text-[9.5px] leading-tight">
                   <thead>
-                    <tr className="bg-[#0f172a] text-white text-[10px] font-bold uppercase tracking-wider">
-                      <th className="py-1 px-2.5 text-center w-8 border-b border-slate-700">NO</th>
-                      <th className="py-1 px-2.5 border-b border-slate-700">NAMA KPM / LEMBAGA</th>
-                      <th className="py-1 px-2.5 text-right border-b border-slate-700 w-24">TOTAL PORSI</th>
-                      <th className="py-1 px-2.5 text-right border-b border-slate-700 w-24">PORSI KECIL</th>
-                      <th className="py-1 px-2.5 text-right border-b border-slate-700 w-24">PORSI BESAR</th>
-                      <th className="py-1 px-2.5 text-right border-b border-slate-700 w-28">TENDIK/KADER</th>
+                    <tr className="bg-[#0f172a] text-white text-[9.5px] font-bold uppercase tracking-wider">
+                      <th className="py-1 px-2 text-center w-7 border-b border-slate-700">NO</th>
+                      <th className="py-1 px-2 border-b border-slate-700">NAMA KPM / LEMBAGA</th>
+                      <th className="py-1 px-2 text-right border-b border-slate-700 w-20">TOTAL PORSI</th>
+                      <th className="py-1 px-2 text-right border-b border-slate-700 w-20">PORSI KECIL</th>
+                      <th className="py-1 px-2 text-right border-b border-slate-700 w-20">PORSI BESAR</th>
+                      <th className="py-1 px-2 text-right border-b border-slate-700 w-24">TENDIK/KADER</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-semibold text-[#0f172a]">
@@ -494,29 +501,29 @@ export default function LembarDistribusiPrint({
                                 : 'bg-[#f8fafc] hover:bg-slate-50'
                             }
                           >
-                            <td className="py-1 px-2.5 text-center font-mono text-slate-500 text-[9.5px]">
+                            <td className="py-[2px] px-2 text-center font-mono text-slate-500 text-[9px]">
                               {row.no}
                             </td>
-                            <td className="py-1 px-2.5">
+                            <td className="py-[2px] px-2">
                               {row.isLibur ? (
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-slate-400 line-through">{row.nama}</span>
-                                  <span className="text-[8px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-1 py-0.2 rounded uppercase">
+                                  <span className="font-semibold text-slate-400 line-through text-[9.5px]">{row.nama}</span>
+                                  <span className="text-[7.5px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-1 py-0.2 rounded uppercase">
                                     [LIBUR - 0 PORSI]
                                   </span>
                                 </div>
                               ) : (
-                                <span className="font-extrabold text-[#0f172a] block">{row.nama}</span>
+                                <span className="font-extrabold text-[#0f172a] block text-[9.5px]">{row.nama}</span>
                               )}
                             </td>
-                            <td className="py-1 px-2.5 text-right font-black font-mono">
+                            <td className="py-[2px] px-2 text-right font-black font-mono text-[9.5px]">
                               {row.isLibur ? (
                                 <span className="text-slate-400 font-normal">0</span>
                               ) : (
                                 <span className="text-[#0f172a] font-black">{row.total.toLocaleString('id-ID')}</span>
                               )}
                             </td>
-                            <td className="py-1 px-2.5 text-right font-mono font-bold">
+                            <td className="py-[2px] px-2 text-right font-mono font-bold text-[9.5px]">
                               {row.isLibur ? (
                                 <span className="text-slate-300 font-normal">-</span>
                               ) : row.porsiKecil > 0 ? (
@@ -525,7 +532,7 @@ export default function LembarDistribusiPrint({
                                 <span className="text-slate-300 font-normal">-</span>
                               )}
                             </td>
-                            <td className="py-1 px-2.5 text-right font-mono font-bold">
+                            <td className="py-[2px] px-2 text-right font-mono font-bold text-[9.5px]">
                               {row.isLibur ? (
                                 <span className="text-slate-300 font-normal">-</span>
                               ) : row.porsiBesar > 0 ? (
@@ -534,7 +541,7 @@ export default function LembarDistribusiPrint({
                                 <span className="text-slate-300 font-normal">-</span>
                               )}
                             </td>
-                            <td className="py-1 px-2.5 text-right font-mono font-semibold">
+                            <td className="py-[2px] px-2 text-right font-mono font-semibold text-[9.5px]">
                               {row.isLibur ? (
                                 <span className="text-slate-300 font-normal">-</span>
                               ) : row.guruTendik > 0 ? (
@@ -548,27 +555,27 @@ export default function LembarDistribusiPrint({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={6} className="py-3 text-center text-slate-400 italic">
+                        <td colSpan={6} className="py-2 text-center text-slate-400 italic text-[9.5px]">
                           Belum ada data KPM terdaftar.
                         </td>
                       </tr>
                     )}
                   </tbody>
-                  <tfoot className="bg-[#1e293b] text-white font-bold border-t-2 border-[#0f172a] text-[11px]">
+                  <tfoot className="bg-[#1e293b] text-white font-bold border-t-2 border-[#0f172a] text-[10px]">
                     <tr>
-                      <td colSpan={2} className="py-1.5 px-2.5 font-black uppercase tracking-wider text-white">
+                      <td colSpan={2} className="py-1 px-2 font-black uppercase tracking-wider text-white">
                         TOTAL KESELURUHAN
                       </td>
-                      <td className="py-1.5 px-2.5 text-right font-mono text-white font-black text-[11.5px]">
+                      <td className="py-1 px-2 text-right font-mono text-white font-black text-[10.5px]">
                         {totals.grandTotal.toLocaleString('id-ID')}
                       </td>
-                      <td className="py-1.5 px-2.5 text-right font-mono text-amber-300 font-black text-[11.5px]">
+                      <td className="py-1 px-2 text-right font-mono text-amber-300 font-black text-[10.5px]">
                         {totals.grandKecil.toLocaleString('id-ID')}
                       </td>
-                      <td className="py-1.5 px-2.5 text-right font-mono text-blue-200 font-black text-[11.5px]">
+                      <td className="py-1 px-2 text-right font-mono text-blue-200 font-black text-[10.5px]">
                         {totals.grandBesar.toLocaleString('id-ID')}
                       </td>
-                      <td className="py-1.5 px-2.5 text-right font-mono text-slate-200 font-bold text-[10.5px]">
+                      <td className="py-1 px-2 text-right font-mono text-slate-200 font-bold text-[10px]">
                         {totals.grandTendik.toLocaleString('id-ID')}
                       </td>
                     </tr>
@@ -578,10 +585,10 @@ export default function LembarDistribusiPrint({
             </div>
 
             {/* Bottom Footer Section (Catatan & Tanda Tangan) */}
-            <div className="mt-2.5 space-y-1.5">
+            <div className="mt-2">
               {/* 4. Catatan Kaki Jika Ada Sekolah Libur */}
               {holidayKpmNames.length > 0 && (
-                <div className="py-1 px-2.5 bg-[#fef2f2] border border-rose-200 rounded text-[9.5px] text-rose-950 font-medium leading-normal mb-2">
+                <div className="py-0.5 px-2 my-1 bg-[#fef2f2] border border-rose-200 rounded text-[9px] text-rose-950 font-medium leading-normal">
                   <strong className="font-bold text-rose-900 uppercase tracking-wider block mb-0.5">
                     Catatan KPM Libur Hari Ini ({holidayKpmNames.length} Lembaga):
                   </strong>
@@ -592,15 +599,15 @@ export default function LembarDistribusiPrint({
               )}
 
               {/* 5. Kolom Tanda Tangan Resmi Kedinasan TTE E-Digital */}
-              <div className="pt-2 border-t border-slate-300 grid grid-cols-2 gap-4 text-[10px] font-sans items-end break-inside-avoid print:break-inside-avoid">
+              <div className="pt-1.5 border-t border-slate-300 grid grid-cols-2 gap-3 text-[9.5px] font-sans items-end break-inside-avoid print:break-inside-avoid">
                 {/* Sisi Kiri: Mengetahui Petugas Logistik */}
                 <div className="text-center space-y-0.5">
-                  <p className="text-slate-600 font-medium text-[9.5px]">Mengetahui,</p>
+                  <p className="text-slate-600 font-medium text-[9px]">Mengetahui,</p>
                   <p className="font-bold text-[#0f172a]">Petugas Distribusi & Logistik</p>
-                  <div className="h-14 flex items-end justify-center pb-1">
-                    <span className="text-slate-400 font-mono text-[8px] italic">(Tanda Tangan & Nama Terang)</span>
+                  <div className="h-10 flex items-end justify-center pb-0.5">
+                    <span className="text-slate-400 font-mono text-[7.5px] italic">(Tanda Tangan & Nama Terang)</span>
                   </div>
-                  <p className="font-bold text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block min-w-[150px]">
+                  <p className="font-bold text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block min-w-[140px]">
                     (_________________________)
                   </p>
                 </div>
@@ -616,28 +623,28 @@ export default function LembarDistribusiPrint({
                   </div>
 
                   {/* Badge Stempel TTE Hijau Kedinasan BSrE */}
-                  <div className="my-0.5 border border-emerald-600/60 bg-emerald-50/60 rounded px-2 py-0.5 shadow-2xs inline-flex flex-col items-start text-left">
+                  <div className="py-0.5 px-2 my-1 border border-emerald-600/60 bg-emerald-50/60 rounded shadow-2xs inline-flex flex-col items-start text-left">
                     <div className="flex items-center gap-1.5 text-emerald-800">
-                      <svg className="w-3.5 h-3.5 fill-emerald-700 shrink-0" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 fill-emerald-700 shrink-0" viewBox="0 0 24 24">
                         <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
                       </svg>
-                      <span className="text-[8.5px] font-bold tracking-wider uppercase">
+                      <span className="text-[8px] font-bold tracking-wider uppercase">
                         Ditandatangani Secara Elektronik
                       </span>
                     </div>
-                    <span className="text-[7.5px] text-slate-600 leading-tight">
+                    <span className="text-[7px] text-slate-600 leading-tight">
                       Sertifikasi BSrE · Badan Gizi Nasional RI
                     </span>
                   </div>
 
                   <div className="text-[#0f172a] text-[9.5px] leading-tight pt-0.5">
-                    <p className="font-bold text-[10px] underline underline-offset-2">
+                    <p className="font-bold text-[9.5px] underline underline-offset-2">
                       Ahmad Sayyidani Khaqiqi, S.Pd
                     </p>
-                    <p className="font-semibold text-slate-700 text-[9px]">
+                    <p className="font-semibold text-slate-700 text-[8.5px]">
                       Penata Layanan Operasional
                     </p>
-                    <p className="font-mono text-slate-600 text-[8.5px] tracking-tight">
+                    <p className="font-mono text-slate-600 text-[8px] tracking-tight">
                       NIP. 200107182026211012
                     </p>
                   </div>
