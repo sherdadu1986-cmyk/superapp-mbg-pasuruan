@@ -2,50 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
-
-function calculateKpmPortion(item: KelompokPenerimaManfaat) {
-  const kat = (item.kategori || '').toUpperCase()
-  const subKat = (item.sub_kategori || '').toUpperCase()
-  const total = item.jumlah_penerima ?? ((item.target_pria ?? 0) + (item.target_wanita ?? 0))
-  const guruTendik = (item.target_guru ?? 0) + (item.target_tendik ?? 0)
-
-  let porsiKecil = 0
-  let porsiBesar = 0
-
-  if (kat.includes('KB') || kat.includes('PAUD') || kat.includes('TK') || kat.includes('RA')) {
-    const siswa = Math.max(0, total - guruTendik)
-    porsiKecil = siswa
-    porsiBesar = guruTendik
-  } else if (kat.includes('SD') || kat.includes('MI')) {
-    const siswa = Math.max(0, total - guruTendik)
-    const porsiKecilSiswa = Math.round(siswa * 0.5)
-    const porsiBesarSiswa = siswa - porsiKecilSiswa
-    porsiKecil = porsiKecilSiswa
-    porsiBesar = porsiBesarSiswa + guruTendik
-  } else if (kat.includes('SMP') || kat.includes('MTS') || kat.includes('SMA') || kat.includes('SMK') || kat.includes('MA')) {
-    porsiBesar = total
-  } else if (kat.includes('POSYANDU') || kat.includes('3B')) {
-    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
-      porsiBesar = total
-    } else {
-      porsiKecil = total
-    }
-  } else {
-    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
-      porsiBesar = total
-    } else {
-      porsiKecil = total
-    }
-  }
-
-  return {
-    total,
-    porsiKecil,
-    porsiBesar,
-    guruTendik
-  }
-}
+import { fetchKelompokPenerimaManfaatList, sortKpmList, calculateKpmPortion, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
 
 export default function CetakLembarDistribusiPage() {
   const [kpmData, setKpmData] = useState<KelompokPenerimaManfaat[]>([])
@@ -61,7 +18,7 @@ export default function CetakLembarDistribusiPage() {
         setLiburIds(liburQuery.split(',').filter(Boolean))
       } else {
         const todayDate = new Date().toISOString().split('T')[0]
-        const saved = localStorage.getItem(`sppg_libur_kpm_${todayDate}`)
+        const saved = localStorage.getItem(`sppg_kpm_libur_${todayDate}`)
         if (saved) {
           try {
             setLiburIds(JSON.parse(saved))

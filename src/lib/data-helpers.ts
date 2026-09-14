@@ -502,6 +502,49 @@ export function sortKpmList<T = any>(list: T[]): T[] {
   })
 }
 
+export function calculateKpmPortion(item: KelompokPenerimaManfaat) {
+  const kat = (item.kategori || '').toUpperCase()
+  const subKat = (item.sub_kategori || '').toUpperCase()
+  const total = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 0
+  const guruTendik = (item.target_guru || 0) + (item.target_tendik || 0)
+
+  let porsiKecil = 0
+  let porsiBesar = 0
+
+  if (kat.includes('KB') || kat.includes('PAUD') || kat.includes('TK') || kat.includes('RA')) {
+    const siswa = Math.max(0, total - guruTendik)
+    porsiKecil = siswa
+    porsiBesar = guruTendik
+  } else if (kat.includes('SD') || kat.includes('MI')) {
+    const siswa = Math.max(0, total - guruTendik)
+    const porsiKecilSiswa = Math.round(siswa * 0.5)
+    const porsiBesarSiswa = siswa - porsiKecilSiswa
+    porsiKecil = porsiKecilSiswa
+    porsiBesar = porsiBesarSiswa + guruTendik
+  } else if (kat.includes('SMP') || kat.includes('MTS') || kat.includes('SMA') || kat.includes('SMK') || kat.includes('MA')) {
+    porsiBesar = total
+  } else if (kat.includes('POSYANDU') || kat.includes('3B')) {
+    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
+      porsiBesar = total
+    } else {
+      porsiKecil = total
+    }
+  } else {
+    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
+      porsiBesar = total
+    } else {
+      porsiKecil = total
+    }
+  }
+
+  return {
+    total,
+    porsiKecil,
+    porsiBesar,
+    guruTendik
+  }
+}
+
 export async function fetchKelompokPenerimaManfaatList(): Promise<KelompokPenerimaManfaat[]> {
   try {
     const { data, error } = await supabase
