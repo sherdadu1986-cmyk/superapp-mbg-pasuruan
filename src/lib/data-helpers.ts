@@ -569,11 +569,39 @@ export async function deleteKelompokPenerimaManfaat(idOrKode: string): Promise<b
 // ─── Menu Harian Helpers ───
 export const INITIAL_MENU_HISTORY: MenuHarianDB[] = []
 
+export function getTodayDateString(): string {
+  const now = new Date()
+  const formatter = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+  const parts = formatter.formatToParts(now)
+  let year = ''
+  let month = ''
+  let day = ''
+  parts.forEach(p => {
+    if (p.type === 'year') year = p.value
+    if (p.type === 'month') month = p.value
+    if (p.type === 'day') day = p.value
+  })
+  if (year && month && day) {
+    return `${year}-${month}-${day}`
+  }
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
+  const todayDateStr = getTodayDateString()
   try {
     const { data, error } = await supabase
       .from('menu_harian')
       .select('*')
+      .eq('tanggal', todayDateStr)
       .order('created_at', { ascending: false })
       .limit(1)
     if (!error && data && data.length > 0) return data[0]
@@ -581,7 +609,8 @@ export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
     console.warn('fetchMenuHariIniDB notice:', err)
   }
   const history = await fetchMenuHistoryDB()
-  return history && history.length > 0 ? history[0] : null
+  const todayMenu = history.find(m => m.tanggal === todayDateStr)
+  return todayMenu || null
 }
 
 export async function fetchMenuHistoryDB(): Promise<MenuHarianDB[]> {

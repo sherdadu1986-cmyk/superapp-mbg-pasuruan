@@ -99,22 +99,76 @@ export default function KelolaMenuHarianPage() {
     loadHistoryMenu()
   }, [])
 
-  // ─── File Upload Handler with Validation & Robust Error Catch ─────────
+  const [compressionStatus, setCompressionStatus] = useState<string | null>(null)
+
+  const compressImageFile = async (
+    file: File
+  ): Promise<{ blob: Blob; filename: string; origSizeStr: string; compSizeStr: string }> => {
+    return new Promise((resolve, reject) => {
+      const origSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+      const origSizeStr = file.size >= 1024 * 1024 ? `${origSizeMB} MB` : `${Math.round(file.size / 1024)} KB`
+
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const maxWidth = 1350
+        let width = img.width
+        let height = img.height
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve({ blob: file, filename: file.name, origSizeStr, compSizeStr: origSizeStr })
+          return
+        }
+
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(img, 0, 0, width, height)
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve({ blob: file, filename: file.name, origSizeStr, compSizeStr: origSizeStr })
+              return
+            }
+            const compSizeKB = Math.round(blob.size / 1024)
+            const compSizeStr = blob.size >= 1024 * 1024 ? `${(blob.size / (1024 * 1024)).toFixed(2)} MB` : `${compSizeKB} KB`
+            const cleanName = (file.name.substring(0, file.name.lastIndexOf('.')) || 'menu').replace(/[^a-zA-Z0-9]/g, '_')
+            const filename = `menu_${Date.now()}_${cleanName}.webp`
+
+            resolve({ blob, filename, origSizeStr, compSizeStr })
+          },
+          'image/webp',
+          0.80
+        )
+      }
+
+      img.onerror = (err) => {
+        URL.revokeObjectURL(url)
+        reject(err)
+      }
+
+      img.src = url
+    })
+  }
+
+  // ─── File Upload Handler with Auto Compression & Robust Error Catch ─────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // 1. Validasi Ukuran File: Maksimal 3MB
-    const MAX_SIZE = 3 * 1024 * 1024 // 3MB
-    if (file.size > MAX_SIZE) {
-      const msg = 'Ukuran file terlalu besar, maksimal 3MB'
-      triggerToast(msg, 'error')
-      alert(msg)
-      e.target.value = ''
-      return
-    }
-
-    // 2. Validasi Format File: Hanya gambar (.jpg, .jpeg, .png, .webp)
+    // Format validation
     const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp']
     const fileExt = file.name.split('.').pop()?.toLowerCase() || ''
     const isAllowedFormat = allowedExtensions.includes(fileExt) || file.type.startsWith('image/')
@@ -127,51 +181,70 @@ export default function KelolaMenuHarianPage() {
     }
 
     setIsUploading(true)
+    setCompressionStatus('Mengkompresi gambar di browser...')
 
     try {
-      const fileName = `menu_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt || 'png'}`
+      // Perform Client-Side Auto Compression via HTML5 Canvas (max width 1350px)
+      const compressed = await compressImageFile(file)
+      const statusMsg = `Ukuran file dikompres dari ${compressed.origSizeStr} menjadi ${compressed.compSizeStr}`
+      setCompressionStatus(statusMsg)
+
+      const compressedFile = new File([compressed.blob], compressed.filename, { type: 'image/webp' })
 
       let publicUrl = ''
       let uploadErrMessage = ''
 
-      // Try 'menu_photos' bucket first
+      // 1. Try 'menu-flyers' bucket first (per spec)
       const { data: upload1, error: err1 } = await supabase
         .storage
-        .from('menu_photos')
-        .upload(fileName, file, { cacheControl: '3600', upsert: true })
+        .from('menu-flyers')
+        .upload(compressed.filename, compressedFile, { cacheControl: '3600', upsert: true })
 
       if (!err1 && upload1) {
-        const { data: urlData } = supabase.storage.from('menu_photos').getPublicUrl(upload1.path || fileName)
+        const { data: urlData } = supabase.storage.from('menu-flyers').getPublicUrl(upload1.path || compressed.filename)
         publicUrl = urlData?.publicUrl || ''
       } else {
-        if (err1) uploadErrMessage += `[menu_photos: ${err1.message}] `
+        if (err1) uploadErrMessage += `[menu-flyers: ${err1.message}] `
 
-        // Fallback to 'menu-images' bucket
+        // 2. Fallback to 'menu_photos' bucket
         const { data: upload2, error: err2 } = await supabase
           .storage
-          .from('menu-images')
-          .upload(fileName, file, { cacheControl: '3600', upsert: true })
+          .from('menu_photos')
+          .upload(compressed.filename, compressedFile, { cacheControl: '3600', upsert: true })
 
         if (!err2 && upload2) {
-          const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(upload2.path || fileName)
+          const { data: urlData } = supabase.storage.from('menu_photos').getPublicUrl(upload2.path || compressed.filename)
           publicUrl = urlData?.publicUrl || ''
-        } else if (err2) {
-          uploadErrMessage += `[menu-images: ${err2.message}]`
+        } else {
+          if (err2) uploadErrMessage += `[menu_photos: ${err2.message}] `
+
+          // 3. Fallback to 'menu-images' bucket
+          const { data: upload3, error: err3 } = await supabase
+            .storage
+            .from('menu-images')
+            .upload(compressed.filename, compressedFile, { cacheControl: '3600', upsert: true })
+
+          if (!err3 && upload3) {
+            const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(upload3.path || compressed.filename)
+            publicUrl = urlData?.publicUrl || ''
+          } else if (err3) {
+            uploadErrMessage += `[menu-images: ${err3.message}]`
+          }
         }
       }
 
       if (publicUrl) {
         setFotoUrl(publicUrl)
-        triggerToast('Foto menu berhasil diunggah ke Supabase Storage!', 'success')
+        triggerToast(`Foto menu berhasil diunggah! (${statusMsg})`, 'success')
       } else {
         console.warn('Storage upload notice:', uploadErrMessage || 'Fallback to base64')
         const reader = new FileReader()
         reader.onloadend = () => {
           const base64 = reader.result as string
           setFotoUrl(base64)
-          triggerToast('Foto dimuat via lokal fallback (Base64). Klik simpan untuk memperbarui.', 'info')
+          triggerToast(`Foto dimuat via Base64 fallback. (${statusMsg})`, 'info')
         }
-        reader.readAsDataURL(file)
+        reader.readAsDataURL(compressedFile)
       }
     } catch (err: any) {
       console.error('Error uploading image:', err)
@@ -522,8 +595,15 @@ export default function KelolaMenuHarianPage() {
               </div>
             </div>
             <p className="text-[11px] text-gray-400">
-              Maksimal 3MB. Rasio foto proporsional 4:5 / 1350x1080 (1080x1350) dengan tampilan jernih.
+              Auto-kompresi gambar aktif (max width 1350px, WebP 80%). Rasio poster proporsional.
             </p>
+
+            {compressionStatus && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-[11px] font-bold flex items-center gap-2 shadow-2xs">
+                <Sparkles size={14} className="text-emerald-600 shrink-0" />
+                <span>{compressionStatus}</span>
+              </div>
+            )}
           </div>
         </div>
 

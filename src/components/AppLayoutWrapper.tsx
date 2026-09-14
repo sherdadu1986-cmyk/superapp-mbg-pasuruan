@@ -36,6 +36,34 @@ interface MenuSection {
   items: MenuItem[];
 }
 
+function BgnLogo() {
+  const [imgSrc, setImgSrc] = useState('/logo-bgn.png')
+  const [hasError, setHasError] = useState(false)
+
+  if (hasError) {
+    return (
+      <div className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[11px] tracking-wider font-mono shadow-2xs flex items-center justify-center">
+        BGN
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt="Badan Gizi Nasional"
+      className="h-8 w-auto object-contain font-bold"
+      onError={() => {
+        if (imgSrc === '/logo-bgn.png') {
+          setImgSrc('/logo.png')
+        } else {
+          setHasError(true)
+        }
+      }}
+    />
+  )
+}
+
 export default function AppLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -226,9 +254,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="px-2 py-0.5 rounded bg-slate-900 text-white font-black text-[11px] tracking-wider font-mono shadow-2xs flex items-center justify-center">
-              BGN
-            </div>
+            <BgnLogo />
             <h1 className="font-extrabold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
               <span>BGN</span>
               <span className="text-slate-400 font-normal">·</span>

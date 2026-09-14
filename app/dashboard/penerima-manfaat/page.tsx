@@ -773,16 +773,25 @@ export default function BerandaOperasionalPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3 py-8 text-center flex flex-col items-center justify-center my-auto">
-              <div className="p-3 bg-amber-50 text-amber-600 rounded-full border border-amber-100">
-                <Utensils size={28} />
+            <div className="space-y-4 py-8 text-center flex flex-col items-center justify-center my-auto">
+              <div className="p-4 bg-amber-50 text-amber-600 rounded-full border border-amber-200/60 shadow-2xs">
+                <Utensils size={30} />
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">Belum Ada Menu Harian Yang Diinput</h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                  Siklus menu belum diunggah dari database. Silakan kelola siklus menu di halaman Kelola Siklus Menu.
+              <div className="space-y-1.5">
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                  Menu Hari Ini Belum Dipublikasikan
+                </h3>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                  Siklus menu diperbarui setiap hari. Silakan unggah menu harian terbaru melalui menu Kelola Menu Harian.
                 </p>
               </div>
+              <Link
+                href="/kelola-menu-harian"
+                className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Unggah Menu Sekarang</span>
+              </Link>
             </div>
           )}
 
