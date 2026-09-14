@@ -8,7 +8,7 @@ import {
 import * as XLSX from 'xlsx'
 import { 
   fetchRelawanSppgList, saveRelawanSppg, deleteRelawanSppg, bulkSaveRelawanSppg,
-  type RelawanSppg, INITIAL_RELAWAN_DATA 
+  type RelawanSppg
 } from '@/lib/data-helpers'
 import { supabase } from '@/lib/supabase'
 
@@ -80,6 +80,12 @@ export const HIERARCHICAL_DIVISI_GROUPS: DivisiGroup[] = [
 ]
 
 export const ALL_DIVISI_OPTIONS: string[] = HIERARCHICAL_DIVISI_GROUPS.flatMap(g => g.options)
+
+const DUMMY_NIKS_TO_PURGE = [
+  '3514121508960001', '3514122003920002', '3514125211950003',
+  '3514121004980004', '3514126507970005', '3514121809930006',
+  '3514124505000007', '3514121206910008', '3514122508940009'
+]
 
 const STATUS_OPTIONS: Array<'Aktif' | 'Cuti' | 'Non-Aktif'> = ['Aktif', 'Cuti', 'Non-Aktif']
 const PENDIDIKAN_OPTIONS = ['SMA/SMK', 'D3', 'S1', 'S2', 'Lainnya']
@@ -206,19 +212,41 @@ export default function DataRelawanSppgPage() {
     setLoading(true)
     try {
       const data = await fetchRelawanSppgList()
-      setRelawanList(data)
+      const cleanData = (data || []).filter(item => 
+        !item.id?.startsWith('rel-00') && 
+        !DUMMY_NIKS_TO_PURGE.includes(item.nik || '')
+      )
+      setRelawanList(cleanData)
     } catch (err) {
       console.error('Error loading relawan data:', err)
-      setRelawanList(INITIAL_RELAWAN_DATA)
+      setRelawanList([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadRelawanData()
+    // Purge legacy dummy entries from local storage & Supabase
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('sppg_relawan_list')
+      if (stored) {
+        try {
+          const list: RelawanSppg[] = JSON.parse(stored) || []
+          const cleaned = list.filter(item => 
+            !item.id?.startsWith('rel-00') && 
+            !DUMMY_NIKS_TO_PURGE.includes(item.nik || '')
+          )
+          localStorage.setItem('sppg_relawan_list', JSON.stringify(cleaned))
+        } catch {}
+      }
+    }
 
-    // Realtime Supabase Subscription
+    // Clean dummy records in database table
+    supabase.from('relawan_sppg').delete().in('nik', DUMMY_NIKS_TO_PURGE).then(() => {
+      loadRelawanData()
+    })
+
+    // Supabase Realtime Subscription
     const channel = supabase
       .channel('schema-db-changes-relawan')
       .on(
