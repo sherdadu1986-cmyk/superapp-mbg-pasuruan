@@ -116,59 +116,35 @@ export default function LembarDistribusiPrint({
   // High-Resolution Direct PDF Export Handler (jsPDF + html-to-image)
   const handleDownloadPDF = async () => {
     const element = document.getElementById('area-dokumen-a4-bgn')
-    if (!element) {
-      alert('Elemen dokumen tidak ditemukan.')
-      return
-    }
+    if (!element) return
 
     try {
       setIsExporting(true)
 
-      // Render DOM ke PNG Base64 menggunakan html-to-image
+      // Render dengan skala tinggi untuk ketajaman teks maksimal
       const dataUrl = await toPng(element, {
-        quality: 0.98,
-        pixelRatio: 2, // Menjaga teks dan tabel tetap sangat tajam
+        quality: 1,
+        pixelRatio: 2,
         cacheBust: true,
         backgroundColor: '#ffffff',
       })
 
-      // Buat instance dokumen PDF A4
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
       })
 
-      const img = new Image()
-      img.src = dataUrl
-      await new Promise((resolve) => {
-        img.onload = resolve
-      })
+      // A4 standar: 210 x 297 mm
+      // Cetak presisi memenuhi seluruh halaman A4 (Full Page Fit)
+      pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST')
 
-      const pdfWidth = 210
-      const pdfHeight = 297
-      const marginX = 8
-      const marginY = 8
-      const printableWidth = pdfWidth - marginX * 2
-      const printableHeight = (img.height * printableWidth) / img.width
+      const todaySlug = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      pdf.save(`Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_${todaySlug}.pdf`)
 
-      // Masukkan gambar ke 1 halaman A4
-      pdf.addImage(
-        dataUrl,
-        'PNG',
-        marginX,
-        marginY,
-        printableWidth,
-        Math.min(printableHeight, pdfHeight - marginY * 2)
-      )
-
-      // Penamaan file resmi
-      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      pdf.save(`Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_${dateStr}.pdf`)
-
-    } catch (error) {
-      console.error('Error detail ekspor PDF:', error)
-      alert('Gagal mengekspor PDF: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } catch (err) {
+      console.error(err)
+      alert('Gagal mengekspor PDF')
     } finally {
       setIsExporting(false)
     }
@@ -209,7 +185,7 @@ export default function LembarDistribusiPrint({
             ${inlineStyles}
             @page {
               size: A4 portrait;
-              margin: 8mm 10mm !important;
+              margin: 0 !important;
             }
             * {
               -webkit-print-color-adjust: exact !important;
@@ -222,12 +198,11 @@ export default function LembarDistribusiPrint({
               margin: 0 !important;
               padding: 0 !important;
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
-              height: auto !important;
             }
             #area-dokumen-a4-bgn {
               width: 100% !important;
               max-width: none !important;
-              padding: 0 !important;
+              padding: 10mm !important;
               margin: 0 !important;
               border: none !important;
               box-shadow: none !important;
@@ -400,11 +375,14 @@ export default function LembarDistribusiPrint({
           /* Area lembar kertas A4 sesungguhnya */
           #area-dokumen-a4-bgn,
           #lembar-cetak-a4 {
-            display: block !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
             width: 100% !important;
-            max-width: 210mm !important;
+            max-width: none !important;
+            min-height: 297mm !important;
             height: auto !important;
-            padding: 0 !important;
+            padding: 10mm !important;
             margin: 0 auto !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
@@ -419,13 +397,13 @@ export default function LembarDistribusiPrint({
 
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm !important;
+            margin: 0 !important;
           }
         }
       `}</style>
 
       {/* Modal Container (Screen View) */}
-      <div className="bg-slate-100 rounded-2xl max-w-4xl w-full max-h-[96vh] flex flex-col overflow-hidden shadow-2xl border border-slate-300">
+      <div className="bg-slate-100 rounded-2xl max-w-5xl w-full max-h-[96vh] flex flex-col overflow-hidden shadow-2xl border border-slate-300">
         
         {/* Modal Top Bar (No Print) */}
         <div className="no-print bg-slate-900 text-white p-4 flex items-center justify-between shadow-md">
@@ -473,247 +451,254 @@ export default function LembarDistribusiPrint({
         {/* Printable Document Sheet Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center">
           
-          {/* Printable Sheet Container (Edge-to-Edge A4 Document) */}
+          {/* Pure A4 Document Paper Element (Standard 794x1123 px for 96 DPI A4) */}
           <div
             id="area-dokumen-a4-bgn"
-            className="w-full max-w-[210mm] mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-slate-300 text-[#0f172a] font-sans text-xs flex flex-col gap-3"
+            className="w-[794px] min-h-[1123px] bg-white p-10 flex flex-col justify-between text-slate-900 mx-auto"
+            style={{ boxSizing: 'border-box' }}
           >
-            {/* 1. Kop Surat Resmi Kedinasan BGN */}
-            <div className="flex items-center justify-between gap-4 pb-1">
-              <div className="flex items-center gap-3.5">
-                <img
-                  src="/logo-bgn.png"
-                  alt="Logo BGN"
-                  crossOrigin="anonymous"
-                  className="h-11 sm:h-12 w-auto object-contain shrink-0"
-                />
-                <div>
-                  <h3 className="font-bold text-xs sm:text-[11pt] text-[#1e3a8a] leading-tight tracking-wide">
-                    BADAN GIZI NASIONAL (BGN) REPUBLIK INDONESIA
-                  </h3>
-                  <h2 className="font-black text-sm sm:text-[12.5pt] text-[#0f172a] leading-tight mt-0.5 tracking-tight">
-                    SATUAN PELAYANAN PROGRAM GIZI (SPPG) KIDULDALEM - WONOREJO, PASURUAN
-                  </h2>
-                  <p className="font-semibold text-[8.5px] sm:text-[9pt] text-[#475569] leading-tight mt-0.5 uppercase tracking-wider">
-                    LEMBAR REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG
-                  </p>
-                </div>
-              </div>
-
-              {/* Box Tanggal Operasional Sisi Kanan */}
-              <div className="bg-[#f8fafc] border border-slate-300 rounded-md p-2 text-right shrink-0 min-w-[160px]">
-                <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">TANGGAL OPERASIONAL</div>
-                <div className="font-black text-[#0f172a] text-[10pt] mt-0.5 leading-snug">
-                  {fullDateFormatted}
-                </div>
-                <div className="text-[8pt] font-medium text-slate-500 mt-0.5">
-                  Waktu Cetak: <span className="font-bold text-slate-700">{printTimeFormatted}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Garis Pembatas Kop Ganda Elegan */}
-            <div className="space-y-0.5">
-              <div className="h-[2px] bg-[#0f172a]" />
-              <div className="h-[1px] bg-slate-400" />
-            </div>
-
-            {/* 2. Ringkasan Informasi Singkat (Info Baris 4 Kolom) */}
-            <div className="grid grid-cols-4 gap-2 bg-[#f8fafc] border border-[#e2e8f0] py-1.5 px-2.5 rounded-md text-[10px]">
-              <div>
-                <span className="text-[8.5px] font-bold text-slate-400 uppercase block">UNIT LAYANAN</span>
-                <span className="font-extrabold text-[#0f172a]">SPPG Kiduldalem</span>
-              </div>
-              <div>
-                <span className="text-[8.5px] font-bold text-slate-400 uppercase block">WILAYAH</span>
-                <span className="font-extrabold text-[#0f172a]">Wonorejo, Pasuruan</span>
-              </div>
-              <div>
-                <span className="text-[8.5px] font-bold text-slate-400 uppercase block">TOTAL TITIK KPM</span>
-                <span className="font-black text-[#0f172a] font-mono">
-                  {rows.length} Titik ({aktifCount} Aktif, {holidayKpmNames.length} Libur)
-                </span>
-              </div>
-              <div>
-                <span className="text-[8.5px] font-bold text-slate-400 uppercase block">STATUS OPERASIONAL</span>
-                <span className="font-black text-emerald-700 flex items-center gap-1">
-                  <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
-                  <span>Terverifikasi APPO</span>
-                </span>
-              </div>
-            </div>
-
-            {/* 3. Tabel Rekapitulasi Porsi (25 KPM - Balanced & Scaled Proportionally) */}
-            <div className="border border-slate-300 rounded-md overflow-hidden">
-              <table className="w-full text-left border-collapse text-[10.5px] leading-tight">
-                <thead>
-                  <tr className="bg-[#0f172a] text-white text-[10px] font-bold uppercase tracking-wider">
-                    <th className="py-1.5 px-2.5 text-center w-8 border-b border-slate-700">NO</th>
-                    <th className="py-1.5 px-2.5 border-b border-slate-700">NAMA KPM / LEMBAGA</th>
-                    <th className="py-1.5 px-2.5 text-right border-b border-slate-700 w-24">TOTAL PORSI</th>
-                    <th className="py-1.5 px-2.5 text-right border-b border-slate-700 w-24">PORSI KECIL</th>
-                    <th className="py-1.5 px-2.5 text-right border-b border-slate-700 w-24">PORSI BESAR</th>
-                    <th className="py-1.5 px-2.5 text-right border-b border-slate-700 w-28">TENDIK/KADER</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 font-semibold text-[#0f172a]">
-                  {rows.length > 0 ? (
-                    rows.map((row, idx) => {
-                      const isEven = idx % 2 === 0
-                      return (
-                        <tr
-                          key={row.id}
-                          className={
-                            row.isLibur
-                              ? 'bg-[#fef2f2] text-slate-400'
-                              : isEven
-                              ? 'bg-white hover:bg-slate-50'
-                              : 'bg-[#f8fafc] hover:bg-slate-50'
-                          }
-                        >
-                          <td className="py-1 px-2.5 text-center font-mono text-slate-500 text-[9.5px]">
-                            {row.no}
-                          </td>
-                          <td className="py-1 px-2.5">
-                            {row.isLibur ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-slate-400 line-through text-[10.5px]">{row.nama}</span>
-                                <span className="text-[8px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-1 py-0.2 rounded uppercase">
-                                  [LIBUR - 0 PORSI]
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="font-extrabold text-[#0f172a] block text-[10.5px]">{row.nama}</span>
-                            )}
-                          </td>
-                          <td className="py-1 px-2.5 text-right font-black font-mono text-[10.5px]">
-                            {row.isLibur ? (
-                              <span className="text-slate-400 font-normal">0</span>
-                            ) : (
-                              <span className="text-[#0f172a] font-black">{row.total.toLocaleString('id-ID')}</span>
-                            )}
-                          </td>
-                          <td className="py-1 px-2.5 text-right font-mono font-bold text-[10.5px]">
-                            {row.isLibur ? (
-                              <span className="text-slate-300 font-normal">-</span>
-                            ) : row.porsiKecil > 0 ? (
-                              <span className="text-[#b45309] font-black">{row.porsiKecil.toLocaleString('id-ID')}</span>
-                            ) : (
-                              <span className="text-slate-300 font-normal">-</span>
-                            )}
-                          </td>
-                          <td className="py-1 px-2.5 text-right font-mono font-bold text-[10.5px]">
-                            {row.isLibur ? (
-                              <span className="text-slate-300 font-normal">-</span>
-                            ) : row.porsiBesar > 0 ? (
-                              <span className="text-[#1d4ed8] font-black">{row.porsiBesar.toLocaleString('id-ID')}</span>
-                            ) : (
-                              <span className="text-slate-300 font-normal">-</span>
-                            )}
-                          </td>
-                          <td className="py-1 px-2.5 text-right font-mono font-semibold text-[10.5px]">
-                            {row.isLibur ? (
-                              <span className="text-slate-300 font-normal">-</span>
-                            ) : row.guruTendik > 0 ? (
-                              <span className="text-slate-700 font-bold">{row.guruTendik.toLocaleString('id-ID')}</span>
-                            ) : (
-                              <span className="text-slate-300 font-normal">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="py-3 text-center text-slate-400 italic text-[10px]">
-                        Belum ada data KPM terdaftar.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot className="bg-[#1e293b] text-white font-bold border-t-2 border-[#0f172a] text-[11px]">
-                  <tr>
-                    <td colSpan={2} className="py-1.5 px-2.5 font-black uppercase tracking-wider text-white">
-                      TOTAL KESELURUHAN
-                    </td>
-                    <td className="py-1.5 px-2.5 text-right font-mono text-white font-black text-[11.5px]">
-                      {totals.grandTotal.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-1.5 px-2.5 text-right font-mono text-amber-300 font-black text-[11.5px]">
-                      {totals.grandKecil.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-1.5 px-2.5 text-right font-mono text-blue-200 font-black text-[11.5px]">
-                      {totals.grandBesar.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-1.5 px-2.5 text-right font-mono text-slate-200 font-bold text-[10.5px]">
-                      {totals.grandTendik.toLocaleString('id-ID')}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {/* 4. Catatan Kaki Jika Ada Sekolah Libur */}
-            {holidayKpmNames.length > 0 && (
-              <div className="py-1 px-3 mt-2 mb-2 bg-[#fef2f2] border border-rose-200 rounded text-[9.5px] text-rose-950 font-medium leading-normal">
-                <strong className="font-bold text-rose-900 uppercase tracking-wider block mb-0.5">
-                  Catatan KPM Libur Hari Ini ({holidayKpmNames.length} Lembaga):
-                </strong>
-                <span>
-                  <strong>{holidayKpmNames.join(', ')}</strong> libur hari ini, alokasi porsi dialihkan/ditiadakan.
-                </span>
-              </div>
-            )}
-
-            {/* 5. Kolom Tanda Tangan Resmi Kedinasan TTE E-Digital */}
-            <div className="mt-3 pt-2 border-t border-slate-300 grid grid-cols-2 gap-4 text-[9.5px] font-sans items-end break-inside-avoid print:break-inside-avoid">
-              {/* Sisi Kiri: Mengetahui Petugas Logistik */}
-              <div className="text-center space-y-0.5">
-                <p className="text-slate-600 font-medium text-[9.5px]">Mengetahui,</p>
-                <p className="font-bold text-[#0f172a]">Petugas Distribusi & Logistik</p>
-                <div className="h-12 flex items-end justify-center pb-0.5">
-                  <span className="text-slate-400 font-mono text-[8px] italic">(Tanda Tangan & Nama Terang)</span>
-                </div>
-                <p className="font-bold text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block min-w-[150px]">
-                  (_________________________)
-                </p>
-              </div>
-
-              {/* Sisi Kanan Bawah: Kepala SPPG dengan Badge Stempel TTE Kedinasan */}
-              <div className="text-center flex flex-col items-center justify-end space-y-0.5">
-                <div className="text-[#0f172a] text-[9.5px] leading-tight space-y-0.5">
-                  <p className="font-medium text-slate-700">Ditetapkan di Pasuruan</p>
-                  <p className="font-medium text-slate-700">
-                    pada tanggal <span className="font-bold text-[#0f172a]">{formattedDate}</span>
-                  </p>
-                  <p className="font-bold text-[#0f172a] mt-0.5">Kepala SPPG,</p>
-                </div>
-
-                {/* Badge Stempel TTE Hijau Kedinasan BSrE */}
-                <div className="py-0.5 px-2 my-1 border border-emerald-600/60 bg-emerald-50/60 rounded shadow-2xs inline-flex flex-col items-start text-left">
-                  <div className="flex items-center gap-1.5 text-emerald-800">
-                    <svg className="w-3.5 h-3.5 fill-emerald-700 shrink-0" viewBox="0 0 24 24">
-                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                    </svg>
-                    <span className="text-[8.5px] font-bold tracking-wider uppercase">
-                      Ditandatangani Secara Elektronik
-                    </span>
+            {/* Top & Table Section Wrapper */}
+            <div>
+              {/* 1. Kop Surat Resmi Kedinasan BGN */}
+              <div className="flex items-center justify-between gap-4 pb-1">
+                <div className="flex items-center gap-4">
+                  <img
+                    src="/logo-bgn.png"
+                    alt="Logo BGN"
+                    crossOrigin="anonymous"
+                    className="h-14 w-auto object-contain shrink-0"
+                  />
+                  <div>
+                    <h3 className="font-bold text-[12pt] text-[#1e3a8a] leading-tight tracking-wide">
+                      BADAN GIZI NASIONAL (BGN) REPUBLIK INDONESIA
+                    </h3>
+                    <h2 className="font-black text-[13.5pt] text-[#0f172a] leading-tight mt-0.5 tracking-tight">
+                      SATUAN PELAYANAN PROGRAM GIZI (SPPG) WONOREJO - WONOREJO, PASURUAN
+                    </h2>
+                    <p className="font-semibold text-[9.5pt] text-[#475569] leading-tight mt-0.5 uppercase tracking-wider">
+                      LEMBAR REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG
+                    </p>
                   </div>
-                  <span className="text-[7.5px] text-slate-600 leading-tight">
-                    Sertifikasi BSrE · Badan Gizi Nasional RI
+                </div>
+
+                {/* Box Tanggal Operasional Sisi Kanan */}
+                <div className="bg-[#f8fafc] border border-slate-300 rounded-md p-2.5 text-right shrink-0 min-w-[170px]">
+                  <div className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider">TANGGAL OPERASIONAL</div>
+                  <div className="font-black text-[#0f172a] text-[10.5pt] mt-0.5 leading-snug">
+                    {fullDateFormatted}
+                  </div>
+                  <div className="text-[8.5pt] font-medium text-slate-500 mt-0.5">
+                    Waktu Cetak: <span className="font-bold text-slate-700">{printTimeFormatted}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Garis Pembatas Kop Ganda Elegan (Border Atas 2px, Border Bawah 1px) */}
+              <div className="my-3 space-y-0.5">
+                <div className="h-[2px] bg-[#0f172a]" />
+                <div className="h-[1px] bg-slate-400" />
+              </div>
+
+              {/* 2. Ringkasan Informasi Singkat (Info Baris 4 Kolom) */}
+              <div className="grid grid-cols-4 gap-2 bg-[#f8fafc] border border-[#e2e8f0] py-2 px-3 rounded-md text-[10.5px] mb-3">
+                <div>
+                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">UNIT LAYANAN</span>
+                  <span className="font-extrabold text-[#0f172a]">SPPG Kiduldalem</span>
+                </div>
+                <div>
+                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">WILAYAH</span>
+                  <span className="font-extrabold text-[#0f172a]">Wonorejo, Pasuruan</span>
+                </div>
+                <div>
+                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">TOTAL TITIK KPM</span>
+                  <span className="font-black text-[#0f172a] font-mono">
+                    {rows.length} Titik ({aktifCount} Aktif, {holidayKpmNames.length} Libur)
                   </span>
                 </div>
+                <div>
+                  <span className="text-[8.5px] font-bold text-slate-400 uppercase block">STATUS OPERASIONAL</span>
+                  <span className="font-black text-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                    <span>Terverifikasi APPO</span>
+                  </span>
+                </div>
+              </div>
 
-                <div className="text-[#0f172a] text-[9.5px] leading-tight pt-0.5">
-                  <p className="font-bold text-[10px] underline underline-offset-2">
-                    Ahmad Sayyidani Khaqiqi, S.Pd
+              {/* 3. Tabel Rekapitulasi Porsi (25 KPM - Scale Fitted & Balanced for Full A4) */}
+              <div className="border border-slate-300 rounded-md overflow-hidden">
+                <table className="w-full text-left border-collapse text-[12px] leading-tight font-medium">
+                  <thead>
+                    <tr className="bg-[#0f172a] text-white text-[11px] font-bold uppercase tracking-wider">
+                      <th className="py-2 px-3 text-center w-8 border-b border-slate-700">NO</th>
+                      <th className="py-2 px-3 border-b border-slate-700">NAMA KPM / LEMBAGA</th>
+                      <th className="py-2 px-3 text-right border-b border-slate-700 w-24">TOTAL PORSI</th>
+                      <th className="py-2 px-3 text-right border-b border-slate-700 w-24">PORSI KECIL</th>
+                      <th className="py-2 px-3 text-right border-b border-slate-700 w-24">PORSI BESAR</th>
+                      <th className="py-2 px-3 text-right border-b border-slate-700 w-28">TENDIK/KADER</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 font-semibold text-[#0f172a]">
+                    {rows.length > 0 ? (
+                      rows.map((row, idx) => {
+                        const isEven = idx % 2 === 0
+                        return (
+                          <tr
+                            key={row.id}
+                            className={
+                              row.isLibur
+                                ? 'bg-[#fef2f2] text-slate-400'
+                                : isEven
+                                ? 'bg-white hover:bg-slate-50'
+                                : 'bg-[#f8fafc] hover:bg-slate-50'
+                            }
+                          >
+                            <td className="py-2 px-3 text-center font-mono text-slate-500 text-[11px]">
+                              {row.no}
+                            </td>
+                            <td className="py-2 px-3">
+                              {row.isLibur ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-slate-400 line-through text-[12px]">{row.nama}</span>
+                                  <span className="text-[8.5px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-1 py-0.2 rounded uppercase">
+                                    [LIBUR - 0 PORSI]
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="font-extrabold text-[#0f172a] block text-[12px]">{row.nama}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-black font-mono text-[12px]">
+                              {row.isLibur ? (
+                                <span className="text-slate-400 font-normal">0</span>
+                              ) : (
+                                <span className="text-[#0f172a] font-black">{row.total.toLocaleString('id-ID')}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-[12px]">
+                              {row.isLibur ? (
+                                <span className="text-slate-300 font-normal">-</span>
+                              ) : row.porsiKecil > 0 ? (
+                                <span className="text-[#b45309] font-black">{row.porsiKecil.toLocaleString('id-ID')}</span>
+                              ) : (
+                                <span className="text-slate-300 font-normal">-</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-[12px]">
+                              {row.isLibur ? (
+                                <span className="text-slate-300 font-normal">-</span>
+                              ) : row.porsiBesar > 0 ? (
+                                <span className="text-[#1d4ed8] font-black">{row.porsiBesar.toLocaleString('id-ID')}</span>
+                              ) : (
+                                <span className="text-slate-300 font-normal">-</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-semibold text-[12px]">
+                              {row.isLibur ? (
+                                <span className="text-slate-300 font-normal">-</span>
+                              ) : row.guruTendik > 0 ? (
+                                <span className="text-slate-700 font-bold">{row.guruTendik.toLocaleString('id-ID')}</span>
+                              ) : (
+                                <span className="text-slate-300 font-normal">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="py-3 text-center text-slate-400 italic text-[11px]">
+                          Belum ada data KPM terdaftar.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-[#1e293b] text-white font-bold border-t-2 border-[#0f172a] text-[13px]">
+                    <tr>
+                      <td colSpan={2} className="py-2.5 px-3 font-black uppercase tracking-wider text-white">
+                        TOTAL KESELURUHAN
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-white font-black text-[13.5px]">
+                        {totals.grandTotal.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-amber-300 font-black text-[13.5px]">
+                        {totals.grandKecil.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-blue-200 font-black text-[13.5px]">
+                        {totals.grandBesar.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-200 font-bold text-[12.5px]">
+                        {totals.grandTendik.toLocaleString('id-ID')}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Bottom Footer Section (Catatan Libur & TTE Signatures) */}
+            <div className="space-y-3 pt-2">
+              {/* 4. Catatan Kaki Jika Ada Sekolah Libur */}
+              {holidayKpmNames.length > 0 && (
+                <div className="my-3 py-2 px-3 bg-[#fef2f2] border border-rose-200 rounded text-[11px] text-rose-950 font-medium leading-normal">
+                  <strong className="font-bold text-rose-900 uppercase tracking-wider block mb-0.5">
+                    Catatan KPM Libur Hari Ini ({holidayKpmNames.length} Lembaga):
+                  </strong>
+                  <span>
+                    <strong>{holidayKpmNames.join(', ')}</strong> libur hari ini, alokasi porsi dialihkan/ditiadakan.
+                  </span>
+                </div>
+              )}
+
+              {/* 5. Kolom Tanda Tangan Resmi Kedinasan TTE E-Digital */}
+              <div className="pt-3 border-t border-slate-300 grid grid-cols-2 gap-4 text-[11.5px] font-sans items-end break-inside-avoid print:break-inside-avoid">
+                {/* Sisi Kiri: Mengetahui Petugas Logistik */}
+                <div className="text-center space-y-0.5">
+                  <p className="text-slate-600 font-medium text-[11px]">Mengetahui,</p>
+                  <p className="font-bold text-[#0f172a]">Petugas Distribusi & Logistik</p>
+                  <div className="h-16 flex items-end justify-center pb-1">
+                    <span className="text-slate-400 font-mono text-[8.5px] italic">(Tanda Tangan & Nama Terang)</span>
+                  </div>
+                  <p className="font-bold text-[#0f172a] border-t border-slate-300 pt-0.5 inline-block min-w-[160px]">
+                    (_________________________)
                   </p>
-                  <p className="font-semibold text-slate-700 text-[9px]">
-                    Penata Layanan Operasional
-                  </p>
-                  <p className="font-mono text-slate-600 text-[8.5px] tracking-tight">
-                    NIP. 200107182026211012
-                  </p>
+                </div>
+
+                {/* Sisi Kanan Bawah: Kepala SPPG dengan Badge Stempel TTE Kedinasan */}
+                <div className="text-center flex flex-col items-center justify-end space-y-0.5">
+                  <div className="text-[#0f172a] text-[11.5px] leading-tight space-y-0.5">
+                    <p className="font-medium text-slate-700">Ditetapkan di Pasuruan</p>
+                    <p className="font-medium text-slate-700">
+                      pada tanggal <span className="font-bold text-[#0f172a]">{formattedDate}</span>
+                    </p>
+                    <p className="font-bold text-[#0f172a] mt-0.5">Kepala SPPG,</p>
+                  </div>
+
+                  {/* Badge Stempel TTE Hijau Kedinasan BSrE */}
+                  <div className="py-1 px-2.5 my-1.5 border border-emerald-600/60 bg-emerald-50/60 rounded shadow-2xs inline-flex flex-col items-start text-left">
+                    <div className="flex items-center gap-1.5 text-emerald-800">
+                      <svg className="w-4 h-4 fill-emerald-700 shrink-0" viewBox="0 0 24 24">
+                        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+                      </svg>
+                      <span className="text-[9.5px] font-bold tracking-wider uppercase">
+                        Ditandatangani Secara Elektronik
+                      </span>
+                    </div>
+                    <span className="text-[8.5px] text-slate-600 leading-tight">
+                      Sertifikasi BSrE · Badan Gizi Nasional RI
+                    </span>
+                  </div>
+
+                  <div className="text-[#0f172a] text-[11.5px] leading-tight pt-0.5">
+                    <p className="font-bold text-[12px] underline underline-offset-2">
+                      Ahmad Sayyidani Khaqiqi, S.Pd
+                    </p>
+                    <p className="font-semibold text-slate-700 text-[10.5px]">
+                      Penata Layanan Operasional
+                    </p>
+                    <p className="font-mono text-slate-600 text-[9.5px] tracking-tight">
+                      NIP. 200107182026211012
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
