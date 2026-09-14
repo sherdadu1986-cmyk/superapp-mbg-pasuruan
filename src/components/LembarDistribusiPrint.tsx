@@ -113,6 +113,12 @@ export default function LembarDistribusiPrint({
     return `${hh}:${mm} WIB`
   }, [])
 
+  // Buka rute cetak mandiri A4 presisi di tab baru
+  const handleBukaLembarCetak = () => {
+    const liburParam = (liburKpmIds || []).join(',')
+    window.open(`/cetak/lembar-distribusi?libur=${encodeURIComponent(liburParam)}`, '_blank')
+  }
+
   // High-Resolution Direct PDF Export Handler (jsPDF + html-to-image)
   const handleDownloadPDF = async () => {
     const element = document.getElementById('area-dokumen-a4-bgn')
@@ -423,9 +429,16 @@ export default function LembarDistribusiPrint({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={handleBukaLembarCetak}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Printer size={15} />
+              <span>Cetak Dokumen (A4)</span>
+            </button>
+            <button
               onClick={handleDownloadPDF}
               disabled={isExporting}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:opacity-80 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:opacity-80 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               {isExporting ? (
                 <>

@@ -1,0 +1,431 @@
+'use client'
+import React, { useEffect, useState, useMemo } from 'react'
+import { Printer } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
+
+function calculateKpmPortion(item: KelompokPenerimaManfaat) {
+  const kat = (item.kategori || '').toUpperCase()
+  const subKat = (item.sub_kategori || '').toUpperCase()
+  const total = item.jumlah_penerima ?? ((item.target_pria ?? 0) + (item.target_wanita ?? 0))
+  const guruTendik = (item.target_guru ?? 0) + (item.target_tendik ?? 0)
+
+  let porsiKecil = 0
+  let porsiBesar = 0
+
+  if (kat.includes('KB') || kat.includes('PAUD') || kat.includes('TK') || kat.includes('RA')) {
+    const siswa = Math.max(0, total - guruTendik)
+    porsiKecil = siswa
+    porsiBesar = guruTendik
+  } else if (kat.includes('SD') || kat.includes('MI')) {
+    const siswa = Math.max(0, total - guruTendik)
+    const porsiKecilSiswa = Math.round(siswa * 0.5)
+    const porsiBesarSiswa = siswa - porsiKecilSiswa
+    porsiKecil = porsiKecilSiswa
+    porsiBesar = porsiBesarSiswa + guruTendik
+  } else if (kat.includes('SMP') || kat.includes('MTS') || kat.includes('SMA') || kat.includes('SMK') || kat.includes('MA')) {
+    porsiBesar = total
+  } else if (kat.includes('POSYANDU') || kat.includes('3B')) {
+    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
+      porsiBesar = total
+    } else {
+      porsiKecil = total
+    }
+  } else {
+    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
+      porsiBesar = total
+    } else {
+      porsiKecil = total
+    }
+  }
+
+  return {
+    total,
+    porsiKecil,
+    porsiBesar,
+    guruTendik
+  }
+}
+
+export default function CetakLembarDistribusiPage() {
+  const [kpmData, setKpmData] = useState<KelompokPenerimaManfaat[]>([])
+  const [liburIds, setLiburIds] = useState<string[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    // Ambil data KPM libur dari query params URL (?libur=id1,id2) atau localStorage
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const liburQuery = params.get('libur')
+      if (liburQuery) {
+        setLiburIds(liburQuery.split(',').filter(Boolean))
+      } else {
+        const todayDate = new Date().toISOString().split('T')[0]
+        const saved = localStorage.getItem(`sppg_libur_kpm_${todayDate}`)
+        if (saved) {
+          try {
+            setLiburIds(JSON.parse(saved))
+          } catch {}
+        }
+      }
+    }
+
+    const loadKpm = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('kelompok_penerima_manfaat')
+          .select('*')
+          .order('urutan', { ascending: true })
+
+        if (error || !data || data.length === 0) {
+          const fallback = await fetchKelompokPenerimaManfaatList()
+          setKpmData(fallback)
+        } else {
+          setKpmData(data)
+        }
+      } catch {
+        const fallback = await fetchKelompokPenerimaManfaatList()
+        setKpmData(fallback)
+      } finally {
+        setLoaded(true)
+      }
+    }
+    loadKpm()
+  }, [])
+
+  useEffect(() => {
+    if (!loaded) return
+    // Beri jeda sedikit agar CSS & gambar logo termuat sempurna
+    const timer = setTimeout(() => {
+      window.print()
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [loaded])
+
+  const fullDateFormatted = useMemo(() => {
+    const d = new Date()
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ]
+    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+  }, [])
+
+  const formattedDate = useMemo(() => {
+    return new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(new Date())
+  }, [])
+
+  const printTimeFormatted = useMemo(() => {
+    const d = new Date()
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${hh}:${mm} WIB`
+  }, [])
+
+  const { rows, totals, holidayKpmNames, aktifCount } = useMemo(() => {
+    let grandTotal = 0
+    let grandKecil = 0
+    let grandBesar = 0
+    let grandTendik = 0
+    let active = 0
+    const holidayNames: string[] = []
+
+    const sortedData = sortKpmList(kpmData)
+
+    const processed = sortedData.map((item, idx) => {
+      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
+      const isLibur = liburIds.includes(itemKey) || (Boolean(item.id) && liburIds.includes(item.id!))
+
+      if (isLibur) {
+        holidayNames.push(item.nama)
+        return {
+          no: idx + 1,
+          id: itemKey,
+          nama: item.nama,
+          kode: item.identitas_npsn_tmp || item.kode || item.id,
+          kategori: item.kategori,
+          total: 0,
+          porsiKecil: 0,
+          porsiBesar: 0,
+          guruTendik: 0,
+          isLibur: true
+        }
+      }
+
+      active += 1
+      const breakdown = calculateKpmPortion(item)
+      grandTotal += breakdown.total
+      grandKecil += breakdown.porsiKecil
+      grandBesar += breakdown.porsiBesar
+      grandTendik += breakdown.guruTendik
+
+      return {
+        no: idx + 1,
+        id: itemKey,
+        nama: item.nama,
+        kode: item.identitas_npsn_tmp || item.kode || item.id,
+        kategori: item.kategori,
+        total: breakdown.total,
+        porsiKecil: breakdown.porsiKecil,
+        porsiBesar: breakdown.porsiBesar,
+        guruTendik: breakdown.guruTendik,
+        isLibur: false
+      }
+    })
+
+    return {
+      rows: processed,
+      totals: {
+        grandTotal,
+        grandKecil,
+        grandBesar,
+        grandTendik
+      },
+      holidayKpmNames: holidayNames,
+      aktifCount: active
+    }
+  }, [kpmData, liburIds])
+
+  return (
+    <div className="print-page-root bg-white text-slate-900 min-h-screen">
+      <style jsx global>{`
+        @page {
+          size: A4 portrait;
+          margin: 6mm 8mm 6mm 8mm;
+        }
+        @media print {
+          body {
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-page-root {
+            background: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+        }
+      `}</style>
+
+      {/* Tombol Bar Bantuan di Layar (Hilang saat cetak) */}
+      <div className="no-print bg-slate-800 text-white p-3 flex justify-between items-center sticky top-0 z-50 shadow-md">
+        <span className="text-sm font-semibold">
+          Pratinjau Lembar A4 Kedinasan SPPG Kiduldalem
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.print()}
+            className="bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 rounded text-sm font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <Printer size={16} />
+            <span>Cetak / Simpan PDF</span>
+          </button>
+          <button
+            onClick={() => window.close()}
+            className="bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded text-sm cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      </div>
+
+      {/* KERTAS A4 PRESISI (210mm x 297mm) */}
+      <div className="w-full max-w-[200mm] mx-auto p-4 flex flex-col justify-between text-slate-900 font-sans text-xs">
+        <div>
+          {/* 1. KOP SURAT RESMI */}
+          <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2 mb-2">
+            <div className="flex items-center gap-3">
+              <img
+                src="/logo-bgn.png"
+                alt="Logo BGN"
+                className="h-12 w-auto object-contain shrink-0"
+              />
+              <div>
+                <h2 className="text-[11px] font-bold text-blue-900 leading-tight">
+                  BADAN GIZI NASIONAL (BGN) REPUBLIK INDONESIA
+                </h2>
+                <h1 className="text-sm font-black text-slate-900 leading-tight">
+                  SATUAN PELAYANAN PROGRAM GIZI (SPPG) WONOREJO - WONOREJO, PASURUAN
+                </h1>
+                <p className="text-[10px] text-slate-600 font-semibold tracking-wide">
+                  LEMBAR REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG
+                </p>
+              </div>
+            </div>
+            <div className="border border-slate-300 rounded p-1.5 text-right text-[10px] shrink-0 min-w-[155px]">
+              <div className="text-[9px] text-slate-500 font-bold uppercase">
+                TANGGAL OPERASIONAL
+              </div>
+              <div className="font-bold text-slate-900">{fullDateFormatted}</div>
+              <div className="text-[8px] text-slate-500">
+                Waktu Cetak: {printTimeFormatted}
+              </div>
+            </div>
+          </div>
+
+          {/* 2. RINGKASAN 4 KOLOM */}
+          <div className="grid grid-cols-4 gap-2 bg-slate-50 border border-slate-200 rounded p-1.5 mb-2 text-[10px]">
+            <div>
+              <span className="text-slate-500 block text-[9px]">UNIT LAYANAN</span>
+              <span className="font-bold">SPPG Kiduldalem</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[9px]">WILAYAH</span>
+              <span className="font-bold">Wonorejo, Pasuruan</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[9px]">TOTAL TITIK KPM</span>
+              <span className="font-bold">
+                {rows.length} Titik ({aktifCount} Aktif, {holidayKpmNames.length} Libur)
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[9px]">STATUS OPERASIONAL</span>
+              <span className="font-bold text-emerald-700">✓ Terverifikasi APPO</span>
+            </div>
+          </div>
+
+          {/* 3. TABEL 25 KPM (Padding Padat & Pas) */}
+          <table className="w-full border-collapse text-[10px] border border-slate-300 rounded overflow-hidden">
+            <thead>
+              <tr className="bg-slate-900 text-white font-bold text-[9.5px]">
+                <th className="py-1 px-1.5 text-center w-8">NO</th>
+                <th className="py-1 px-2 text-left">NAMA KPM / LEMBAGA</th>
+                <th className="py-1 px-1.5 text-center">TOTAL PORSI</th>
+                <th className="py-1 px-1.5 text-center text-amber-300">PORSI KECIL</th>
+                <th className="py-1 px-1.5 text-center text-blue-300">PORSI BESAR</th>
+                <th className="py-1 px-1.5 text-center">TENDIK/KADER</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
+              {rows.length > 0 ? (
+                rows.map((row, idx) => (
+                  <tr
+                    key={row.id}
+                    className={
+                      row.isLibur
+                        ? 'bg-rose-50 text-slate-400'
+                        : idx % 2 === 1
+                        ? 'bg-slate-50/70'
+                        : 'bg-white'
+                    }
+                  >
+                    <td className="py-0.5 px-1.5 text-center font-mono text-[9px]">{row.no}</td>
+                    <td className="py-0.5 px-2 font-semibold">
+                      {row.isLibur ? (
+                        <>
+                          <span className="line-through">{row.nama}</span>
+                          <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
+                            [LIBUR - 0 PORSI]
+                          </span>
+                        </>
+                      ) : (
+                        row.nama
+                      )}
+                    </td>
+                    <td className="py-0.5 px-1.5 text-center font-bold">
+                      {row.isLibur ? 0 : row.total.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-0.5 px-1.5 text-center text-amber-700 font-bold">
+                      {row.isLibur ? '-' : row.porsiKecil > 0 ? row.porsiKecil.toLocaleString('id-ID') : '-'}
+                    </td>
+                    <td className="py-0.5 px-1.5 text-center text-blue-700 font-bold">
+                      {row.isLibur ? '-' : row.porsiBesar > 0 ? row.porsiBesar.toLocaleString('id-ID') : '-'}
+                    </td>
+                    <td className="py-0.5 px-1.5 text-center font-medium">
+                      {row.isLibur ? '-' : row.guruTendik > 0 ? row.guruTendik.toLocaleString('id-ID') : '-'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-2 text-center text-slate-400 italic">
+                    Belum ada data KPM terdaftar.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="bg-slate-900 text-white font-bold text-[10px]">
+                <td colSpan={2} className="py-1 px-2 text-left tracking-wider">
+                  TOTAL KESELURUHAN
+                </td>
+                <td className="py-1 px-1.5 text-center font-black">
+                  {totals.grandTotal.toLocaleString('id-ID')}
+                </td>
+                <td className="py-1 px-1.5 text-center text-amber-300 font-black">
+                  {totals.grandKecil.toLocaleString('id-ID')}
+                </td>
+                <td className="py-1 px-1.5 text-center text-blue-300 font-black">
+                  {totals.grandBesar.toLocaleString('id-ID')}
+                </td>
+                <td className="py-1 px-1.5 text-center">
+                  {totals.grandTendik.toLocaleString('id-ID')}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          {/* 4. CATATAN LIBUR */}
+          {holidayKpmNames.length > 0 && (
+            <div className="border border-red-200 bg-red-50/70 text-red-800 text-[9px] p-1.5 rounded mt-1.5 leading-snug">
+              <span className="font-bold">
+                CATATAN KPM LIBUR HARI INI ({holidayKpmNames.length} LEMBAGA):
+              </span>
+              <br />
+              {holidayKpmNames.join(', ')} libur hari ini, alokasi porsi dialihkan/ditiadakan.
+            </div>
+          )}
+        </div>
+
+        {/* 5. TANDA TANGAN & TTE KEDINASAN */}
+        <div className="flex justify-between items-end mt-2 pt-1 text-[9.5px] border-t border-slate-200 print:break-inside-avoid">
+          <div className="text-center w-48 space-y-0.5">
+            <p className="text-slate-600">Mengetahui,</p>
+            <p className="font-bold">Petugas Distribusi & Logistik</p>
+            <div className="h-10 flex items-end justify-center pb-0.5">
+              <span className="text-[8px] text-slate-400 font-mono italic">
+                (Tanda Tangan & Nama Terang)
+              </span>
+            </div>
+            <p className="font-bold text-slate-900 border-t border-slate-300 pt-0.5 inline-block w-36 mx-auto">
+              (_________________________)
+            </p>
+          </div>
+
+          <div className="text-left w-56 space-y-0.5">
+            <p>Ditetapkan di Pasuruan</p>
+            <p>
+              pada tanggal <span className="font-bold">{formattedDate}</span>
+            </p>
+            <p className="font-bold mb-1">Kepala SPPG,</p>
+
+            {/* Badge TTE BSrE Hijau */}
+            <div className="border border-emerald-600 bg-emerald-50 rounded p-1 my-1 w-fit">
+              <div className="flex items-center gap-1 text-emerald-800 font-bold text-[8.5px]">
+                <span>✓</span> DITANDATANGANI SECARA ELEKTRONIK
+              </div>
+              <div className="text-[7.5px] text-emerald-700">
+                Sertifikasi BSrE · Badan Gizi Nasional RI
+              </div>
+            </div>
+
+            <p className="font-bold underline text-slate-900 mt-1">
+              Ahmad Sayyidani Khaqiqi, S.Pd
+            </p>
+            <p className="text-[8.5px] text-slate-600">Penata Layanan Operasional</p>
+            <p className="text-[8.5px] text-slate-600 font-mono">NIP. 200107182026211012</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
