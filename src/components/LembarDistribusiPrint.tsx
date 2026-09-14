@@ -14,8 +14,8 @@ interface LembarDistribusiPrintProps {
 function calculateKpmPortion(item: KelompokPenerimaManfaat) {
   const kat = (item.kategori || '').toUpperCase()
   const subKat = (item.sub_kategori || '').toUpperCase()
-  const total = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 0
-  const guruTendik = (item.target_guru || 0) + (item.target_tendik || 0)
+  const total = item.jumlah_penerima ?? ((item.target_pria ?? 0) + (item.target_wanita ?? 0))
+  const guruTendik = (item.target_guru ?? 0) + (item.target_tendik ?? 0)
 
   let porsiKecil = 0
   let porsiBesar = 0

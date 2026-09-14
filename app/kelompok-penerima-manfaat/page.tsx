@@ -592,23 +592,40 @@ const getBnbaCountForGroup = (
     setFormEmail(item.email && item.email !== '-' ? item.email : '')
 
     if (is3BGroup) {
-      setFormBalitaLaki(item.pria || Math.floor(item.totalTarget * 0.3))
-      setFormBalitaPerem(Math.floor(item.totalTarget * 0.3))
-      setFormBumil(Math.floor(item.totalTarget * 0.2))
-      setFormBusui(Math.floor(item.totalTarget * 0.15))
-      setFormKaderPosyandu(item.guru || 5)
+      let balitaLakiVal = (item.pria !== null && item.pria !== undefined) ? Number(item.pria) : Math.floor(item.totalTarget * 0.3)
+      let balitaPeremVal = Math.floor(item.totalTarget * 0.3)
+      let bumilVal = Math.floor(item.totalTarget * 0.2)
+      let busuiVal = Math.floor(item.totalTarget * 0.15)
+      let kaderVal = (item.guru !== null && item.guru !== undefined) ? Number(item.guru) : 0
+
+      if (item.subKategoriRaw && typeof item.subKategoriRaw === 'string' && item.subKategoriRaw.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(item.subKategoriRaw)
+          if (parsed.balitaLaki !== undefined && parsed.balitaLaki !== null && parsed.balitaLaki !== '') balitaLakiVal = Number(parsed.balitaLaki)
+          if (parsed.balitaPerem !== undefined && parsed.balitaPerem !== null && parsed.balitaPerem !== '') balitaPeremVal = Number(parsed.balitaPerem)
+          if (parsed.bumil !== undefined && parsed.bumil !== null && parsed.bumil !== '') bumilVal = Number(parsed.bumil)
+          if (parsed.busui !== undefined && parsed.busui !== null && parsed.busui !== '') busuiVal = Number(parsed.busui)
+          if (parsed.kader !== undefined && parsed.kader !== null && parsed.kader !== '') kaderVal = Number(parsed.kader)
+        } catch {}
+      }
+
+      setFormBalitaLaki(balitaLakiVal)
+      setFormBalitaPerem(balitaPeremVal)
+      setFormBumil(bumilVal)
+      setFormBusui(busuiVal)
+      setFormKaderPosyandu(kaderVal)
     } else if (isSdGroup) {
-      setFormSdSiswaLaki13(item.sd13Laki ?? Math.floor(item.pria / 2))
-      setFormSdSiswaPerem13(item.sd13Perem ?? Math.floor(item.wanita / 2))
-      setFormSdSiswaLaki46(item.sd46Laki ?? Math.ceil(item.pria / 2))
-      setFormSdSiswaPerem46(item.sd46Perem ?? Math.ceil(item.wanita / 2))
-      setFormGuru(item.guru)
-      setFormTendik(item.tendik)
+      setFormSdSiswaLaki13(item.sd13Laki ?? Math.floor((item.pria ?? 0) / 2))
+      setFormSdSiswaPerem13(item.sd13Perem ?? Math.floor((item.wanita ?? 0) / 2))
+      setFormSdSiswaLaki46(item.sd46Laki ?? Math.ceil((item.pria ?? 0) / 2))
+      setFormSdSiswaPerem46(item.sd46Perem ?? Math.ceil((item.wanita ?? 0) / 2))
+      setFormGuru(item.guru ?? 0)
+      setFormTendik(item.tendik ?? 0)
     } else {
-      setFormPria(item.pria)
-      setFormWanita(item.wanita)
-      setFormGuru(item.guru)
-      setFormTendik(item.tendik)
+      setFormPria(item.pria ?? 0)
+      setFormWanita(item.wanita ?? 0)
+      setFormGuru(item.guru ?? 0)
+      setFormTendik(item.tendik ?? 0)
     }
 
     setShowAddModal(true)
@@ -687,39 +704,57 @@ const getBnbaCountForGroup = (
 
     const fullWilayah = `JAWA TIMUR · PASURUAN · ${formKecamatan.trim()} · ${formKelDesa.trim()}`
 
-    // Mapping fields depending on Posyandu vs SD vs Standard School
-    let targetPriaVal = Number(formPria) || 0
-    let targetWanitaVal = Number(formWanita) || 0
-    let targetGuruVal = Number(formGuru) || 0
-    let targetTendikVal = Number(formTendik) || 0
+    const parseNumberSafe = (val: any): number => {
+      if (val === '' || val === null || val === undefined) return 0
+      const n = Number(val)
+      return isNaN(n) ? 0 : n
+    }
+
+    let targetPriaVal = parseNumberSafe(formPria)
+    let targetWanitaVal = parseNumberSafe(formWanita)
+    let targetGuruVal = parseNumberSafe(formGuru)
+    let targetTendikVal = parseNumberSafe(formTendik)
 
     let subKatSummary: string | undefined = undefined
 
     if (is3B) {
-      targetPriaVal = Number(formBalitaLaki) || 0
-      targetWanitaVal = (Number(formBalitaPerem) || 0) + (Number(formBumil) || 0) + (Number(formBusui) || 0)
-      targetGuruVal = Number(formKaderPosyandu) || 0
+      const balitaLakiNum = parseNumberSafe(formBalitaLaki)
+      const balitaPeremNum = parseNumberSafe(formBalitaPerem)
+      const bumilNum = parseNumberSafe(formBumil)
+      const busuiNum = parseNumberSafe(formBusui)
+      const kaderNum = parseNumberSafe(formKaderPosyandu)
+
+      targetPriaVal = balitaLakiNum
+      targetWanitaVal = balitaPeremNum + bumilNum + busuiNum
+      targetGuruVal = kaderNum
       targetTendikVal = 0
+
       subKatSummary = JSON.stringify({
-        balitaLaki: formBalitaLaki,
-        balitaPerem: formBalitaPerem,
-        bumil: formBumil,
-        busui: formBusui,
-        kader: formKaderPosyandu,
+        balitaLaki: balitaLakiNum,
+        balitaPerem: balitaPeremNum,
+        bumil: bumilNum,
+        busui: busuiNum,
+        kader: kaderNum,
         porsiKecil: portionSummary.kecil,
         porsiBesar: portionSummary.besar,
         subKat: formSubKategori
       })
     } else if (isSd) {
-      targetPriaVal = (Number(formSdSiswaLaki13) || 0) + (Number(formSdSiswaLaki46) || 0)
-      targetWanitaVal = (Number(formSdSiswaPerem13) || 0) + (Number(formSdSiswaPerem46) || 0)
-      targetGuruVal = Number(formGuru) || 0
-      targetTendikVal = Number(formTendik) || 0
+      const sd13LakiNum = parseNumberSafe(formSdSiswaLaki13)
+      const sd13PeremNum = parseNumberSafe(formSdSiswaPerem13)
+      const sd46LakiNum = parseNumberSafe(formSdSiswaLaki46)
+      const sd46PeremNum = parseNumberSafe(formSdSiswaPerem46)
+
+      targetPriaVal = sd13LakiNum + sd46LakiNum
+      targetWanitaVal = sd13PeremNum + sd46PeremNum
+      targetGuruVal = parseNumberSafe(formGuru)
+      targetTendikVal = parseNumberSafe(formTendik)
+
       subKatSummary = JSON.stringify({
-        sd13Laki: formSdSiswaLaki13,
-        sd13Perem: formSdSiswaPerem13,
-        sd46Laki: formSdSiswaLaki46,
-        sd46Perem: formSdSiswaPerem46,
+        sd13Laki: sd13LakiNum,
+        sd13Perem: sd13PeremNum,
+        sd46Laki: sd46LakiNum,
+        sd46Perem: sd46PeremNum,
         porsiKecil: portionSummary.kecil,
         porsiBesar: portionSummary.besar
       })
