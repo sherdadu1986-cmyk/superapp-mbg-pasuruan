@@ -110,6 +110,80 @@ export default function LembarDistribusiPrint({
     return `${hh}:${mm} WIB`
   }, [])
 
+  // Standalone Isolated Print Window Handler
+  const handleCetakDokumenMandiri = () => {
+    const printContent = document.getElementById('area-dokumen-a4-bgn')
+    if (!printContent) {
+      alert('Area dokumen tidak ditemukan')
+      return
+    }
+
+    // Ambil semua tag CSS/Tailwind dari halaman aktif
+    const styleSheets = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((el) => el.outerHTML)
+      .join('\n')
+
+    // Buka window khusus print
+    const printWindow = window.open('', '_blank', 'width=900,height=1100')
+    if (!printWindow) {
+      alert('Mohon izinkan pop-up browser untuk mencetak.')
+      return
+    }
+
+    printWindow.document.open()
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="id">
+        <head>
+          <meta charset="UTF-8">
+          <title>Lembar Rekapitulasi Distribusi MBG - BGN</title>
+          ${styleSheets}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 6mm 8mm 6mm 8mm;
+            }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            body {
+              background-color: #ffffff !important;
+              color: #0f172a !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            }
+            #area-dokumen-a4-bgn {
+              width: 100% !important;
+              max-width: none !important;
+              box-shadow: none !important;
+              border: none !important;
+              border-radius: 0 !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="area-dokumen-a4-bgn">
+            ${printContent.innerHTML}
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.focus();
+                window.print();
+                window.close();
+              }, 350);
+            };
+          </script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+  }
+
   useEffect(() => {
     if (!isOpen) return
 
@@ -253,6 +327,7 @@ export default function LembarDistribusiPrint({
           }
 
           /* Area lembar kertas A4 sesungguhnya */
+          #area-dokumen-a4-bgn,
           #lembar-cetak-a4 {
             display: flex !important;
             flex-direction: column !important;
@@ -276,7 +351,7 @@ export default function LembarDistribusiPrint({
 
           @page {
             size: A4 portrait;
-            margin: 0; /* Margin fisik ditangani oleh padding #lembar-cetak-a4 */
+            margin: 0; /* Margin fisik ditangani oleh padding #area-dokumen-a4-bgn */
           }
         }
       `}</style>
@@ -302,7 +377,7 @@ export default function LembarDistribusiPrint({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => window.print()}
+              onClick={handleCetakDokumenMandiri}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <Printer size={15} />
@@ -322,7 +397,7 @@ export default function LembarDistribusiPrint({
           
           {/* Printable Sheet Container (Edge-to-Edge A4 Document) */}
           <div
-            id="lembar-cetak-a4"
+            id="area-dokumen-a4-bgn"
             className="bg-white border border-slate-300 rounded-xl shadow-lg p-6 sm:p-7 w-full max-w-[210mm] text-[#0f172a] font-sans text-xs flex flex-col justify-between h-full min-h-[265mm]"
           >
             {/* Top Section Wrapper */}
