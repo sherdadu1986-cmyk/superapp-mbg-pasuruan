@@ -1,8 +1,8 @@
 "use client"
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { 
   Search, RotateCw, Plus, X, Check, Building2, Info, Eye, Edit, Trash2, 
-  Bookmark, FileSpreadsheet, FileText, Printer, ChevronLeft, 
+  Bookmark, FileSpreadsheet, FileText, FileCheck, Printer, ChevronLeft, 
   ChevronRight, UserPlus, ShieldAlert, HeartHandshake, FileDown, Upload,
   ChevronUp, ChevronDown
 } from 'lucide-react'
@@ -49,13 +49,15 @@ export interface DetailKpmItem {
   sd46Laki?: number
   sd46Perem?: number
   subKategoriRaw?: string
+  suratPernyataanUrl?: string
+  mouUrl?: string
 }
 
 export default function KelompokPenerimaManfaatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRealtimeActive, setIsRealtimeActive] = useState(false)
-  const [perPage, setPerPage] = useState(15)
+  const [perPage, setPerPage] = useState(30)
   const [loading, setLoading] = useState(true)
   const [showAlert, setShowAlert] = useState(true)
   const [activeFilter, setActiveFilter] = useState<'Semua' | 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih'>('Semua')
@@ -129,6 +131,201 @@ export default function KelompokPenerimaManfaatPage() {
   const [showImportConfirmModal, setShowImportConfirmModal] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
+  // KPM Document Upload States & Handlers
+  const docFileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingDocItem, setUploadingDocItem] = useState<{ item: DetailKpmItem; type: 'surat_pernyataan' | 'mou' } | null>(null)
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false)
+
+  const triggerFileUpload = (item: DetailKpmItem, type: 'surat_pernyataan' | 'mou') => {
+    setUploadingDocItem({ item, type })
+    setTimeout(() => {
+      if (docFileInputRef.current) {
+        docFileInputRef.current.click()
+      }
+    }, 50)
+  }
+
+  const handleDocFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !uploadingDocItem) return
+
+    const { item, type } = uploadingDocItem
+    setIsUploadingDoc(true)
+
+    try {
+      const ext = file.name.split('.').pop() || 'pdf'
+      const filePath = `kpm/${item.id}/${type}_${Date.now()}.${ext}`
+
+      // Upload to Supabase Storage bucket 'dokumen-kpm'
+      const { data: uploadData, error: uploadErr } = await supabase
+        .storage
+        .from('dokumen-kpm')
+        .upload(filePath, file, { upsert: true })
+
+      if (uploadErr) {
+        console.error('Storage upload error:', uploadErr)
+        alert(`Gagal upload: ${uploadErr.message}`)
+        setIsUploadingDoc(false)
+        return
+      }
+
+      // Get Public URL
+      const { data: urlData } = supabase
+        .storage
+        .from('dokumen-kpm')
+        .getPublicUrl(filePath)
+
+      const publicUrl = urlData?.publicUrl || ''
+
+      if (!publicUrl) {
+        alert('Gagal memperoleh Public URL dari Supabase Storage.')
+        setIsUploadingDoc(false)
+        return
+      }
+
+      const fieldName = type === 'surat_pernyataan' ? 'surat_pernyataan_url' : 'mou_url'
+
+      let currentSubKatObj: any = {}
+      if (item.subKategoriRaw && typeof item.subKategoriRaw === 'string' && item.subKategoriRaw.trim().startsWith('{')) {
+        try { currentSubKatObj = JSON.parse(item.subKategoriRaw) } catch {}
+      }
+
+      if (type === 'surat_pernyataan') {
+        currentSubKatObj.suratPernyataanUrl = publicUrl
+      } else {
+        currentSubKatObj.mouUrl = publicUrl
+      }
+
+      const newSubKatStr = JSON.stringify(currentSubKatObj)
+
+      const updatePayload: Record<string, any> = {
+        [fieldName]: publicUrl,
+        sub_kategori: newSubKatStr,
+        updated_at: new Date().toISOString()
+      }
+
+      let query = supabase.from('kelompok_penerima_manfaat').update(updatePayload)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (item.id && uuidRegex.test(item.id)) {
+        query = query.eq('id', item.id)
+      } else if (item.npsnReg) {
+        query = query.or(`kode.eq.${item.npsnReg},identitas_npsn_tmp.eq.${item.npsnReg}`)
+      } else {
+        query = query.eq('id', item.id)
+      }
+
+      const { error: dbErr } = await query
+
+      if (dbErr) {
+        let retryQuery = supabase.from('kelompok_penerima_manfaat').update({
+          sub_kategori: newSubKatStr,
+          updated_at: new Date().toISOString()
+        })
+        if (item.id && uuidRegex.test(item.id)) {
+          retryQuery = retryQuery.eq('id', item.id)
+        } else if (item.npsnReg) {
+          retryQuery = retryQuery.or(`kode.eq.${item.npsnReg},identitas_npsn_tmp.eq.${item.npsnReg}`)
+        } else {
+          retryQuery = retryQuery.eq('id', item.id)
+        }
+        await retryQuery
+      }
+
+      setKpmItems(prev => prev.map(k => {
+        if (k.id === item.id || k.npsnReg === item.npsnReg) {
+          return {
+            ...k,
+            suratPernyataanUrl: type === 'surat_pernyataan' ? publicUrl : k.suratPernyataanUrl,
+            mouUrl: type === 'mou' ? publicUrl : k.mouUrl,
+            subKategoriRaw: newSubKatStr
+          }
+        }
+        return k
+      }))
+
+      const docLabel = type === 'surat_pernyataan' ? 'Surat Pernyataan' : 'MoU Penerima MBG'
+      triggerToast(`Berhasil mengunggah ${docLabel} untuk ${item.nama}`)
+    } catch (err: any) {
+      console.error('Exception doc upload:', err)
+      alert(`Gagal upload: ${err.message || 'Terjadi kesalahan'}`)
+    } finally {
+      setIsUploadingDoc(false)
+      setUploadingDocItem(null)
+      if (e.target) e.target.value = ''
+    }
+  }
+
+  const handleDeleteDoc = async (item: DetailKpmItem, type: 'surat_pernyataan' | 'mou') => {
+    const docLabel = type === 'surat_pernyataan' ? 'Surat Pernyataan' : 'MoU Penerima MBG'
+    if (!confirm(`Apakah Anda yakin ingin menghapus dokumen ${docLabel} untuk ${item.nama}?`)) return
+
+    try {
+      const fieldName = type === 'surat_pernyataan' ? 'surat_pernyataan_url' : 'mou_url'
+
+      let currentSubKatObj: any = {}
+      if (item.subKategoriRaw && typeof item.subKategoriRaw === 'string' && item.subKategoriRaw.trim().startsWith('{')) {
+        try { currentSubKatObj = JSON.parse(item.subKategoriRaw) } catch {}
+      }
+
+      if (type === 'surat_pernyataan') {
+        delete currentSubKatObj.suratPernyataanUrl
+      } else {
+        delete currentSubKatObj.mouUrl
+      }
+
+      const newSubKatStr = JSON.stringify(currentSubKatObj)
+
+      const updatePayload: Record<string, any> = {
+        [fieldName]: null,
+        sub_kategori: newSubKatStr,
+        updated_at: new Date().toISOString()
+      }
+
+      let query = supabase.from('kelompok_penerima_manfaat').update(updatePayload)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (item.id && uuidRegex.test(item.id)) {
+        query = query.eq('id', item.id)
+      } else if (item.npsnReg) {
+        query = query.or(`kode.eq.${item.npsnReg},identitas_npsn_tmp.eq.${item.npsnReg}`)
+      } else {
+        query = query.eq('id', item.id)
+      }
+
+      const { error: dbErr } = await query
+      if (dbErr) {
+        let retryQuery = supabase.from('kelompok_penerima_manfaat').update({
+          sub_kategori: newSubKatStr,
+          updated_at: new Date().toISOString()
+        })
+        if (item.id && uuidRegex.test(item.id)) {
+          retryQuery = retryQuery.eq('id', item.id)
+        } else if (item.npsnReg) {
+          retryQuery = retryQuery.or(`kode.eq.${item.npsnReg},identitas_npsn_tmp.eq.${item.npsnReg}`)
+        } else {
+          retryQuery = retryQuery.eq('id', item.id)
+        }
+        await retryQuery
+      }
+
+      setKpmItems(prev => prev.map(k => {
+        if (k.id === item.id || k.npsnReg === item.npsnReg) {
+          return {
+            ...k,
+            suratPernyataanUrl: type === 'surat_pernyataan' ? undefined : k.suratPernyataanUrl,
+            mouUrl: type === 'mou' ? undefined : k.mouUrl,
+            subKategoriRaw: newSubKatStr
+          }
+        }
+        return k
+      }))
+
+      triggerToast(`Dokumen ${docLabel} berhasil dihapus dari ${item.nama}`)
+    } catch (err: any) {
+      console.error('Exception deleting doc:', err)
+      alert(`Gagal menghapus dokumen: ${err.message || 'Error'}`)
+    }
+  }
+
   // BNBA Form Fields
   const [bnbaNisnNik, setBnbaNisnNik] = useState('')
   const [bnbaNama, setBnbaNama] = useState('')
@@ -193,7 +390,7 @@ export default function KelompokPenerimaManfaatPage() {
       return { kecil, besar, label: `Porsi Kecil: ${kecil} porsi (Siswa PAUD/TK) | Porsi Besar: ${besar} porsi (Guru/Tendik)` }
     } else {
       const besar = (Number(formPria) || 0) + (Number(formWanita) || 0) + (Number(formGuru) || 0) + (Number(formTendik) || 0)
-      return { kecil: 0, besar, label: `Porsi Kecil: 0 porsi | Porsi Besar: ${besar} porsi (Siswa + Guru/Tendik)` }
+      return { kecil: 0, besar, label: `Porsi Besar: ${besar} porsi (Siswa SMP/SMA + Guru/Tendik)` }
     }
   }, [isPosyanduCategory, isSdCategory, formKategori, formBalitaLaki, formBalitaPerem, formBumil, formBusui, formKaderPosyandu, formSdSiswaLaki13, formSdSiswaPerem13, formSdSiswaLaki46, formSdSiswaPerem46, formPria, formWanita, formGuru, formTendik])
 
@@ -291,6 +488,8 @@ const getBnbaCountForGroup = (
         let sd13PeremVal: number | undefined = undefined
         let sd46LakiVal: number | undefined = undefined
         let sd46PeremVal: number | undefined = undefined
+        let suratPernyataanUrlVal: string | undefined = kpm.surat_pernyataan_url
+        let mouUrlVal: string | undefined = kpm.mou_url
 
         if (kpm.sub_kategori && typeof kpm.sub_kategori === 'string' && kpm.sub_kategori.trim().startsWith('{')) {
           try {
@@ -299,6 +498,8 @@ const getBnbaCountForGroup = (
             sd13PeremVal = parsed.sd13Perem
             sd46LakiVal = parsed.sd46Laki
             sd46PeremVal = parsed.sd46Perem
+            if (!suratPernyataanUrlVal && parsed.suratPernyataanUrl) suratPernyataanUrlVal = parsed.suratPernyataanUrl
+            if (!mouUrlVal && parsed.mouUrl) mouUrlVal = parsed.mouUrl
           } catch {}
         }
 
@@ -329,7 +530,9 @@ const getBnbaCountForGroup = (
           sd13Perem: sd13PeremVal,
           sd46Laki: sd46LakiVal,
           sd46Perem: sd46PeremVal,
-          subKategoriRaw: kpm.sub_kategori
+          subKategoriRaw: kpm.sub_kategori,
+          suratPernyataanUrl: suratPernyataanUrlVal,
+          mouUrl: mouUrlVal
         }
       })
 
@@ -1814,6 +2017,15 @@ const getBnbaCountForGroup = (
         </div>
       </div>
 
+      {/* Hidden File Input for KPM Document Upload */}
+      <input
+        type="file"
+        ref={docFileInputRef}
+        onChange={handleDocFileSelect}
+        accept=".pdf,image/png,image/jpeg"
+        className="hidden"
+      />
+
       {/* 5. Tabel Data Flat & Compact */}
       <div className="bg-white border border-slate-200 rounded-lg shadow-none overflow-hidden">
         <div className="overflow-x-auto scrollbar-thin">
@@ -1834,6 +2046,7 @@ const getBnbaCountForGroup = (
                 <th className="py-3 px-3 text-right min-w-[110px]">JUMLAH TENDIK</th>
                 <th className="py-3 px-3 text-right min-w-[130px]">TOTAL / RINCIAN</th>
                 <th className="py-3 px-3 text-center min-w-[150px]">KETERANGAN</th>
+                <th className="py-3 px-3 text-center min-w-[260px]">DOKUMEN PENDUKUNG</th>
                 <th className="py-3 px-3 min-w-[200px]">NAMA PIMPINAN/KETUA/PENGHUBUNG</th>
                 <th className="py-3 px-3 min-w-[120px]">NO. HP/TELEPON</th>
                 <th className="py-3 px-3 min-w-[160px]">EMAIL</th>
@@ -1981,6 +2194,103 @@ const getBnbaCountForGroup = (
                       )}
                     </td>
 
+                    {/* Dokumen Pendukung (Surat Pernyataan & MoU MBG) */}
+                    <td className="py-3 px-3 text-center">
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5">
+                        {/* A. Surat Pernyataan */}
+                        {row.suratPernyataanUrl ? (
+                          <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
+                            <a
+                              href={row.suratPernyataanUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline flex items-center gap-1 text-emerald-800"
+                              title="Klik untuk membuka/preview Surat Pernyataan"
+                            >
+                              <Check size={12} className="text-emerald-600 shrink-0" />
+                              <span>✓ Surat Pernyataan</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => triggerFileUpload(row, 'surat_pernyataan')}
+                              title="Ganti / Upload Ulang Surat Pernyataan"
+                              className="p-0.5 text-slate-500 hover:text-slate-900 ml-0.5 cursor-pointer"
+                            >
+                              <Upload size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDoc(row, 'surat_pernyataan')}
+                              title="Hapus Surat Pernyataan"
+                              className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'surat_pernyataan'}
+                            onClick={() => triggerFileUpload(row, 'surat_pernyataan')}
+                            className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-bold px-2 py-1 rounded cursor-pointer transition disabled:opacity-50"
+                          >
+                            {isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'surat_pernyataan' ? (
+                              <RotateCw size={11} className="animate-spin" />
+                            ) : (
+                              <FileText size={11} className="text-slate-500 shrink-0" />
+                            )}
+                            <span>+ Surat Pernyataan</span>
+                          </button>
+                        )}
+
+                        {/* B. MoU MBG */}
+                        {row.mouUrl ? (
+                          <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
+                            <a
+                              href={row.mouUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline flex items-center gap-1 text-emerald-800"
+                              title="Klik untuk membuka/preview MoU MBG"
+                            >
+                              <Check size={12} className="text-emerald-600 shrink-0" />
+                              <span>✓ MoU MBG</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => triggerFileUpload(row, 'mou')}
+                              title="Ganti / Upload Ulang MoU MBG"
+                              className="p-0.5 text-slate-500 hover:text-slate-900 ml-0.5 cursor-pointer"
+                            >
+                              <Upload size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDoc(row, 'mou')}
+                              title="Hapus MoU MBG"
+                              className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'mou'}
+                            onClick={() => triggerFileUpload(row, 'mou')}
+                            className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-bold px-2 py-1 rounded cursor-pointer transition disabled:opacity-50"
+                          >
+                            {isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'mou' ? (
+                              <RotateCw size={11} className="animate-spin" />
+                            ) : (
+                              <FileText size={11} className="text-slate-500 shrink-0" />
+                            )}
+                            <span>+ MoU MBG</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+
                     <td className="py-3 px-3 font-semibold text-slate-900">
                       {row.pimpinan}
                     </td>
@@ -2004,7 +2314,7 @@ const getBnbaCountForGroup = (
                 ))
               ) : (
                 <tr>
-                  <td colSpan={18} className="py-10 text-center text-slate-400 font-medium">
+                  <td colSpan={19} className="py-10 text-center text-slate-400 font-medium">
                     {loading ? 'Memuat data dari database Supabase...' : 'Tidak ada data Kelompok Penerima Manfaat yang cocok.'}
                   </td>
                 </tr>
@@ -2025,11 +2335,13 @@ const getBnbaCountForGroup = (
               <select
                 value={perPage}
                 onChange={(e) => setPerPage(Number(e.target.value))}
-                className="px-2 py-1 border border-slate-300 rounded-md text-xs font-medium bg-white"
+                className="px-2 py-1 border border-slate-300 rounded-md text-xs font-medium bg-white cursor-pointer"
               >
-                <option value={15}>15 baris</option>
-                <option value={25}>25 baris</option>
+                <option value={10}>10 baris</option>
+                <option value={20}>20 baris</option>
+                <option value={30}>30 baris</option>
                 <option value={50}>50 baris</option>
+                <option value={9999}>Semua</option>
               </select>
             </div>
 

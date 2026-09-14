@@ -408,6 +408,8 @@ export interface KelompokPenerimaManfaat {
   email?: string
   status: string
   created_at?: string
+  surat_pernyataan_url?: string
+  mou_url?: string
 }
 
 export interface MenuHarianDB {
