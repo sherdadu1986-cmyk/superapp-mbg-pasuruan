@@ -1099,7 +1099,7 @@ export default function DataRelawanSppgPage() {
                       <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
                         {formatDateIndo(item.mulai_bekerja)}
                       </td>
-                      <td className="py-3 px-3.5 text-slate-700 max-w-xs truncate" title={item.alamat}>
+                      <td className="py-3 px-3.5 text-slate-700 max-w-xs truncate" title={item.alamat || undefined}>
                         {item.alamat || '-'}
                       </td>
                       <td className="py-3 px-3.5 font-mono text-slate-800 text-[11px]">
