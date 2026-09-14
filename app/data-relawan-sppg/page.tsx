@@ -127,7 +127,7 @@ const DUMMY_NIKS_TO_PURGE = [
 const STATUS_OPTIONS: Array<'Aktif' | 'Cuti' | 'Non-Aktif'> = ['Aktif', 'Cuti', 'Non-Aktif']
 const PENDIDIKAN_OPTIONS = ['SMA/SMK', 'D3', 'S1', 'S2', 'Lainnya']
 
-function formatDateIndo(dateStr?: string): string {
+function formatDateIndo(dateStr?: string | null): string {
   if (!dateStr) return '-'
   try {
     const d = new Date(dateStr)
@@ -689,20 +689,40 @@ export default function DataRelawanSppgPage() {
 
     setFormSubmitting(true)
     try {
-      const saved = await saveRelawanSppg({
-        ...formData,
+      // 1. Mapping payload sesuai kolom tabel relawan_sppg yang valid
+      const payload = {
+        nama_lengkap: formData.nama_lengkap,
+        divisi: formData.divisi || 'PENGOLAHAN',
+        nik: formData.nik ? String(formData.nik).replace(/[^0-9]/g, '').trim() : null,
+        email: formData.email || null,
+        tempat_lahir: formData.tempat_lahir || null,
+        tanggal_lahir: formData.tanggal_lahir ? normalizeDateStr(formData.tanggal_lahir) : null,
+        status: formData.status || 'Aktif',
+        no_hp: formData.no_hp ? String(formData.no_hp).replace(/[^0-9]/g, '').trim() : null,
+        pendidikan_terakhir: formData.pendidikan_terakhir || null,
+        mulai_bekerja: formData.mulai_bekerja ? normalizeDateStr(formData.mulai_bekerja) : null,
+        alamat: formData.alamat || null,
+        no_bpjstk: formData.no_bpjstk ? String(formData.no_bpjstk).replace(/[^0-9]/g, '').trim() : null,
+        no_rekening_bni: formData.no_rekening_bni ? String(formData.no_rekening_bni).replace(/[^0-9]/g, '').trim() : null,
         id: editingItem ? editingItem.id : undefined
-      })
-
-      if (editingItem) {
-        setRelawanList(prev => prev.map(r => r.id === saved.id ? saved : r))
-      } else {
-        setRelawanList(prev => [saved, ...prev])
       }
 
+      // 2. Eksekusi Supabase insert / update lewat helper dengan validation & error boundary
+      const saved = await saveRelawanSppg(payload)
+
+      if (!saved) {
+        alert('Gagal menyimpan data ke database!')
+        return
+      }
+
+      // 3. Jika berhasil, beri notifikasi, re-fetch data master dari Supabase dan tutup modal
+      alert('Data relawan berhasil disimpan permanen ke database!')
+      await loadRelawanData()
       setIsModalOpen(false)
+
     } catch (err: any) {
-      alert(`Gagal menyimpan data relawan: ${err?.message || 'Error server'}`)
+      console.error('Submit catch error:', err)
+      alert('Gagal menyimpan data ke database: ' + (err?.message || 'Terjadi kesalahan jaringan atau sistem'))
     } finally {
       setFormSubmitting(false)
     }
@@ -779,7 +799,7 @@ export default function DataRelawanSppgPage() {
   }, [relawanList])
 
   // Badge Divisi Styling Hierarkis per Kelompok Operasional
-  const getDivisiBadge = (divisi: string) => {
+  const getDivisiBadge = (divisi?: string | null) => {
     const d = (divisi || '').toUpperCase()
 
     if (d.includes('KEPALA') || d.includes('PENGAWAS') || d.includes('ASISTEN LAPANGAN')) {

@@ -102,3 +102,44 @@ ALTER TABLE public.menu_harian ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public all access on menu_harian" 
     ON public.menu_harian FOR ALL USING (true) WITH CHECK (true);
 
+-- 4. Table: relawan_sppg
+CREATE TABLE IF NOT EXISTS public.relawan_sppg (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    nama_lengkap VARCHAR(255) NOT NULL,
+    nik VARCHAR(50) UNIQUE NOT NULL,
+    divisi VARCHAR(100) NOT NULL DEFAULT 'PENGOLAHAN',
+    email VARCHAR(150),
+    tempat_lahir VARCHAR(100),
+    tanggal_lahir DATE,
+    status VARCHAR(50) NOT NULL DEFAULT 'Aktif',
+    no_hp VARCHAR(50),
+    pendidikan_terakhir VARCHAR(50),
+    mulai_bekerja DATE,
+    alamat TEXT,
+    no_bpjstk VARCHAR(50),
+    no_rekening_bni VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for relawan_sppg query performance
+CREATE INDEX IF NOT EXISTS idx_relawan_nik ON public.relawan_sppg(nik);
+CREATE INDEX IF NOT EXISTS idx_relawan_divisi ON public.relawan_sppg(divisi);
+
+-- RLS Policy for relawan_sppg
+ALTER TABLE public.relawan_sppg ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'relawan_sppg' AND policyname = 'Enable all operations for relawan_sppg'
+    ) THEN 
+        CREATE POLICY "Enable all operations for relawan_sppg" 
+            ON public.relawan_sppg 
+            FOR ALL 
+            TO public 
+            USING (true) 
+            WITH CHECK (true); 
+    END IF; 
+END $$;
+

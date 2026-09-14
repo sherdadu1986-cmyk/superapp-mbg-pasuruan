@@ -866,18 +866,18 @@ export async function deleteBnbaItem(id: string): Promise<boolean> {
 export interface RelawanSppg {
   id: string
   nama_lengkap: string
-  nik: string
+  nik?: string | null
   divisi: string
-  email: string
-  tempat_lahir: string
-  tanggal_lahir: string
+  email?: string | null
+  tempat_lahir?: string | null
+  tanggal_lahir?: string | null
   status: 'Aktif' | 'Cuti' | 'Non-Aktif'
-  no_hp: string
-  pendidikan_terakhir: string
-  mulai_bekerja: string
-  alamat: string
-  no_bpjstk: string
-  no_rekening_bni: string
+  no_hp?: string | null
+  pendidikan_terakhir?: string | null
+  mulai_bekerja?: string | null
+  alamat?: string | null
+  no_bpjstk?: string | null
+  no_rekening_bni?: string | null
   created_at?: string
 }
 
@@ -913,48 +913,84 @@ export async function fetchRelawanSppgList(): Promise<RelawanSppg[]> {
 }
 
 export async function saveRelawanSppg(item: Partial<RelawanSppg>): Promise<RelawanSppg> {
-  const isEdit = !!item.id
-  const payload = {
-    ...item,
-    id: item.id || `rel-${Date.now()}`
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const isEdit = !!(item.id && uuidRegex.test(item.id))
+
+  const cleanNik = item.nik ? String(item.nik).replace(/[^0-9]/g, '').trim() : null
+  const cleanHp = item.no_hp ? String(item.no_hp).replace(/[^0-9]/g, '').trim() : null
+  const cleanBpjstk = item.no_bpjstk ? String(item.no_bpjstk).replace(/[^0-9]/g, '').trim() : null
+  const cleanRekening = item.no_rekening_bni ? String(item.no_rekening_bni).replace(/[^0-9]/g, '').trim() : null
+
+  const cleanTglLahir = item.tanggal_lahir ? normalizeDateStr(item.tanggal_lahir) : null
+  const cleanMulaiBekerja = item.mulai_bekerja ? normalizeDateStr(item.mulai_bekerja) : null
+
+  const payload: any = {
+    nama_lengkap: item.nama_lengkap,
+    nik: cleanNik,
+    divisi: item.divisi || 'PENGOLAHAN',
+    email: item.email || null,
+    tempat_lahir: item.tempat_lahir || null,
+    tanggal_lahir: cleanTglLahir || null,
+    status: item.status || 'Aktif',
+    no_hp: cleanHp || null,
+    pendidikan_terakhir: item.pendidikan_terakhir || null,
+    mulai_bekerja: cleanMulaiBekerja || null,
+    alamat: item.alamat || null,
+    no_bpjstk: cleanBpjstk || null,
+    no_rekening_bni: cleanRekening || null,
+  }
+
+  if (isEdit && item.id) {
+    payload.id = item.id
+  }
+
+  let dbData: RelawanSppg | null = null
+  let dbError: any = null
+
+  if (isEdit) {
+    const { data, error } = await supabase
+      .from('relawan_sppg')
+      .update(payload)
+      .eq('id', payload.id)
+      .select()
+      .single()
+    dbData = data
+    dbError = error
+  } else {
+    const { data, error } = await supabase
+      .from('relawan_sppg')
+      .insert([payload])
+      .select()
+      .single()
+    dbData = data
+    dbError = error
+  }
+
+  if (dbError) {
+    console.error('Supabase Insert/Update Error:', dbError)
+    throw dbError
+  }
+
+  if (!dbData) {
+    throw new Error('Supabase tidak mengembalikan data relawan.')
   }
 
   if (typeof window !== 'undefined') {
-    const currentList = await fetchRelawanSppgList()
-    let updatedList: RelawanSppg[] = []
-    if (isEdit) {
-      updatedList = currentList.map(r => r.id === payload.id ? { ...r, ...payload } as RelawanSppg : r)
-    } else {
-      updatedList = [payload as RelawanSppg, ...currentList]
-    }
-    localStorage.setItem('sppg_relawan_list', JSON.stringify(updatedList))
-    window.dispatchEvent(new Event('storage'))
+    try {
+      const stored = localStorage.getItem('sppg_relawan_list')
+      const currentList: RelawanSppg[] = stored ? JSON.parse(stored) : []
+      let updatedList: RelawanSppg[] = []
+      if (isEdit) {
+        updatedList = currentList.map(r => r.id === dbData!.id ? dbData! : r)
+      } else {
+        updatedList = [dbData, ...currentList.filter(r => r.id !== dbData!.id)]
+      }
+      localStorage.setItem('sppg_relawan_list', JSON.stringify(updatedList))
+      window.dispatchEvent(new Event('storage'))
+    } catch {}
   }
 
-  try {
-    if (isEdit) {
-      const { data, error } = await supabase
-        .from('relawan_sppg')
-        .update(payload)
-        .eq('id', payload.id)
-        .select()
-        .single()
-      if (error) console.error('Error updating relawan:', error)
-      if (data) return data
-    } else {
-      const { data, error } = await supabase
-        .from('relawan_sppg')
-        .insert(payload)
-        .select()
-        .single()
-      if (error) console.error('Error inserting relawan:', error)
-      if (data) return data
-    }
-  } catch (err) {
-    console.warn('Supabase relawan_sppg save warning:', err)
-  }
-
-  return payload as RelawanSppg
+  return dbData
 }
 
 export async function deleteRelawanSppg(id: string): Promise<boolean> {
