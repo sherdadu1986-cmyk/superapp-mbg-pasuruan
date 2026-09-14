@@ -838,4 +838,227 @@ export async function deleteBnbaItem(id: string): Promise<boolean> {
   return true
 }
 
+// ─── Data Relawan SPPG Helpers ───────────────────────────────
 
+export interface RelawanSppg {
+  id: string
+  nama_lengkap: string
+  nik: string
+  divisi: string
+  email: string
+  tempat_lahir: string
+  tanggal_lahir: string
+  status: 'Aktif' | 'Cuti' | 'Non-Aktif'
+  no_hp: string
+  pendidikan_terakhir: string
+  mulai_bekerja: string
+  alamat: string
+  no_bpjstk: string
+  no_rekening_bni: string
+  created_at?: string
+}
+
+export const INITIAL_RELAWAN_DATA: RelawanSppg[] = [
+  {
+    id: 'rel-001',
+    nama_lengkap: 'Ahmad Sayyidani Khaqiqi, S.Pd.',
+    nik: '3514121508960001',
+    divisi: 'Administrasi',
+    email: 'sayyidani.kh@sppg-bgn.go.id',
+    tempat_lahir: 'Pasuruan',
+    tanggal_lahir: '1996-08-15',
+    status: 'Aktif',
+    no_hp: '081234567890',
+    pendidikan_terakhir: 'S1',
+    mulai_bekerja: '2025-01-02',
+    alamat: 'Jl. Raya Kiduldalem No. 45, Wonorejo, Pasuruan',
+    no_bpjstk: '24018892019',
+    no_rekening_bni: '0891234567'
+  },
+  {
+    id: 'rel-002',
+    nama_lengkap: 'Budi Santoso',
+    nik: '3514122003920002',
+    divisi: 'Dapur',
+    email: 'budi.santoso@gmail.com',
+    tempat_lahir: 'Pasuruan',
+    tanggal_lahir: '1992-03-20',
+    status: 'Aktif',
+    no_hp: '082134567891',
+    pendidikan_terakhir: 'SMA/SMK',
+    mulai_bekerja: '2025-01-05',
+    alamat: 'Desa Wonorejo RT 02 RW 01, Pasuruan',
+    no_bpjstk: '24018892020',
+    no_rekening_bni: '0891234568'
+  },
+  {
+    id: 'rel-003',
+    nama_lengkap: 'Siti Rahmawati, A.Md.Gz.',
+    nik: '3514125211950003',
+    divisi: 'QC',
+    email: 'siti.rahma@sppg-bgn.go.id',
+    tempat_lahir: 'Malang',
+    tanggal_lahir: '1995-11-12',
+    status: 'Aktif',
+    no_hp: '085712345678',
+    pendidikan_terakhir: 'D3',
+    mulai_bekerja: '2025-01-02',
+    alamat: 'Jl. Merdeka No. 12, Wonorejo, Pasuruan',
+    no_bpjstk: '24018892021',
+    no_rekening_bni: '0891234569'
+  },
+  {
+    id: 'rel-004',
+    nama_lengkap: 'Muhammad Rizky Pratama',
+    nik: '3514121004980004',
+    divisi: 'Distribusi',
+    email: 'rizky.pratama@gmail.com',
+    tempat_lahir: 'Pasuruan',
+    tanggal_lahir: '1998-04-10',
+    status: 'Aktif',
+    no_hp: '089612345679',
+    pendidikan_terakhir: 'SMA/SMK',
+    mulai_bekerja: '2025-01-10',
+    alamat: 'Dusun Krajan RT 04 RW 02, Kiduldalem, Pasuruan',
+    no_bpjstk: '24018892022',
+    no_rekening_bni: '0891234570'
+  },
+  {
+    id: 'rel-005',
+    nama_lengkap: 'Dewi Lestari, S.E.',
+    nik: '3514126507970005',
+    divisi: 'Logistik',
+    email: 'dewi.lestari@gmail.com',
+    tempat_lahir: 'Pasuruan',
+    tanggal_lahir: '1997-07-25',
+    status: 'Aktif',
+    no_hp: '081398765432',
+    pendidikan_terakhir: 'S1',
+    mulai_bekerja: '2025-01-02',
+    alamat: 'Jl. Manggis No. 8, Wonorejo, Pasuruan',
+    no_bpjstk: '24018892023',
+    no_rekening_bni: '0891234571'
+  },
+  {
+    id: 'rel-006',
+    nama_lengkap: 'Eko Prasetyo',
+    nik: '3514121809930006',
+    divisi: 'Dapur',
+    email: 'eko.prasetyo@gmail.com',
+    tempat_lahir: 'Probolinggo',
+    tanggal_lahir: '1993-09-18',
+    status: 'Cuti',
+    no_hp: '082298765431',
+    pendidikan_terakhir: 'SMA/SMK',
+    mulai_bekerja: '2025-01-15',
+    alamat: 'Desa Sambisari RT 01 RW 03, Wonorejo, Pasuruan',
+    no_bpjstk: '24018892024',
+    no_rekening_bni: '0891234572'
+  },
+  {
+    id: 'rel-007',
+    nama_lengkap: 'Maya Indah Sari',
+    nik: '3514124505000007',
+    divisi: 'Administrasi',
+    email: 'maya.indah@gmail.com',
+    tempat_lahir: 'Pasuruan',
+    tanggal_lahir: '2000-05-05',
+    status: 'Aktif',
+    no_hp: '087812349876',
+    pendidikan_terakhir: 'D3',
+    mulai_bekerja: '2025-02-01',
+    alamat: 'Jl. Pahlawan No. 34, Wonorejo, Pasuruan',
+    no_bpjstk: '24018892025',
+    no_rekening_bni: '0891234573'
+  }
+]
+
+export async function fetchRelawanSppgList(): Promise<RelawanSppg[]> {
+  try {
+    const { data, error } = await supabase
+      .from('relawan_sppg')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (error || !data || data.length === 0) {
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_relawan_list') : null
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          if (parsed && parsed.length > 0) return parsed
+        } catch {}
+      }
+      return INITIAL_RELAWAN_DATA
+    }
+    return data
+  } catch {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sppg_relawan_list') : null
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        if (parsed && parsed.length > 0) return parsed
+      } catch {}
+    }
+    return INITIAL_RELAWAN_DATA
+  }
+}
+
+export async function saveRelawanSppg(item: Partial<RelawanSppg>): Promise<RelawanSppg> {
+  const isEdit = !!item.id
+  const payload = {
+    ...item,
+    id: item.id || `rel-${Date.now()}`
+  }
+
+  if (typeof window !== 'undefined') {
+    const currentList = await fetchRelawanSppgList()
+    let updatedList: RelawanSppg[] = []
+    if (isEdit) {
+      updatedList = currentList.map(r => r.id === payload.id ? { ...r, ...payload } as RelawanSppg : r)
+    } else {
+      updatedList = [payload as RelawanSppg, ...currentList]
+    }
+    localStorage.setItem('sppg_relawan_list', JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    if (isEdit) {
+      const { data } = await supabase
+        .from('relawan_sppg')
+        .update(payload)
+        .eq('id', payload.id)
+        .select()
+        .single()
+      if (data) return data
+    } else {
+      const { data } = await supabase
+        .from('relawan_sppg')
+        .insert(payload)
+        .select()
+        .single()
+      if (data) return data
+    }
+  } catch (err) {
+    console.warn('Supabase relawan_sppg save warning:', err)
+  }
+
+  return payload as RelawanSppg
+}
+
+export async function deleteRelawanSppg(id: string): Promise<boolean> {
+  if (typeof window !== 'undefined') {
+    const currentList = await fetchRelawanSppgList()
+    const filtered = currentList.filter(r => r.id !== id)
+    localStorage.setItem('sppg_relawan_list', JSON.stringify(filtered))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    await supabase.from('relawan_sppg').delete().eq('id', id)
+  } catch (err) {
+    console.warn('Supabase relawan_sppg delete warning:', err)
+  }
+
+  return true
+}

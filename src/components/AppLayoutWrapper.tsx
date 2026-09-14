@@ -67,6 +67,12 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           icon: <BookOpen size={17} className="text-emerald-600" />, 
           path: '/kelompok-penerima-manfaat',
           active: pathname === '/kelompok-penerima-manfaat'
+        },
+        { 
+          name: 'Data Relawan SPPG', 
+          icon: <Users size={17} className="text-blue-600" />, 
+          path: '/data-relawan-sppg',
+          active: pathname === '/data-relawan-sppg'
         }
       ]
     },
