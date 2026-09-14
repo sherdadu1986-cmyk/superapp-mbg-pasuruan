@@ -1,7 +1,9 @@
 "use client"
 import React, { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Printer, X, Building2, CheckCircle2 } from 'lucide-react'
+import { FileDown, Loader2, X, Building2, CheckCircle2, Printer } from 'lucide-react'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 import { supabase } from '@/lib/supabase'
 import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
 
@@ -65,6 +67,7 @@ export default function LembarDistribusiPrint({
 }: LembarDistribusiPrintProps) {
   const [mounted, setMounted] = useState(false)
   const [kpmData, setKpmData] = useState<KelompokPenerimaManfaat[]>([])
+  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -110,7 +113,52 @@ export default function LembarDistribusiPrint({
     return `${hh}:${mm} WIB`
   }, [])
 
-  // Standalone Isolated Print Window Handler
+  // High-Resolution Direct PDF Export Handler (jsPDF + html2canvas)
+  const handleDownloadPDF = async () => {
+    const element = document.getElementById('area-dokumen-a4-bgn')
+    if (!element) return
+
+    try {
+      setIsExporting(true)
+
+      // Tangkap kontainer sebagai canvas dengan skala resolusi tinggi
+      const canvas = await html2canvas(element, {
+        scale: 2.5, // Menghasilkan cetakan teks dan logo yang sangat tajam
+        useCORS: true, // Memastikan gambar/logo dari URL publik termuat
+        logging: false,
+        backgroundColor: '#ffffff'
+      })
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.98)
+
+      // Inisialisasi jsPDF format A4 Portrait (210 x 297 mm)
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      })
+
+      const pdfWidth = 210
+      const marginX = 6
+      const marginY = 6
+      const contentWidth = pdfWidth - (marginX * 2)
+      const contentHeight = (canvas.height * contentWidth) / canvas.width
+
+      // Tambahkan gambar ke lembar A4 tunggal
+      pdf.addImage(imgData, 'JPEG', marginX, marginY, contentWidth, contentHeight)
+
+      // Format penamaan file resmi: Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_YYYYMMDD.pdf
+      const dateSlug = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      pdf.save(`Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_${dateSlug}.pdf`)
+    } catch (error) {
+      console.error('Gagal generate PDF:', error)
+      alert('Terjadi kesalahan saat membuat file PDF.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // Standalone Isolated Print Window Handler (Fallback Option)
   const handleCetakDokumenMandiri = () => {
     const printContent = document.getElementById('area-dokumen-a4-bgn')
     if (!printContent) {
@@ -367,7 +415,7 @@ export default function LembarDistribusiPrint({
         <div className="no-print bg-slate-900 text-white p-4 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-blue-600 text-white rounded-lg">
-              <Printer size={20} />
+              <FileDown size={20} />
             </div>
             <div>
               <h2 className="font-bold text-sm sm:text-base leading-tight">
@@ -381,11 +429,21 @@ export default function LembarDistribusiPrint({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleCetakDokumenMandiri}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              onClick={handleDownloadPDF}
+              disabled={isExporting}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:opacity-80 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
-              <Printer size={15} />
-              <span>Cetak Dokumen (A4)</span>
+              {isExporting ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  <span>Menyiapkan PDF...</span>
+                </>
+              ) : (
+                <>
+                  <FileDown size={15} />
+                  <span>Unduh Dokumen PDF</span>
+                </>
+              )}
             </button>
             <button
               onClick={onClose}
