@@ -196,16 +196,28 @@ export default function CetakLembarDistribusiPage() {
       <style jsx global>{`
         @page {
           size: A4 portrait;
-          margin: 6mm 8mm 6mm 8mm;
+          margin: 6mm 8mm 6mm 8mm !important;
         }
         @media print {
-          body {
+          header,
+          nav,
+          aside,
+          footer,
+          .no-print,
+          [data-component="navbar"],
+          [data-component="sidebar"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
             background: #ffffff !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-          }
-          .no-print {
-            display: none !important;
           }
           .print-page-root {
             background: #ffffff !important;

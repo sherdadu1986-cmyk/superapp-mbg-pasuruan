@@ -67,3 +67,34 @@ body {
   pointer-events: none;
   border-radius: inherit;
 }
+
+@media print {
+  /* Sembunyikan navbar, sidebar, footer, dan tombol interaksi */
+  header,
+  nav,
+  aside,
+  footer,
+  .no-print,
+  [data-component="navbar"],
+  [data-component="sidebar"] {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Pastikan root dokumen mulai langsung dari paling atas kertas */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm 6mm 8mm !important;
+  }
+}

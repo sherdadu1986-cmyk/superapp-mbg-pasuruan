@@ -1,9 +1,7 @@
 "use client"
 import React, { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { FileDown, Loader2, X, Building2, CheckCircle2, Printer } from 'lucide-react'
-import jsPDF from 'jspdf'
-import { toPng } from 'html-to-image'
+import { Printer, X, Building2, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { fetchKelompokPenerimaManfaatList, sortKpmList, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
 
@@ -67,7 +65,6 @@ export default function LembarDistribusiPrint({
 }: LembarDistribusiPrintProps) {
   const [mounted, setMounted] = useState(false)
   const [kpmData, setKpmData] = useState<KelompokPenerimaManfaat[]>([])
-  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -117,43 +114,6 @@ export default function LembarDistribusiPrint({
   const handleBukaLembarCetak = () => {
     const liburParam = (liburKpmIds || []).join(',')
     window.open(`/cetak/lembar-distribusi?libur=${encodeURIComponent(liburParam)}`, '_blank')
-  }
-
-  // High-Resolution Direct PDF Export Handler (jsPDF + html-to-image)
-  const handleDownloadPDF = async () => {
-    const element = document.getElementById('area-dokumen-a4-bgn')
-    if (!element) return
-
-    try {
-      setIsExporting(true)
-
-      // Render dengan skala tinggi untuk ketajaman teks maksimal
-      const dataUrl = await toPng(element, {
-        quality: 1,
-        pixelRatio: 2,
-        cacheBust: true,
-        backgroundColor: '#ffffff',
-      })
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      })
-
-      // A4 standar: 210 x 297 mm
-      // Cetak presisi memenuhi seluruh halaman A4 (Full Page Fit)
-      pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST')
-
-      const todaySlug = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      pdf.save(`Rekapitulasi_Distribusi_MBG_SPPG_Kiduldalem_${todaySlug}.pdf`)
-
-    } catch (err) {
-      console.error(err)
-      alert('Gagal mengekspor PDF')
-    } finally {
-      setIsExporting(false)
-    }
   }
 
   // Standalone Isolated Print Window Handler (Fallback Option)
@@ -415,7 +375,7 @@ export default function LembarDistribusiPrint({
         <div className="no-print bg-slate-900 text-white p-4 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-blue-600 text-white rounded-lg">
-              <FileDown size={20} />
+              <Printer size={20} />
             </div>
             <div>
               <h2 className="font-bold text-sm sm:text-base leading-tight">
@@ -430,27 +390,10 @@ export default function LembarDistribusiPrint({
           <div className="flex items-center gap-2">
             <button
               onClick={handleBukaLembarCetak}
-              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <Printer size={15} />
               <span>Cetak Dokumen (A4)</span>
-            </button>
-            <button
-              onClick={handleDownloadPDF}
-              disabled={isExporting}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:opacity-80 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" />
-                  <span>Menyiapkan PDF...</span>
-                </>
-              ) : (
-                <>
-                  <FileDown size={15} />
-                  <span>Unduh Dokumen PDF</span>
-                </>
-              )}
             </button>
             <button
               onClick={onClose}

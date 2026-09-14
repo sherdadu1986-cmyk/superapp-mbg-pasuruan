@@ -239,9 +239,9 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
   )
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
-      {/* Header Top Navbar (Clean White SIPGN Style) */}
-      <header className="bg-white border-b border-gray-200 h-14 px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40 shadow-2xs">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans print:bg-white print:min-h-0">
+      {/* Header Top Navbar (Clean White SIPGN Style - Hidden on print) */}
+      <header className="no-print print:hidden bg-white border-b border-gray-200 h-14 px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40 shadow-2xs">
         {/* Left Header: Mobile Toggle + Logo + App Title */}
         <div className="flex items-center gap-3">
           <button 
@@ -275,9 +275,9 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
       </header>
 
       {/* Main Body: Sidebar + Full Width Content */}
-      <div className="flex-1 flex min-w-0">
-        {/* Desktop Sidebar (White bg-white border-r w-64) */}
-        <aside className="hidden lg:block w-64 flex-shrink-0 border-r border-gray-200 bg-white">
+      <div className="flex-1 flex min-w-0 print:block">
+        {/* Desktop Sidebar (White bg-white border-r w-64 - Hidden on print) */}
+        <aside className="no-print print:hidden hidden lg:block w-64 flex-shrink-0 border-r border-gray-200 bg-white">
           {renderSidebarContents()}
         </aside>
 
@@ -290,7 +290,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setMobileOpen(false)}
-                className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 lg:hidden"
+                className="no-print print:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 lg:hidden"
               />
               
               <motion.div
@@ -298,7 +298,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed top-0 bottom-0 left-0 w-64 max-w-[80vw] z-50 lg:hidden bg-white h-full shadow-xl"
+                className="no-print print:hidden fixed top-0 bottom-0 left-0 w-64 max-w-[80vw] z-50 lg:hidden bg-white h-full shadow-xl"
               >
                 <div className="p-4 border-b border-gray-200 flex items-center justify-between">
                   <span className="font-bold text-xs text-gray-800">Menu SIPGN</span>
@@ -316,7 +316,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
         </AnimatePresence>
 
         {/* Main Content Area (Full width, no tight max-w) */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[#F8FAFC] min-w-0">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[#F8FAFC] min-w-0 print:p-0 print:bg-white print:overflow-visible">
           {children}
         </main>
       </div>
