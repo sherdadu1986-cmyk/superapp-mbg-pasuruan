@@ -1062,3 +1062,43 @@ export async function deleteRelawanSppg(id: string): Promise<boolean> {
 
   return true
 }
+
+export async function bulkSaveRelawanSppg(items: Partial<RelawanSppg>[]): Promise<boolean> {
+  if (!items || items.length === 0) return false
+
+  const processedItems = items.map((item, idx) => ({
+    ...item,
+    id: item.id || `rel-${Date.now()}-${idx}`
+  }))
+
+  if (typeof window !== 'undefined') {
+    const currentList = await fetchRelawanSppgList()
+    const existingMap = new Map<string, RelawanSppg>()
+    currentList.forEach(r => {
+      const key = r.nik || r.id
+      if (key) existingMap.set(key, r)
+    })
+    processedItems.forEach(r => {
+      const key = r.nik || r.id
+      if (key) {
+        const prev = existingMap.get(key)
+        existingMap.set(key, { ...prev, ...r } as RelawanSppg)
+      }
+    })
+    const updatedList = Array.from(existingMap.values())
+    localStorage.setItem('sppg_relawan_list', JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+
+  try {
+    const { error } = await supabase.from('relawan_sppg').upsert(processedItems)
+    if (error) {
+      await supabase.from('relawan_sppg').insert(processedItems)
+    }
+  } catch (err) {
+    console.warn('Supabase bulk relawan_sppg save warning:', err)
+  }
+
+  return true
+}
+
