@@ -143,3 +143,12 @@ BEGIN
     END IF; 
 END $$;
 
+-- Sync & Fix Foreign Key mapping for SDN Tamansari & other imported BNBA records
+UPDATE public.penerima_manfaat_bnba
+SET kelompok_id = COALESCE(
+    (SELECT id::text FROM public.kelompok_penerima_manfaat WHERE identitas_npsn_tmp = '20518988' OR kode = '20518988' OR nama ILIKE '%TAMANSARI%' LIMIT 1),
+    kelompok_id
+)
+WHERE (kelompok_id IS NULL OR kelompok_id = '' OR kelompok_id = '20518988') 
+  AND (nisn_nik ILIKE '%20518988%' OR kelompok_id = '20518988');
+

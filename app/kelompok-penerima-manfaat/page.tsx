@@ -13,6 +13,7 @@ import {
   saveKelompokPenerimaManfaat, 
   deleteKelompokPenerimaManfaat,
   fetchBnbaList,
+  fetchAllBnbaRecordsFromSupabase,
   saveBnbaItem,
   saveBnbaBulk,
   deleteBnbaItem,
@@ -448,7 +449,12 @@ const getBnbaCountForGroup = (
   if (group.npsnReg) possibleKeys.add(String(group.npsnReg).trim().toLowerCase())
   if (group.kode) possibleKeys.add(String(group.kode).trim().toLowerCase())
   if (group.identitas_npsn_tmp) possibleKeys.add(String(group.identitas_npsn_tmp).trim().toLowerCase())
-  if (group.nama) possibleKeys.add(String(group.nama).trim().toLowerCase())
+  if (group.nama) {
+    const cleanNama = String(group.nama).trim().toLowerCase()
+    possibleKeys.add(cleanNama)
+    const shortNama = cleanNama.replace(/^(sdn|smpn|mtsn|posyandu|tk|kb|paud)\s+/g, '').trim()
+    if (shortNama && shortNama.length >= 3) possibleKeys.add(shortNama)
+  }
 
   const matchedRowIds = new Set<string>()
   records.forEach(b => {
@@ -459,10 +465,22 @@ const getBnbaCountForGroup = (
       raw.npsn,
       raw.kode,
       raw.sekolah_id,
-      raw.kode_kelompok
+      raw.kode_kelompok,
+      raw.nama_sekolah,
+      raw.nama_kelompok
     ].filter(Boolean)
 
-    if (rowKeys.some(k => possibleKeys.has(String(k).trim().toLowerCase()))) {
+    let isMatch = rowKeys.some(k => possibleKeys.has(String(k).trim().toLowerCase()))
+
+    if (!isMatch && group.nama) {
+      const gNama = String(group.nama).trim().toLowerCase()
+      const bSekolah = String(raw.nama_sekolah || raw.nama_kelompok || raw.sekolah || '').trim().toLowerCase()
+      if (bSekolah && (gNama.includes(bSekolah) || bSekolah.includes(gNama))) {
+        isMatch = true
+      }
+    }
+
+    if (isMatch) {
       matchedRowIds.add(b.id || `${b.nisn_nik}-${b.nama_lengkap}`)
     }
   })
@@ -474,10 +492,9 @@ const getBnbaCountForGroup = (
   const loadData = async () => {
     setLoading(true)
     try {
-      const [supabaseRes, bnbaRes, directBnbaRes] = await Promise.all([
+      const [supabaseRes, bnbaRecords] = await Promise.all([
         supabase.from('kelompok_penerima_manfaat').select('*').order('urutan', { ascending: true }),
-        fetchBnbaList(),
-        supabase.from('penerima_manfaat_bnba').select('*').limit(10000)
+        fetchAllBnbaRecordsFromSupabase()
       ])
 
       let data = supabaseRes.data
@@ -485,13 +502,7 @@ const getBnbaCountForGroup = (
         data = await fetchKelompokPenerimaManfaatList()
       }
 
-      // Combine BNBA records from fetchBnbaList and direct Supabase select for comprehensive coverage
-      const combinedBnbaMap = new Map<string, PenerimaManfaatBnba>()
-      ;(bnbaRes || []).forEach(b => { if (b.id) combinedBnbaMap.set(b.id, b) })
-      ;(directBnbaRes.data || []).forEach((b: any) => { if (b.id) combinedBnbaMap.set(b.id, b) })
-
-      const combinedBnbaList = Array.from(combinedBnbaMap.values())
-      setAllBnbaRecords(combinedBnbaList)
+      setAllBnbaRecords(bnbaRecords)
 
       // Map Supabase rows to DetailKpmItem format
       const mappedItems: DetailKpmItem[] = (data || []).map((kpm: any, idx: number) => {
@@ -507,7 +518,7 @@ const getBnbaCountForGroup = (
           jenisLabel = 'SMP / MTs'
         }
 
-        const bnbaCount = getBnbaCountForGroup(kpm, combinedBnbaList)
+        const bnbaCount = getBnbaCountForGroup(kpm, bnbaRecords)
         const totalTarget = kpm.jumlah_penerima || (kpm.target_pria || 0) + (kpm.target_wanita || 0) + (kpm.target_guru || 0) + (kpm.target_tendik || 0) || 0
 
         let ketStatus: 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih' = 'Sesuai'

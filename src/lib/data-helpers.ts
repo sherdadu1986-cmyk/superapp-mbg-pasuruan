@@ -815,17 +815,64 @@ const LS_BNBA = 'sppg_penerima_bnba'
 // Initial empty BNBA list
 export const INITIAL_BNBA_DATA: PenerimaManfaatBnba[] = []
 
+export async function fetchAllBnbaRecordsFromSupabase(): Promise<PenerimaManfaatBnba[]> {
+  try {
+    const allRecords: PenerimaManfaatBnba[] = []
+    const pageSize = 1000
+    let page = 0
+    let hasMore = true
+
+    while (hasMore && page < 20) {
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await supabase
+        .from('penerima_manfaat_bnba')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error || !data || data.length === 0) {
+        hasMore = false
+      } else {
+        allRecords.push(...data)
+        if (data.length < pageSize) {
+          hasMore = false
+        }
+        page++
+      }
+    }
+
+    if (allRecords.length > 0) {
+      return allRecords
+    }
+  } catch (err) {
+    console.error('Error fetching all BNBA records:', err)
+  }
+
+  const stored = typeof window !== 'undefined' ? localStorage.getItem(LS_BNBA) : null
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) return parsed
+    } catch {}
+  }
+
+  return []
+}
+
 export async function fetchBnbaList(kelompokId?: string): Promise<PenerimaManfaatBnba[]> {
   try {
-    let query = supabase.from('penerima_manfaat_bnba').select('*').order('created_at', { ascending: false })
     if (kelompokId) {
-      query = query.eq('kelompok_id', kelompokId)
+      const { data, error } = await supabase
+        .from('penerima_manfaat_bnba')
+        .select('*')
+        .or(`kelompok_id.eq.${kelompokId},nisn_nik.eq.${kelompokId}`)
+        .order('created_at', { ascending: false })
+      if (error || !data) return []
+      return data
     } else {
-      query = query.limit(10000)
+      return await fetchAllBnbaRecordsFromSupabase()
     }
-    const { data, error } = await query
-    if (error || !data) return []
-    return data
   } catch {
     const stored = typeof window !== 'undefined' ? localStorage.getItem(LS_BNBA) : null
     let all: PenerimaManfaatBnba[] = []
