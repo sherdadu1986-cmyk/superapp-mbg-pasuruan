@@ -97,6 +97,72 @@ export default function BerandaOperasionalPage() {
     return []
   })
 
+  // Operational Route & PIC Settings State (Stored locally per date)
+  const [distribusiSettings, setDistribusiSettings] = useState<Record<string, { rute: 'Kiri' | 'Kanan'; no_hp_pic: string }>>(() => {
+    if (typeof window !== 'undefined') {
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const saved = localStorage.getItem(`sppg_distribusi_settings_${todayStr}`)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return {}
+  })
+
+  const handleUpdateRute = (itemKey: string, newRute: 'Kiri' | 'Kanan', defaultHp: string = '') => {
+    setDistribusiSettings((prev) => {
+      const current = prev[itemKey] || {
+        rute: 'Kiri',
+        no_hp_pic: defaultHp
+      }
+      const next = {
+        ...prev,
+        [itemKey]: {
+          ...current,
+          rute: newRute
+        }
+      }
+      if (typeof window !== 'undefined') {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        localStorage.setItem(`sppg_distribusi_settings_${todayStr}`, JSON.stringify(next))
+      }
+      return next
+    })
+  }
+
+  const handleUpdatePic = (itemKey: string, newPic: string, defaultRute: 'Kiri' | 'Kanan' = 'Kiri') => {
+    setDistribusiSettings((prev) => {
+      const current = prev[itemKey] || {
+        rute: defaultRute,
+        no_hp_pic: ''
+      }
+      const next = {
+        ...prev,
+        [itemKey]: {
+          ...current,
+          no_hp_pic: newPic
+        }
+      }
+      if (typeof window !== 'undefined') {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        localStorage.setItem(`sppg_distribusi_settings_${todayStr}`, JSON.stringify(next))
+      }
+      return next
+    })
+  }
+
+  const getKpmSetting = (itemKey: string, item: KelompokPenerimaManfaat, idx: number) => {
+    const saved = distribusiSettings[itemKey]
+    const defaultRute: 'Kiri' | 'Kanan' = idx < Math.ceil(kpmList.length / 2) ? 'Kiri' : 'Kanan'
+    const defaultHp = item.hp || item.pimpinan || ''
+    return {
+      rute: saved?.rute || defaultRute,
+      no_hp_pic: saved?.no_hp_pic !== undefined ? saved.no_hp_pic : defaultHp
+    }
+  }
+
   const toggleLibur = (id: string) => {
     setLiburKpmIds((prev) => {
       const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -828,13 +894,15 @@ export default function BerandaOperasionalPage() {
             </div>
 
             {/* Tabel Ringkas Distribusi (Full Unclipped Table) */}
-            <div className="border border-slate-100 rounded-xl overflow-hidden shadow-2xs">
+            <div className="border border-slate-100 rounded-xl overflow-x-auto shadow-2xs">
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider">
                   <tr>
                     <th className="py-2.5 px-3 text-center w-10 border-b border-slate-800">NO</th>
                     <th className="py-2.5 px-3 border-b border-slate-800">NAMA KPM / LEMBAGA</th>
                     <th className="py-2.5 px-3 text-center border-b border-slate-800">STATUS HARIAN</th>
+                    <th className="py-2.5 px-3 text-center border-b border-slate-800">RUTE DISTRIBUSI</th>
+                    <th className="py-2.5 px-3 text-center border-b border-slate-800">NO HP PIC / KONTAK</th>
                     <th className="py-2.5 px-3 text-right border-b border-slate-800">TOTAL</th>
                     <th className="py-2.5 px-3 text-right border-b border-slate-800">KECIL</th>
                     <th className="py-2.5 px-3 text-right border-b border-slate-800">BESAR</th>
@@ -847,6 +915,7 @@ export default function BerandaOperasionalPage() {
                       const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
                       const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
                       const breakdown = calculateKpmPortion(item)
+                      const setting = getKpmSetting(itemKey, item, idx)
 
                       return (
                         <tr
@@ -879,6 +948,29 @@ export default function BerandaOperasionalPage() {
                             >
                               {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
                             </button>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <select
+                              value={setting.rute}
+                              onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
+                              className={`text-xs font-semibold px-2 py-1 rounded border cursor-pointer focus:outline-none transition ${
+                                setting.rute === 'Kiri'
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              }`}
+                            >
+                              <option value="Kiri">Rute Kiri</option>
+                              <option value="Kanan">Rute Kanan</option>
+                            </select>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <input
+                              type="text"
+                              placeholder="08xxxxxxxxxx"
+                              value={setting.no_hp_pic || ''}
+                              onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
+                              className="w-28 text-xs px-1.5 py-1 border border-slate-200 rounded font-mono focus:border-blue-500 focus:bg-blue-50/20 focus:outline-none text-center"
+                            />
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono">
                             {isLibur ? (
@@ -923,7 +1015,7 @@ export default function BerandaOperasionalPage() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
+                      <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
                         Belum ada data KPM terdaftar.
                       </td>
                     </tr>
@@ -931,7 +1023,7 @@ export default function BerandaOperasionalPage() {
                 </tbody>
                 <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs shadow-2xs">
                   <tr>
-                    <td colSpan={3} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
+                    <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
                       TOTAL KESELURUHAN ({ringkasanOperasional.aktifCount} KPM AKTIF)
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black">

@@ -7,13 +7,21 @@ import { fetchKelompokPenerimaManfaatList, sortKpmList, calculateKpmPortion, typ
 export default function CetakLembarDistribusiPage() {
   const [kpmData, setKpmData] = useState<KelompokPenerimaManfaat[]>([])
   const [liburIds, setLiburIds] = useState<string[]>([])
+  const [ruteFilter, setRuteFilter] = useState<'ALL' | 'Kiri' | 'Kanan'>('ALL')
+  const [distribusiSettings, setDistribusiSettings] = useState<Record<string, { rute: 'Kiri' | 'Kanan'; no_hp_pic: string }>>({})
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    // Ambil data KPM libur dari query params URL (?libur=id1,id2) atau localStorage
+    // Ambil data KPM libur & rute dari query params URL (?libur=id1,id2&rute=Kiri) atau localStorage
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const liburQuery = params.get('libur')
+      const ruteQuery = params.get('rute') as 'ALL' | 'Kiri' | 'Kanan' | null
+
+      if (ruteQuery && ['ALL', 'Kiri', 'Kanan'].includes(ruteQuery)) {
+        setRuteFilter(ruteQuery)
+      }
+
       if (liburQuery) {
         setLiburIds(liburQuery.split(',').filter(Boolean))
       } else {
@@ -24,6 +32,14 @@ export default function CetakLembarDistribusiPage() {
             setLiburIds(JSON.parse(saved))
           } catch {}
         }
+      }
+
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const savedDist = localStorage.getItem(`sppg_distribusi_settings_${todayStr}`)
+      if (savedDist) {
+        try {
+          setDistribusiSettings(JSON.parse(savedDist))
+        } catch {}
       }
     }
 
@@ -94,24 +110,51 @@ export default function CetakLembarDistribusiPage() {
 
     const sortedData = sortKpmList(kpmData)
 
-    const processed = sortedData.map((item, idx) => {
+    const processed: Array<{
+      no: number
+      id: string
+      nama: string
+      kode: string
+      kategori: string
+      rute: 'Kiri' | 'Kanan'
+      noHpPic: string
+      total: number
+      porsiKecil: number
+      porsiBesar: number
+      guruTendik: number
+      isLibur: boolean
+    }> = []
+
+    sortedData.forEach((item, idx) => {
       const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
       const isLibur = liburIds.includes(itemKey) || (Boolean(item.id) && liburIds.includes(item.id!))
 
+      const saved = distribusiSettings[itemKey]
+      const defaultRute: 'Kiri' | 'Kanan' = idx < Math.ceil(sortedData.length / 2) ? 'Kiri' : 'Kanan'
+      const rute: 'Kiri' | 'Kanan' = saved?.rute || defaultRute
+      const noHpPic = saved?.no_hp_pic !== undefined ? saved.no_hp_pic : (item.hp || item.pimpinan || '-')
+
+      if (ruteFilter !== 'ALL' && rute !== ruteFilter) {
+        return
+      }
+
       if (isLibur) {
         holidayNames.push(item.nama)
-        return {
-          no: idx + 1,
+        processed.push({
+          no: processed.length + 1,
           id: itemKey,
           nama: item.nama,
-          kode: item.identitas_npsn_tmp || item.kode || item.id,
+          kode: item.identitas_npsn_tmp || item.kode || item.id || '',
           kategori: item.kategori,
+          rute,
+          noHpPic,
           total: 0,
           porsiKecil: 0,
           porsiBesar: 0,
           guruTendik: 0,
           isLibur: true
-        }
+        })
+        return
       }
 
       active += 1
@@ -121,18 +164,20 @@ export default function CetakLembarDistribusiPage() {
       grandBesar += breakdown.porsiBesar
       grandTendik += breakdown.guruTendik
 
-      return {
-        no: idx + 1,
+      processed.push({
+        no: processed.length + 1,
         id: itemKey,
         nama: item.nama,
-        kode: item.identitas_npsn_tmp || item.kode || item.id,
+        kode: item.identitas_npsn_tmp || item.kode || item.id || '',
         kategori: item.kategori,
+        rute,
+        noHpPic,
         total: breakdown.total,
         porsiKecil: breakdown.porsiKecil,
         porsiBesar: breakdown.porsiBesar,
         guruTendik: breakdown.guruTendik,
         isLibur: false
-      }
+      })
     })
 
     return {
@@ -146,7 +191,7 @@ export default function CetakLembarDistribusiPage() {
       holidayKpmNames: holidayNames,
       aktifCount: active
     }
-  }, [kpmData, liburIds])
+  }, [kpmData, liburIds, ruteFilter, distribusiSettings])
 
   return (
     <div className="print-page-root bg-white text-slate-900 min-h-screen">
@@ -185,10 +230,38 @@ export default function CetakLembarDistribusiPage() {
       `}</style>
 
       {/* Tombol Bar Bantuan di Layar (Hilang saat cetak) */}
-      <div className="no-print bg-slate-800 text-white p-3 flex justify-between items-center sticky top-0 z-50 shadow-md">
-        <span className="text-sm font-semibold">
-          Pratinjau Lembar A4 Kedinasan SPPG Kiduldalem
-        </span>
+      <div className="no-print bg-slate-800 text-white p-3 flex flex-wrap justify-between items-center sticky top-0 z-50 shadow-md gap-2">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold">
+            Pratinjau Lembar A4 Kedinasan SPPG Kiduldalem
+          </span>
+          <div className="bg-slate-700 p-0.5 rounded flex items-center gap-1 text-xs">
+            <button
+              onClick={() => setRuteFilter('ALL')}
+              className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                ruteFilter === 'ALL' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Cetak Semua ({kpmData.length})
+            </button>
+            <button
+              onClick={() => setRuteFilter('Kiri')}
+              className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                ruteFilter === 'Kiri' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Rute Kiri Saja
+            </button>
+            <button
+              onClick={() => setRuteFilter('Kanan')}
+              className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                ruteFilter === 'Kanan' ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Rute Kanan Saja
+            </button>
+          </div>
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => window.print()}
@@ -224,8 +297,8 @@ export default function CetakLembarDistribusiPage() {
                 <h1 className="text-sm font-black text-slate-900 leading-tight">
                   SATUAN PELAYANAN PROGRAM GIZI (SPPG) WONOREJO - WONOREJO, PASURUAN
                 </h1>
-                <p className="text-[10px] text-slate-600 font-semibold tracking-wide">
-                  LEMBAR REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG
+                <p className="text-[10px] text-slate-600 font-semibold tracking-wide uppercase">
+                  LEMBAR REKAPITULASI KEBUTUHAN PORSI DISTRIBUSI HARIAN MBG {ruteFilter !== 'ALL' ? `(${ruteFilter.toUpperCase()})` : ''}
                 </p>
               </div>
             </div>
@@ -247,8 +320,10 @@ export default function CetakLembarDistribusiPage() {
               <span className="font-bold">SPPG Kiduldalem</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[9px]">WILAYAH</span>
-              <span className="font-bold">Wonorejo, Pasuruan</span>
+              <span className="text-slate-500 block text-[9px]">RUTE DISTRIBUSI</span>
+              <span className="font-bold text-indigo-700">
+                {ruteFilter === 'ALL' ? 'Semua Rute (Kiri & Kanan)' : `Rute ${ruteFilter}`}
+              </span>
             </div>
             <div>
               <span className="text-slate-500 block text-[9px]">TOTAL TITIK KPM</span>
@@ -262,16 +337,18 @@ export default function CetakLembarDistribusiPage() {
             </div>
           </div>
 
-          {/* 3. TABEL 25 KPM (Padding Padat & Pas) */}
-          <table className="w-full border-collapse text-[10px] border border-slate-300 rounded overflow-hidden">
+          {/* 3. TABEL KPM (Padding Padat & Pas) */}
+          <table className="w-full border-collapse text-[9.5px] border border-slate-300 rounded overflow-hidden">
             <thead>
-              <tr className="bg-slate-900 text-white font-bold text-[9.5px]">
-                <th className="py-1 px-1.5 text-center w-8">NO</th>
+              <tr className="bg-slate-900 text-white font-bold text-[9px]">
+                <th className="py-1 px-1.5 text-center w-7">NO</th>
                 <th className="py-1 px-2 text-left">NAMA KPM / LEMBAGA</th>
-                <th className="py-1 px-1.5 text-center">TOTAL PORSI</th>
-                <th className="py-1 px-1.5 text-center text-amber-300">PORSI KECIL</th>
-                <th className="py-1 px-1.5 text-center text-blue-300">PORSI BESAR</th>
-                <th className="py-1 px-1.5 text-center">TENDIK/KADER</th>
+                <th className="py-1 px-1.5 text-center w-14">RUTE</th>
+                <th className="py-1 px-1.5 text-center w-24">KONTAK PIC</th>
+                <th className="py-1 px-1.5 text-center w-16">TOTAL PORSI</th>
+                <th className="py-1 px-1.5 text-center text-amber-300 w-16">PORSI KECIL</th>
+                <th className="py-1 px-1.5 text-center text-blue-300 w-16">PORSI BESAR</th>
+                <th className="py-1 px-1.5 text-center w-20">TENDIK/KADER</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
@@ -287,18 +364,28 @@ export default function CetakLembarDistribusiPage() {
                         : 'bg-white'
                     }
                   >
-                    <td className="py-0.5 px-1.5 text-center font-mono text-[9px]">{row.no}</td>
+                    <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px]">{row.no}</td>
                     <td className="py-0.5 px-2 font-semibold">
                       {row.isLibur ? (
                         <>
                           <span className="line-through">{row.nama}</span>
-                          <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
+                          <span className="ml-1.5 text-[7.5px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
                             [LIBUR - 0 PORSI]
                           </span>
                         </>
                       ) : (
                         row.nama
                       )}
+                    </td>
+                    <td className="py-0.5 px-1.5 text-center font-bold">
+                      <span className={`px-1 py-0.2 rounded text-[8px] border ${
+                        row.rute === 'Kiri' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}>
+                        {row.rute}
+                      </span>
+                    </td>
+                    <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] text-slate-700">
+                      {row.noHpPic || '-'}
                     </td>
                     <td className="py-0.5 px-1.5 text-center font-bold">
                       {row.isLibur ? 0 : row.total.toLocaleString('id-ID')}
@@ -316,15 +403,15 @@ export default function CetakLembarDistribusiPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-2 text-center text-slate-400 italic">
-                    Belum ada data KPM terdaftar.
+                  <td colSpan={8} className="py-2 text-center text-slate-400 italic">
+                    Belum ada data KPM terdaftar untuk rute ini.
                   </td>
                 </tr>
               )}
             </tbody>
             <tfoot>
-              <tr className="bg-slate-900 text-white font-bold text-[10px]">
-                <td colSpan={2} className="py-1 px-2 text-left tracking-wider">
+              <tr className="bg-slate-900 text-white font-bold text-[9.5px]">
+                <td colSpan={4} className="py-1 px-2 text-left tracking-wider">
                   TOTAL KESELURUHAN
                 </td>
                 <td className="py-1 px-1.5 text-center font-black">
