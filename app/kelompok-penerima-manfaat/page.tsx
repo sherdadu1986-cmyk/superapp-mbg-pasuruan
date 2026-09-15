@@ -1372,70 +1372,70 @@ const getBnbaCountForGroup = (
     }
   }
 
-  // ─── BNBA Excel Import & Template Download Helpers ───
-  const normalizeBirthDate = (val: any): string => {
-    if (val === null || val === undefined || val === '') {
-      return '2015-01-01'
-    }
+  // ─── BNBA Excel Import & Template Download Helpers (Smart AI-like Auto-Detector) ───
+  const parseSmartDate = (val: any): string => {
+    if (!val) return '2015-01-01'
 
-    // 1. Handle Excel serial date number
+    // 1. Serial Number Excel (contoh: 42205)
     if (typeof val === 'number') {
       try {
-        if (XLSX?.SSF?.parse_date_code) {
-          const dateObj = XLSX.SSF.parse_date_code(val)
-          if (dateObj && dateObj.y && dateObj.m && dateObj.d) {
-            const yyyy = String(dateObj.y).padStart(4, '0')
-            const mm = String(dateObj.m).padStart(2, '0')
-            const dd = String(dateObj.d).padStart(2, '0')
+        if ((XLSX as any)?.SSF?.parse_date_code) {
+          const dObj = (XLSX as any).SSF.parse_date_code(val)
+          if (dObj && dObj.y && dObj.m && dObj.d) {
+            const yyyy = String(dObj.y).padStart(4, '0')
+            const mm = String(dObj.m).padStart(2, '0')
+            const dd = String(dObj.d).padStart(2, '0')
             return `${yyyy}-${mm}-${dd}`
           }
         }
-        const jsDate = new Date(Math.round((val - 25569) * 86400 * 1000))
-        if (!isNaN(jsDate.getTime())) {
-          return jsDate.toISOString().split('T')[0]
-        }
       } catch {}
+      const date = new Date(Math.round((val - 25569) * 86400 * 1000))
+      return !isNaN(date.getTime()) ? date.toISOString().slice(0, 10) : '2015-01-01'
     }
 
-    let str = String(val).trim()
-    // Clean up inner whitespace (e.g., "24 -04 - 1996" -> "24-04-1996", "2022- 08 -18" -> "2022-08-18")
-    str = str.replace(/\s+/g, '')
+    if (val instanceof Date) {
+      return !isNaN(val.getTime()) ? val.toISOString().slice(0, 10) : '2015-01-01'
+    }
 
-    // Check if YYYY-MM-DD
+    const str = String(val).trim()
+    if (!str) return '2015-01-01'
+
+    // 2. Format M/D/YYYY atau MM/DD/YYYY (Format bawaan Excel riil: 7/20/2015, 11/19/2014)
+    const mdyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    if (mdyMatch) {
+      let part1 = parseInt(mdyMatch[1], 10)
+      let part2 = parseInt(mdyMatch[2], 10)
+      const year = mdyMatch[3]
+
+      // Logika jika part1 > 12 berarti pasti DD/MM/YYYY, jika tidak maka M/D/YYYY
+      let month = part1
+      let day = part2
+      if (part1 > 12) {
+        day = part1
+        month = part2
+      }
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    }
+
+    // Format D/M/YY atau DD-MM-YY (short 2-digit year)
+    const shortYMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/)
+    if (shortYMatch) {
+      let part1 = parseInt(shortYMatch[1], 10)
+      let part2 = parseInt(shortYMatch[2], 10)
+      let yy = parseInt(shortYMatch[3], 10)
+      const year = yy <= 30 ? `20${String(yy).padStart(2, '0')}` : `19${String(yy).padStart(2, '0')}`
+      let month = part1
+      let day = part2
+      if (part1 > 12) {
+        day = part1
+        month = part2
+      }
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    }
+
+    // 3. Format YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
       return str
-    }
-
-    // Handle DD/MM/YYYY, DD-MM-YYYY, D/M/YY, etc.
-    const parts = str.split(/[-/.]/)
-    if (parts.length === 3) {
-      let p1 = parts[0]
-      let p2 = parts[1]
-      let p3 = parts[2]
-
-      // Case: YYYY-M-D or YYYY/M/D
-      if (p1.length === 4) {
-        const y = p1
-        const m = p2.padStart(2, '0')
-        const d = p3.padStart(2, '0')
-        return `${y}-${m}-${d}`
-      }
-
-      // Case: DD-MM-YYYY or D/M/YY (e.g. 5/9/81, 9/2/23, 24-04-1996)
-      let d = p1.padStart(2, '0')
-      let m = p2.padStart(2, '0')
-      let y = p3
-
-      if (y.length === 2) {
-        const yy = parseInt(y, 10)
-        if (!isNaN(yy)) {
-          y = yy <= 30 ? `20${y.padStart(2, '0')}` : `19${y.padStart(2, '0')}`
-        }
-      }
-
-      if (y.length === 4) {
-        return `${y}-${m}-${d}`
-      }
     }
 
     try {
@@ -1445,8 +1445,20 @@ const getBnbaCountForGroup = (
       }
     } catch {}
 
-    return str || '2015-01-01'
+    return '2015-01-01'
   }
+
+  const normalizeBirthDate = parseSmartDate
+
+  const parseSmartGender = (val: any): 'L' | 'P' => {
+    if (!val) return 'L'
+    const s = String(val).trim().toUpperCase()
+    if (s === 'P' || s.startsWith('PEREMPUAN') || s.startsWith('WANITA')) return 'P'
+    if (s === 'L' || s.startsWith('LAKI') || s.startsWith('PRIA')) return 'L'
+    return 'L'
+  }
+
+  const parseJk = parseSmartGender
 
   const parsePosisi = (val: any): 'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui' => {
     const s = String(val || '').trim().toLowerCase()
@@ -1455,13 +1467,6 @@ const getBnbaCountForGroup = (
     if (s.includes('bumil') || s.includes('hamil')) return 'Bumil'
     if (s.includes('busui') || s.includes('menyusui')) return 'Busui'
     return 'Siswa'
-  }
-
-  const parseJk = (val: any): 'L' | 'P' => {
-    const s = String(val || '').trim().toUpperCase()
-    if (s.startsWith('L') || s.includes('PRIA') || s.includes('LAKI')) return 'L'
-    if (s.startsWith('P') || s.includes('PEREMPUAN') || s.includes('WANITA')) return 'P'
-    return 'L'
   }
 
   // Download BNBA Excel Template
@@ -1571,7 +1576,7 @@ const getBnbaCountForGroup = (
     triggerToast(`Ekspor Excel BNBA "${fileName}" berhasil diunduh.`)
   }
 
-  // Handle File Input Change for Excel / CSV Import
+  // Handle File Input Change for Excel / CSV Import (Smart AI-like Two-Layer Extractor)
   const handleFileImportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !activeBnbaGroup) return
@@ -1580,83 +1585,90 @@ const getBnbaCountForGroup = (
     reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result
-        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true })
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: false })
         const wsname = wb.SheetNames[0]
-        const ws = wb.Sheets[wsname]
+        const sheet = wb.Sheets[wsname]
 
         const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
         const selectedKelompokId = activeKelompokUuid || activeBnbaGroup.id
 
-        // Parse Excel rows as JSON objects with header keys
-        const jsonRows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
-        // Fallback parse as raw 2D array
-        const arrayRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })
+        // Ambil baik sebagai array of objects maupun array of arrays (header: 1)
+        const rawRowsWithHeader: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+        const rawRowsAsArray: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false })
 
-        if ((!jsonRows || jsonRows.length === 0) && (!arrayRows || arrayRows.length < 2)) {
+        if ((!rawRowsWithHeader || rawRowsWithHeader.length === 0) && (!rawRowsAsArray || rawRowsAsArray.length < 2)) {
           alert('File Excel kosong atau tidak memiliki baris data.')
           return
         }
 
-        const parsedItems: PenerimaManfaatBnba[] = []
-
-        if (jsonRows && jsonRows.length > 0) {
-          jsonRows.forEach((row: any, idx: number) => {
-            const nama_lengkap = String(row['NAMA LENGKAP'] || row['NAMA PENERIMA'] || row['NAMA'] || row.nama_lengkap || row.nama_penerima || row.nama || '').trim().toUpperCase()
-            const nisn_nik = String(row['NIK / NISN'] || row['NIK/NISN'] || row['NIK'] || row['NISN'] || row.nisn_nik || row.nik || row.nisn || '').trim()
-
-            if (!nama_lengkap && !nisn_nik) return
-
-            const tglLahirRaw = row['TANGGAL LAHIR'] || row['TANGGAL_LAHIR'] || row.tanggal_lahir || ''
-            const tanggal_lahir = normalizeBirthDate(tglLahirRaw)
-
-            const jkRaw = row['JK'] || row['JENIS KELAMIN'] || row['JENIS_KELAMIN'] || row.jenis_kelamin || row.jk || ''
-            const jenis_kelamin = parseJk(jkRaw)
-
-            const ortuRaw = row['NAMA ORTU'] || row['ORANG TUA'] || row['NAMA_ORTU'] || row.nama_ortu || ''
-            const nama_ortu = String(ortuRaw || '-').trim().toUpperCase()
-
-            const posisiRaw = row['POSISI'] || row.posisi || 'Murid'
-            const posisi = parsePosisi(posisiRaw)
-
-            const kelasRaw = row['KELAS'] || row.kelas || ''
-            const kelas = String(kelasRaw || '-').trim()
-
-            parsedItems.push({
-              id: `bnba-imp-${Date.now()}-${idx}`,
-              kelompok_id: selectedKelompokId,
-              nama_lengkap,
-              nisn_nik,
-              tanggal_lahir,
-              jenis_kelamin,
-              nama_ortu,
-              posisi,
-              kelas,
-              created_at: new Date().toISOString()
-            })
-          })
+        // Filter baris data murni (deteksi jika baris 0 adalah header)
+        let headerRowIdx = 0
+        for (let i = 0; i < Math.min(5, rawRowsAsArray.length); i++) {
+          const rowStr = (rawRowsAsArray[i] || []).map(c => String(c || '').toLowerCase().replace(/[^a-z0-9]/g, '')).join(' ')
+          if (rowStr.includes('nama') || rowStr.includes('nik') || rowStr.includes('nisn')) {
+            headerRowIdx = i
+            break
+          }
         }
 
-        if (parsedItems.length === 0 && arrayRows && arrayRows.length >= 2) {
-          const dataRows = arrayRows.slice(1)
-          dataRows.forEach((row, idx) => {
-            const nisnNik = String(row[0] || row[1] || '').trim()
-            const namaLengkap = String(row[1] || row[0] || '').trim().toUpperCase()
-            if (!nisnNik && !namaLengkap) return
+        const dataRowsArray = rawRowsAsArray.slice(headerRowIdx + 1).filter((r) => r && r.length > 0 && (r[0] || r[1]))
 
-            parsedItems.push({
-              id: `bnba-imp-${Date.now()}-${idx}`,
-              kelompok_id: selectedKelompokId,
-              nisn_nik: nisnNik,
-              nama_lengkap: namaLengkap,
-              tanggal_lahir: normalizeBirthDate(row[2]),
-              jenis_kelamin: parseJk(row[3]),
-              nama_ortu: String(row[4] || '-').trim().toUpperCase(),
-              posisi: parsePosisi(row[5] || 'Murid'),
-              kelas: String(row[6] || '-').trim(),
-              created_at: new Date().toISOString()
-            })
-          })
-        }
+        const parsedItems: PenerimaManfaatBnba[] = dataRowsArray.map((rowArr, index) => {
+          // Baris objek alternatif jika user punya nama header berbeda
+          const rowObj = rawRowsWithHeader[index] || {}
+
+          // Helper Fuzzy Header Match (mengabaikan teks dalam kurung, spasi, case)
+          const findByHeaderFuzzy = (keywords: string[]) => {
+            for (const key of Object.keys(rowObj)) {
+              const cleanKey = key.replace(/\(.*?\)/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+              if (keywords.some((kw) => cleanKey.includes(kw))) {
+                return rowObj[key]
+              }
+            }
+            return undefined
+          }
+
+          // 1. NIK / NISN (Kolom A / index 0)
+          const rawNik = rowArr[0] ?? findByHeaderFuzzy(['nik', 'nisn', 'nomor', 'ktp'])
+          const nikNisn = rawNik ? String(rawNik).replace(/[^0-9]/g, '').trim() : ''
+
+          // 2. Nama Lengkap (Kolom B / index 1)
+          const rawNama = rowArr[1] ?? findByHeaderFuzzy(['nama', 'lengkap', 'siswa', 'peserta', 'penerima'])
+          const namaLengkap = rawNama ? String(rawNama).trim().toUpperCase() : ''
+
+          // 3. Tanggal Lahir (Kolom C / index 2)
+          const rawTgl = rowArr[2] ?? findByHeaderFuzzy(['tanggallahir', 'tgl', 'lahir', 'birth'])
+          const tanggalLahir = parseSmartDate(rawTgl)
+
+          // 4. Jenis Kelamin (Kolom D / index 3)
+          const rawJk = rowArr[3] ?? findByHeaderFuzzy(['jeniskelamin', 'jk', 'kelamin', 'gender'])
+          const jenisKelamin = parseSmartGender(rawJk)
+
+          // 5. Nama Ortu / Wali (Kolom E / index 4)
+          const rawOrtu = rowArr[4] ?? findByHeaderFuzzy(['namaortu', 'ortu', 'wali', 'ayah', 'ibu'])
+          const ortuWali = rawOrtu && String(rawOrtu).trim() !== '' ? String(rawOrtu).trim().toUpperCase() : '-'
+
+          // 6. Posisi (Kolom F / index 5)
+          const rawPosisi = rowArr[5] ?? findByHeaderFuzzy(['posisi', 'jabatan', 'kategori', 'peran', 'sasaran'])
+          const posisi = parsePosisi(rawPosisi)
+
+          // 7. Kelas / Sasaran (Kolom G / index 6)
+          const rawKelas = rowArr[6] ?? findByHeaderFuzzy(['kelas', 'sasaran', 'rombel', 'tingkat'])
+          const kelas = rawKelas && String(rawKelas).trim() !== '' ? String(rawKelas).trim() : '-'
+
+          return {
+            id: `bnba-imp-${Date.now()}-${index}`,
+            kelompok_id: selectedKelompokId,
+            nisn_nik: nikNisn,
+            nama_lengkap: namaLengkap,
+            tanggal_lahir: tanggalLahir,
+            jenis_kelamin: jenisKelamin,
+            nama_ortu: ortuWali,
+            posisi: posisi,
+            kelas: kelas,
+            created_at: new Date().toISOString()
+          }
+        }).filter((item) => item.nama_lengkap !== '' || item.nisn_nik !== '')
 
         if (parsedItems.length === 0) {
           alert('Tidak ditemukan data valid dalam file Excel (pastikan NIK/NISN & Nama Lengkap terisi).')
