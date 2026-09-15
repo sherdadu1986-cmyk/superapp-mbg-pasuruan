@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Printer, X, Building2, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { fetchKelompokPenerimaManfaatList, sortKpmList, calculateKpmPortion, type KelompokPenerimaManfaat } from '@/lib/data-helpers'
+
 interface LembarDistribusiPrintProps {
   isOpen: boolean
   onClose: () => void
