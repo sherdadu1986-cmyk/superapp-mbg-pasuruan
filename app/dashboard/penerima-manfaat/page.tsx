@@ -12,6 +12,7 @@ import {
 } from '@/lib/data-helpers'
 import { supabase } from '@/lib/supabase'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
+import { TableSkeleton } from '@/components/TableSkeleton'
 
 export const dynamic = 'force-dynamic'
 
@@ -324,9 +325,14 @@ export default function BerandaOperasionalPage() {
   }
 
   const [showPrintModal, setShowPrintModal] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
 
   const handlePrintDistribution = () => {
+    setIsPrinting(true)
     setShowPrintModal(true)
+    setTimeout(() => {
+      setIsPrinting(false)
+    }, 800)
   }
 
   // Indonesian Date Formatter
@@ -894,162 +900,158 @@ export default function BerandaOperasionalPage() {
             </div>
 
             {/* Tabel Ringkas Distribusi (Full Unclipped Table) */}
-            <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-[#0e2a5c] text-white text-center font-bold text-[11px]">
-                  <tr>
-                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 w-10">NO</th>
-                    <th rowSpan={2} className="border border-slate-700 py-2 px-3 text-left">NAMA KPM / LEMBAGA</th>
-                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">STATUS HARIAN</th>
-                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">RUTE DISTRIBUSI</th>
-                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">NO HP PIC / KONTAK</th>
-                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 text-right w-14">TOTAL</th>
-                    <th colSpan={3} className="border border-slate-700 py-1.5 px-2 uppercase tracking-wide">PORSI</th>
-                  </tr>
-                  <tr className="bg-[#0e2a5c] text-white text-center font-bold text-[10px]">
-                    <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-amber-300">KECIL</th>
-                    <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-blue-300">SISWA</th>
-                    <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-white">TENDIK</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 font-medium text-slate-700 bg-white">
-                  {kpmList.length > 0 ? (
-                    kpmList.map((item, idx) => {
-                      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
-                      const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
-                      const breakdown = calculateKpmPortion(item)
-                      const setting = getKpmSetting(itemKey, item, idx)
-
-                      const total = breakdown.total
-                      const kecil = breakdown.porsiKecil
-                      const siswaBesar = breakdown.siswaBesar
-                      const tendik = breakdown.tendik
-
-                      return (
-                        <tr
-                          key={itemKey}
-                          className={`transition-colors ${isLibur ? 'bg-rose-50/30' : idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
-                        >
-                          <td className="py-2 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border border-slate-200">
-                            {idx + 1}
-                          </td>
-                          <td className="py-2 px-3 border border-slate-200">
-                            <span
-                              className={`font-semibold block truncate max-w-[180px] ${
-                                isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
-                              }`}
-                              title={item.nama}
-                            >
-                              {item.nama}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-center border border-slate-200">
-                            <button
-                              type="button"
-                              onClick={() => toggleLibur(itemKey)}
-                              title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
-                                isLibur
-                                  ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
-                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
-                              }`}
-                            >
-                              {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
-                            </button>
-                          </td>
-                          <td className="py-2 px-3 text-center border border-slate-200">
-                            <select
-                              value={setting.rute}
-                              onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
-                              className={`text-xs font-semibold px-2 py-1 rounded border cursor-pointer focus:outline-none transition ${
-                                setting.rute === 'Kiri'
-                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              }`}
-                            >
-                              <option value="Kiri">Rute Kiri</option>
-                              <option value="Kanan">Rute Kanan</option>
-                            </select>
-                          </td>
-                          <td className="py-2 px-3 text-center border border-slate-200">
-                            <input
-                              type="text"
-                              placeholder="08xxxxxxxxxx"
-                              value={setting.no_hp_pic || ''}
-                              onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
-                              className="w-28 text-xs px-1.5 py-1 border border-slate-200 rounded font-mono focus:border-blue-500 focus:bg-blue-50/20 focus:outline-none text-center"
-                            />
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
-                            {isLibur ? (
-                              <span className="font-bold text-slate-400">
-                                0 <span className="text-[9px] text-rose-500 font-normal">(Libur)</span>
-                              </span>
-                            ) : (
-                              <span className="font-bold text-slate-900">
-                                {total.toLocaleString('id-ID')}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
-                            {isLibur ? (
-                              <span className="font-bold text-slate-300">-</span>
-                            ) : (
-                              <span className="font-bold text-amber-700">
-                                {kecil > 0 ? kecil.toLocaleString('id-ID') : '-'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
-                            {isLibur ? (
-                              <span className="font-bold text-slate-300">-</span>
-                            ) : (
-                              <span className="font-bold text-blue-700">
-                                {siswaBesar > 0 ? siswaBesar.toLocaleString('id-ID') : '-'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
-                            {isLibur ? (
-                              <span className="font-semibold text-slate-300">-</span>
-                            ) : (
-                              <span className="font-semibold text-slate-700">
-                                {tendik > 0 ? tendik.toLocaleString('id-ID') : '-'}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })
-                  ) : (
+            {loading ? (
+              <TableSkeleton />
+            ) : (
+              <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs transition-opacity duration-300 opacity-100">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-[#0e2a5c] text-white text-center font-bold text-[11px]">
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-400 font-medium border border-slate-200">
-                        Belum ada data KPM terdaftar.
+                      <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 w-10">NO</th>
+                      <th rowSpan={2} className="border border-slate-700 py-2 px-3 text-left">NAMA KPM / LEMBAGA</th>
+                      <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">STATUS HARIAN</th>
+                      <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">RUTE DISTRIBUSI</th>
+                      <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">NO HP PIC / KONTAK</th>
+                      <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 text-right w-14">TOTAL</th>
+                      <th colSpan={3} className="border border-slate-700 py-1.5 px-2 uppercase tracking-wide">PORSI</th>
+                    </tr>
+                    <tr className="bg-[#0e2a5c] text-white text-center font-bold text-[10px]">
+                      <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-amber-300">KECIL</th>
+                      <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-blue-300">SISWA</th>
+                      <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-white">TENDIK</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 font-medium text-slate-700 bg-white">
+                    {kpmList.length > 0 ? (
+                      kpmList.map((item, idx) => {
+                        const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
+                        const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
+                        const breakdown = calculateKpmPortion(item)
+                        const setting = getKpmSetting(itemKey, item, idx)
+
+                        const total = breakdown.total
+                        const kecil = breakdown.porsiKecil
+                        const siswaBesar = breakdown.siswaBesar
+                        const tendik = breakdown.tendik
+
+                        return (
+                          <tr
+                            key={itemKey}
+                            className={`transition-colors ${isLibur ? 'bg-rose-50/30' : idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
+                          >
+                            <td className="py-2 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border border-slate-200">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2 px-3 border border-slate-200">
+                              <span
+                                className={`font-semibold block truncate max-w-[180px] ${
+                                  isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
+                                }`}
+                                title={item.nama}
+                              >
+                                {item.nama}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center border border-slate-200">
+                              <button
+                                type="button"
+                                onClick={() => toggleLibur(itemKey)}
+                                title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
+                                  isLibur
+                                    ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
+                                    : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
+                                }`}
+                              >
+                                {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
+                              </button>
+                            </td>
+                            <td className="py-2 px-3 text-center border border-slate-200">
+                              <select
+                                value={setting.rute}
+                                onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
+                                className="bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-800 focus:ring-1 focus:ring-slate-800 outline-hidden cursor-pointer"
+                              >
+                                <option value="Kiri">Rute Kiri</option>
+                                <option value="Kanan">Rute Kanan</option>
+                              </select>
+                            </td>
+                            <td className="py-2 px-3 text-center border border-slate-200">
+                              <input
+                                type="text"
+                                value={setting.no_hp_pic}
+                                onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
+                                placeholder="08xxx..."
+                                className="w-28 text-center bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
+                              />
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                              {isLibur ? (
+                                <span className="font-bold text-slate-300">-</span>
+                              ) : (
+                                <span className="font-bold text-slate-900">{total.toLocaleString('id-ID')}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                              {isLibur ? (
+                                <span className="font-bold text-slate-300">-</span>
+                              ) : (
+                                <span className="font-bold text-amber-700">
+                                  {kecil > 0 ? kecil.toLocaleString('id-ID') : '-'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                              {isLibur ? (
+                                <span className="font-bold text-slate-300">-</span>
+                              ) : (
+                                <span className="font-bold text-blue-700">
+                                  {siswaBesar > 0 ? siswaBesar.toLocaleString('id-ID') : '-'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                              {isLibur ? (
+                                <span className="font-semibold text-slate-300">-</span>
+                              ) : (
+                                <span className="font-semibold text-slate-700">
+                                  {tendik > 0 ? tendik.toLocaleString('id-ID') : '-'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="py-8 text-center text-slate-400 font-medium border border-slate-200">
+                          Belum ada data KPM terdaftar.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs shadow-2xs">
+                    <tr>
+                      <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px] border border-slate-200">
+                        TOTAL KESELURUHAN ({ringkasanOperasional.aktifCount} KPM AKTIF)
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black border border-slate-200">
+                        {ringkasanOperasional.total.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black border border-slate-200">
+                        {ringkasanOperasional.kecil.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black border border-slate-200">
+                        {ringkasanOperasional.siswaBesar.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold border border-slate-200">
+                        {ringkasanOperasional.tendik.toLocaleString('id-ID')}
                       </td>
                     </tr>
-                  )}
-                </tbody>
-                <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs shadow-2xs">
-                  <tr>
-                    <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px] border border-slate-200">
-                      TOTAL KESELURUHAN ({ringkasanOperasional.aktifCount} KPM AKTIF)
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black border border-slate-200">
-                      {ringkasanOperasional.total.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black border border-slate-200">
-                      {ringkasanOperasional.kecil.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black border border-slate-200">
-                      {ringkasanOperasional.siswaBesar.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold border border-slate-200">
-                      {ringkasanOperasional.tendik.toLocaleString('id-ID')}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Quick Action Buttons */}
@@ -1063,10 +1065,15 @@ export default function BerandaOperasionalPage() {
             </Link>
             <button
               onClick={handlePrintDistribution}
-              className="flex-1 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+              disabled={isPrinting}
+              className="flex-1 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Printer size={15} className="text-slate-600" />
-              <span>Cetak Lembar Distribusi</span>
+              {isPrinting ? (
+                <RotateCw size={15} className="text-slate-600 animate-spin" />
+              ) : (
+                <Printer size={15} className="text-slate-600" />
+              )}
+              <span>{isPrinting ? 'Memproses Cetak...' : 'Cetak Lembar Distribusi'}</span>
             </button>
           </div>
         </div>

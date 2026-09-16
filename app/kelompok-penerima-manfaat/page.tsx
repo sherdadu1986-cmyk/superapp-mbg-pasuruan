@@ -21,6 +21,7 @@ import {
   type PenerimaManfaatBnba
 } from '@/lib/data-helpers'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
+import { TableSkeleton } from '@/components/TableSkeleton'
 
 export interface DetailKpmItem {
   id: string
@@ -63,6 +64,7 @@ export default function KelompokPenerimaManfaatPage() {
   const [showAlert, setShowAlert] = useState(true)
   const [activeFilter, setActiveFilter] = useState<'Semua' | 'Belum ada detail' | 'Kurang' | 'Sesuai' | 'Lebih'>('Semua')
   const [showPrintModal, setShowPrintModal] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
 
   // Toast Notification
   const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -2086,10 +2088,15 @@ const getBnbaCountForGroup = (
           </button>
           <button 
             title="Cetak Lembar Kendali Distribusi BGN" 
-            onClick={() => setShowPrintModal(true)}
-            className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-md transition cursor-pointer flex items-center gap-1"
+            onClick={() => {
+              setIsPrinting(true)
+              setShowPrintModal(true)
+              setTimeout(() => setIsPrinting(false), 800)
+            }}
+            disabled={isPrinting}
+            className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-md transition cursor-pointer flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Printer size={15} />
+            {isPrinting ? <RotateCw size={15} className="animate-spin text-slate-600" /> : <Printer size={15} />}
           </button>
         </div>
       </div>
@@ -2104,374 +2111,315 @@ const getBnbaCountForGroup = (
       />
 
       {/* 5. Tabel Data Flat & Compact */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-none overflow-hidden">
-        <div className="overflow-x-auto scrollbar-thin">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
-                <th className="py-3 px-3 text-center w-10">#</th>
-                <th className="py-3 px-3 text-center min-w-[170px]">AKSI</th>
-                <th className="py-3 px-3 min-w-[130px]">JENIS KELOMPOK</th>
-                <th className="py-3 px-3 min-w-[220px]">NAMA KELOMPOK</th>
-                <th className="py-3 px-3 text-center min-w-[120px]">STATUS KEPEMILIKAN</th>
-                <th className="py-3 px-3 min-w-[110px]">KECAMATAN</th>
-                <th className="py-3 px-3 min-w-[110px]">KEL/DESA</th>
-                <th className="py-3 px-3 min-w-[180px]">ALAMAT</th>
-                <th className="py-3 px-3 text-right min-w-[100px]">JUMLAH PRIA</th>
-                <th className="py-3 px-3 text-right min-w-[110px]">JUMLAH WANITA</th>
-                <th className="py-3 px-3 text-right min-w-[140px]">JUMLAH GURU/KADER</th>
-                <th className="py-3 px-3 text-right min-w-[110px]">JUMLAH TENDIK</th>
-                <th className="py-3 px-3 text-right min-w-[130px]">TOTAL / RINCIAN</th>
-                <th className="py-3 px-3 text-center min-w-[150px]">KETERANGAN</th>
-                <th className="py-3 px-3 text-center min-w-[260px]">DOKUMEN PENDUKUNG</th>
-                <th className="py-3 px-3 min-w-[200px]">NAMA PIMPINAN/KETUA/PENGHUBUNG</th>
-                <th className="py-3 px-3 min-w-[120px]">NO. HP/TELEPON</th>
-                <th className="py-3 px-3 min-w-[160px]">EMAIL</th>
-                <th className="py-3 px-3 text-center min-w-[90px]">STATUS</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
-              {filteredRows.length > 0 ? (
-                filteredRows.slice(0, perPage).map((row, idx) => (
-                  <tr key={row.id} className={`hover:bg-slate-50 transition duration-150 whitespace-nowrap ${row.status === 'Non-Aktif' ? 'opacity-60 bg-slate-50' : ''}`}>
-                    <td className="py-2.5 px-2 text-center font-bold text-slate-700">
-                      <div className="flex items-center justify-center gap-1">
-                        <div className="flex flex-col items-center justify-center -my-1">
+      {loading ? (
+        <TableSkeleton />
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-lg shadow-none overflow-hidden transition-opacity duration-300 opacity-100">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
+                  <th className="py-3 px-3 text-center w-10">#</th>
+                  <th className="py-3 px-3 text-center min-w-[170px]">AKSI</th>
+                  <th className="py-3 px-3 min-w-[130px]">JENIS KELOMPOK</th>
+                  <th className="py-3 px-3 min-w-[220px]">NAMA KELOMPOK</th>
+                  <th className="py-3 px-3 text-center min-w-[120px]">STATUS KEPEMILIKAN</th>
+                  <th className="py-3 px-3 min-w-[110px]">KECAMATAN</th>
+                  <th className="py-3 px-3 min-w-[110px]">KEL/DESA</th>
+                  <th className="py-3 px-3 min-w-[180px]">ALAMAT</th>
+                  <th className="py-3 px-3 text-right min-w-[100px]">JUMLAH PRIA</th>
+                  <th className="py-3 px-3 text-right min-w-[110px]">JUMLAH WANITA</th>
+                  <th className="py-3 px-3 text-right min-w-[140px]">JUMLAH GURU/KADER</th>
+                  <th className="py-3 px-3 text-right min-w-[110px]">JUMLAH TENDIK</th>
+                  <th className="py-3 px-3 text-right min-w-[130px]">TOTAL / RINCIAN</th>
+                  <th className="py-3 px-3 text-center min-w-[150px]">KETERANGAN</th>
+                  <th className="py-3 px-3 text-center min-w-[260px]">DOKUMEN PENDUKUNG</th>
+                  <th className="py-3 px-3 min-w-[200px]">NAMA PIMPINAN/KETUA/PENGHUBUNG</th>
+                  <th className="py-3 px-3 min-w-[120px]">NO. HP/TELEPON</th>
+                  <th className="py-3 px-3 min-w-[160px]">EMAIL</th>
+                  <th className="py-3 px-3 text-center min-w-[90px]">STATUS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
+                {filteredRows.length > 0 ? (
+                  filteredRows.slice(0, perPage).map((row, idx) => (
+                    <tr key={row.id} className={`hover:bg-slate-50 transition duration-150 whitespace-nowrap ${row.status === 'Non-Aktif' ? 'opacity-60 bg-slate-50' : ''}`}>
+                      <td className="py-2.5 px-2 text-center font-bold text-slate-700">
+                        <div className="flex items-center justify-center gap-1">
+                          <div className="flex flex-col items-center justify-center -my-1">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveRow(idx, 'up')}
+                              disabled={idx === 0 || isReordering}
+                              title="Pindah urutan ke atas (▲)"
+                              className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer disabled:cursor-not-allowed transition hover:bg-slate-200 rounded"
+                            >
+                              <ChevronUp size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveRow(idx, 'down')}
+                              disabled={idx === filteredRows.length - 1 || isReordering}
+                              title="Pindah urutan ke bawah (▼)"
+                              className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer disabled:cursor-not-allowed transition hover:bg-slate-200 rounded"
+                            >
+                              <ChevronDown size={13} />
+                            </button>
+                          </div>
+                          <span>{row.urutan ?? (idx + 1)}</span>
+                        </div>
+                      </td>
+
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleMoveRow(idx, 'up')}
-                            disabled={idx === 0 || isReordering}
-                            title="Pindah urutan ke atas (▲)"
-                            className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer disabled:cursor-not-allowed transition hover:bg-slate-200 rounded"
+                            onClick={() => handleOpenBnbaModal(row)}
+                            className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded transition cursor-pointer shadow-2xs"
                           >
-                            <ChevronUp size={13} />
+                            <UserPlus size={12} />
+                            <span>Rincian BNBA ({row.rincianTerisi})</span>
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleMoveRow(idx, 'down')}
-                            disabled={idx === filteredRows.length - 1 || isReordering}
-                            title="Pindah urutan ke bawah (▼)"
-                            className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 disabled:hover:text-slate-400 cursor-pointer disabled:cursor-not-allowed transition hover:bg-slate-200 rounded"
+                            onClick={() => handleEditClick(row)}
+                            title="Edit Data KPM"
+                            className="p-1 text-slate-600 hover:bg-slate-200 rounded transition cursor-pointer"
                           >
-                            <ChevronDown size={13} />
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteClick(row)}
+                            title="Hapus KPM"
+                            className="p-1 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                          >
+                            <Trash2 size={14} />
                           </button>
                         </div>
-                        <span className="w-5 text-center text-xs text-slate-800 font-mono font-bold">
-                          {idx + 1}
+                      </td>
+
+                      <td className="py-3 px-3 font-semibold text-slate-800">
+                        {row.jenis}
+                      </td>
+
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-slate-900 block">{row.nama}</span>
+                        <span className="font-mono text-[10px] text-slate-500 block">[{row.npsnReg}]</span>
+                      </td>
+
+                      <td className="py-3 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          {row.kepemilikan}
                         </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Flat Minimal Action Bar */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-1.5 justify-center">
-                        <button
-                          onClick={() => handleOpenBnbaModal(row)}
-                          className="bg-slate-800 hover:bg-slate-900 text-white text-xs px-3 py-1 rounded-md font-medium transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                        >
-                          <Eye size={12} />
-                          <span>Rincian</span>
-                        </button>
-                        <button
-                          onClick={() => handleEditClick(row)}
-                          title="Edit Data"
-                          className="p-1.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-md transition cursor-pointer"
-                        >
-                          <Edit size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleToggleStatus(row)}
-                          title={row.status === 'Aktif' ? 'Arsip / Nonaktifkan' : 'Aktifkan Kembali'}
-                          className="p-1.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-md transition cursor-pointer"
-                        >
-                          <Bookmark size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(row)}
-                          title="Hapus Data"
-                          className="p-1.5 border border-slate-200 hover:bg-rose-50 text-rose-600 rounded-md transition cursor-pointer"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
+                      <td className="py-3 px-3 font-medium text-slate-700">
+                        {row.kecamatan}
+                      </td>
 
-                    <td className="py-3 px-3 font-semibold text-slate-900">
-                      {row.jenis}
-                    </td>
+                      <td className="py-3 px-3 text-slate-700">
+                        {row.kelDesa}
+                      </td>
 
-                    <td className="py-3 px-3">
-                      <span className="font-bold text-slate-900 block">{row.nama}</span>
-                      <span className="font-mono text-[10px] text-slate-500 block">[{row.npsnReg}]</span>
-                    </td>
+                      <td className="py-3 px-3 text-slate-600">
+                        {row.alamat}
+                      </td>
 
-                    <td className="py-3 px-3 text-center">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                        {row.kepemilikan}
-                      </span>
-                    </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-700">
+                        {row.pria} Orang
+                      </td>
 
-                    <td className="py-3 px-3 font-medium text-slate-700">
-                      {row.kecamatan}
-                    </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-700">
+                        {row.wanita} Orang
+                      </td>
 
-                    <td className="py-3 px-3 text-slate-700">
-                      {row.kelDesa}
-                    </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-700">
+                        {row.guru} Orang
+                      </td>
 
-                    <td className="py-3 px-3 text-slate-600">
-                      {row.alamat}
-                    </td>
+                      <td className="py-3 px-3 text-right font-mono text-slate-700">
+                        {row.tendik} Orang
+                      </td>
 
-                    <td className="py-3 px-3 text-right font-mono text-slate-700">
-                      {row.pria} Orang
-                    </td>
+                      <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">
+                        {row.totalTarget} Orang
+                      </td>
 
-                    <td className="py-3 px-3 text-right font-mono text-slate-700">
-                      {row.wanita} Orang
-                    </td>
-
-                    <td className="py-3 px-3 text-right font-mono text-slate-700">
-                      {row.guru} Orang
-                    </td>
-
-                    <td className="py-3 px-3 text-right font-mono text-slate-700">
-                      {row.tendik} Orang
-                    </td>
-
-                    <td className="py-3 px-3 text-right font-mono">
-                      <span className="font-bold text-slate-900">{row.totalTarget}</span>
-                      <span className="text-slate-400 mx-1">/</span>
-                      <span className={row.rincianTerisi < row.totalTarget ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-bold'}>
-                        {row.rincianTerisi}
-                      </span>
-                    </td>
-
-                    {/* Keterangan Status Badge */}
-                    <td className="py-3 px-3 text-center">
-                      {row.keteranganStatus === 'Belum ada detail' && (
-                        <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-semibold inline-block">
+                      <td className="py-3 px-3 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          row.keteranganStatus === 'Belum ada detail'
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : row.keteranganStatus === 'Kurang'
+                            ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                            : row.keteranganStatus === 'Sesuai'
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : 'bg-blue-50 text-blue-800 border border-blue-200'
+                        }`}>
                           {row.keteranganMsg}
                         </span>
-                      )}
-                      {row.keteranganStatus === 'Kurang' && (
-                        <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[10px] font-semibold inline-block">
-                          {row.keteranganMsg}
-                        </span>
-                      )}
-                      {row.keteranganStatus === 'Sesuai' && (
-                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-semibold inline-block">
-                          {row.keteranganMsg}
-                        </span>
-                      )}
-                      {row.keteranganStatus === 'Lebih' && (
-                        <span className="bg-sky-50 text-sky-800 border border-sky-200 px-2 py-0.5 rounded text-[10px] font-semibold inline-block">
-                          {row.keteranganMsg}
-                        </span>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Dokumen Pendukung (Surat Pernyataan & MoU MBG) */}
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5">
-                        {/* A. Surat Pernyataan */}
-                        {row.suratPernyataanUrl ? (
-                          <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
+                      {/* Dokumen Pendukung Column */}
+                      <td className="py-3 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* A. Surat Pernyataan */}
+                          {row.suratPernyataanUrl ? (
+                            <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPreviewDoc(row, 'surat_pernyataan')}
+                                className="hover:underline flex items-center gap-1 text-emerald-800 cursor-pointer"
+                                title="Lihat / Preview Surat Pernyataan"
+                              >
+                                <FileCheck size={11} className="text-emerald-600 shrink-0" />
+                                <span>Surat Pernyataan</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => triggerFileUpload(row, 'surat_pernyataan')}
+                                title="Ganti / Upload Ulang Berkas"
+                                className="p-0.5 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+                              >
+                                <RotateCw size={11} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDoc(row, 'surat_pernyataan')}
+                                title="Hapus Surat Pernyataan"
+                                className="p-0.5 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               type="button"
-                              onClick={() => handleOpenPreviewDoc(row, 'surat_pernyataan')}
-                              className="hover:underline flex items-center gap-1 text-emerald-800 cursor-pointer"
-                              title="Lihat / Preview Surat Pernyataan"
-                            >
-                              <Check size={12} className="text-emerald-600 shrink-0" />
-                              <span>✓ Surat Pernyataan</span>
-                            </button>
-                            <div className="h-3 w-px bg-emerald-300/60 mx-0.5" />
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPreviewDoc(row, 'surat_pernyataan')}
-                              title="Lihat / Preview Dokumen"
-                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
-                            >
-                              <Eye size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const cleanName = (row.nama || 'Lembaga').replace(/[^a-zA-Z0-9]/g, '_')
-                                const rawExt = row.suratPernyataanUrl!.split('?')[0].split('.').pop() || 'pdf'
-                                handleDownloadDocument(row.suratPernyataanUrl!, `Surat_Pernyataan_MBG_${cleanName}.${rawExt}`)
-                              }}
-                              title="Unduh / Download Direct"
-                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
-                            >
-                              <Download size={12} />
-                            </button>
-                            <button
-                              type="button"
+                              disabled={isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'surat_pernyataan'}
                               onClick={() => triggerFileUpload(row, 'surat_pernyataan')}
-                              title="Ganti / Upload Ulang Berkas"
-                              className="p-0.5 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+                              className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-bold px-2 py-1 rounded cursor-pointer transition disabled:opacity-50"
                             >
-                              <RotateCw size={11} />
+                              {isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'surat_pernyataan' ? (
+                                <RotateCw size={11} className="animate-spin" />
+                              ) : (
+                                <FileText size={11} className="text-slate-500 shrink-0" />
+                              )}
+                              <span>+ Surat Pernyataan</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteDoc(row, 'surat_pernyataan')}
-                              title="Hapus Surat Pernyataan"
-                              className="p-0.5 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'surat_pernyataan'}
-                            onClick={() => triggerFileUpload(row, 'surat_pernyataan')}
-                            className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-bold px-2 py-1 rounded cursor-pointer transition disabled:opacity-50"
-                          >
-                            {isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'surat_pernyataan' ? (
-                              <RotateCw size={11} className="animate-spin" />
-                            ) : (
-                              <FileText size={11} className="text-slate-500 shrink-0" />
-                            )}
-                            <span>+ Surat Pernyataan</span>
-                          </button>
-                        )}
+                          )}
 
-                        {/* B. MoU MBG */}
-                        {row.mouUrl ? (
-                          <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
+                          {/* B. MoU MBG */}
+                          {row.mouUrl ? (
+                            <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-1 rounded shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPreviewDoc(row, 'mou')}
+                                className="hover:underline flex items-center gap-1 text-emerald-800 cursor-pointer"
+                                title="Lihat / Preview MoU MBG"
+                              >
+                                <FileCheck size={11} className="text-emerald-600 shrink-0" />
+                                <span>MoU MBG</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => triggerFileUpload(row, 'mou')}
+                                title="Ganti / Upload Ulang Berkas"
+                                className="p-0.5 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+                              >
+                                <RotateCw size={11} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDoc(row, 'mou')}
+                                title="Hapus MoU MBG"
+                                className="p-0.5 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               type="button"
-                              onClick={() => handleOpenPreviewDoc(row, 'mou')}
-                              className="hover:underline flex items-center gap-1 text-emerald-800 cursor-pointer"
-                              title="Lihat / Preview MoU MBG"
-                            >
-                              <Check size={12} className="text-emerald-600 shrink-0" />
-                              <span>✓ MoU MBG</span>
-                            </button>
-                            <div className="h-3 w-px bg-emerald-300/60 mx-0.5" />
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPreviewDoc(row, 'mou')}
-                              title="Lihat / Preview Dokumen"
-                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
-                            >
-                              <Eye size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const cleanName = (row.nama || 'Lembaga').replace(/[^a-zA-Z0-9]/g, '_')
-                                const rawExt = row.mouUrl!.split('?')[0].split('.').pop() || 'pdf'
-                                handleDownloadDocument(row.mouUrl!, `MoU_MBG_${cleanName}.${rawExt}`)
-                              }}
-                              title="Unduh / Download Direct"
-                              className="p-0.5 text-emerald-700 hover:text-emerald-950 transition cursor-pointer"
-                            >
-                              <Download size={12} />
-                            </button>
-                            <button
-                              type="button"
+                              disabled={isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'mou'}
                               onClick={() => triggerFileUpload(row, 'mou')}
-                              title="Ganti / Upload Ulang Berkas"
-                              className="p-0.5 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+                              className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-bold px-2 py-1 rounded cursor-pointer transition disabled:opacity-50"
                             >
-                              <RotateCw size={11} />
+                              {isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'mou' ? (
+                                <RotateCw size={11} className="animate-spin" />
+                              ) : (
+                                <FileText size={11} className="text-slate-500 shrink-0" />
+                              )}
+                              <span>+ MoU MBG</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteDoc(row, 'mou')}
-                              title="Hapus MoU MBG"
-                              className="p-0.5 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'mou'}
-                            onClick={() => triggerFileUpload(row, 'mou')}
-                            className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-bold px-2 py-1 rounded cursor-pointer transition disabled:opacity-50"
-                          >
-                            {isUploadingDoc && uploadingDocItem?.item.id === row.id && uploadingDocItem?.type === 'mou' ? (
-                              <RotateCw size={11} className="animate-spin" />
-                            ) : (
-                              <FileText size={11} className="text-slate-500 shrink-0" />
-                            )}
-                            <span>+ MoU MBG</span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="py-3 px-3 font-semibold text-slate-900">
-                      {row.pimpinan}
-                    </td>
+                      <td className="py-3 px-3 font-semibold text-slate-900">
+                        {row.pimpinan}
+                      </td>
 
-                    <td className="py-3 px-3 font-mono text-slate-700">
-                      {row.hp}
-                    </td>
+                      <td className="py-3 px-3 font-mono text-slate-700">
+                        {row.hp}
+                      </td>
 
-                    <td className="py-3 px-3 text-slate-500 font-mono text-[10px]">
-                      {row.email}
-                    </td>
+                      <td className="py-3 px-3 text-slate-500 font-mono text-[10px]">
+                        {row.email}
+                      </td>
 
-                    <td className="py-3 px-3 text-center">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                        row.status === 'Aktif' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
-                        {row.status}
-                      </span>
+                      <td className="py-3 px-3 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          row.status === 'Aktif' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {row.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={19} className="py-10 text-center text-slate-400 font-medium">
+                      {loading ? 'Memuat data dari database Supabase...' : 'Tidak ada data Kelompok Penerima Manfaat yang cocok.'}
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={19} className="py-10 text-center text-slate-400 font-medium">
-                    {loading ? 'Memuat data dari database Supabase...' : 'Tidak ada data Kelompok Penerima Manfaat yang cocok.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer Pagination */}
-        <div className="p-3 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-medium">
-          <div>
-            Menampilkan 1-{Math.min(filteredRows.length, perPage)} dari {filteredRows.length} data kelompok
+                )}
+              </tbody>
+            </table>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 mr-3">
-              <label className="text-xs text-slate-500">Tampilkan:</label>
-              <select
-                value={perPage}
-                onChange={(e) => setPerPage(Number(e.target.value))}
-                className="px-2 py-1 border border-slate-300 rounded-md text-xs font-medium bg-white cursor-pointer"
-              >
-                <option value={10}>10 baris</option>
-                <option value={20}>20 baris</option>
-                <option value={30}>30 baris</option>
-                <option value={50}>50 baris</option>
-                <option value={9999}>Semua</option>
-              </select>
+          {/* Footer Pagination */}
+          <div className="p-3 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-medium">
+            <div>
+              Menampilkan 1-{Math.min(filteredRows.length, perPage)} dari {filteredRows.length} data kelompok
             </div>
 
-            <button disabled className="px-3 py-1 bg-slate-50 border border-slate-200 rounded text-slate-400 text-xs flex items-center gap-1 cursor-not-allowed">
-              <ChevronLeft size={13} /> Sebelumnya
-            </button>
-            <span className="px-3 py-1 bg-slate-900 text-white font-bold text-xs rounded">1</span>
-            <button className="px-3 py-1 bg-white border border-slate-300 rounded text-slate-700 hover:bg-slate-50 transition text-xs flex items-center gap-1 cursor-pointer">
-              Berikutnya <ChevronRight size={13} />
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 mr-3">
+                <label className="text-xs text-slate-500">Tampilkan:</label>
+                <select
+                  value={perPage}
+                  onChange={(e) => setPerPage(Number(e.target.value))}
+                  className="px-2 py-1 border border-slate-300 rounded-md text-xs font-medium bg-white cursor-pointer"
+                >
+                  <option value={10}>10 baris</option>
+                  <option value={20}>20 baris</option>
+                  <option value={30}>30 baris</option>
+                  <option value={50}>50 baris</option>
+                  <option value={9999}>Semua</option>
+                </select>
+              </div>
+
+              <button disabled className="px-3 py-1 bg-slate-50 border border-slate-200 rounded text-slate-400 text-xs flex items-center gap-1 cursor-not-allowed">
+                Sebelumnya
+              </button>
+              <span className="px-3 py-1 bg-slate-900 text-white font-bold text-xs rounded">1</span>
+              <button className="px-3 py-1 bg-white border border-slate-300 rounded text-slate-700 hover:bg-slate-50 transition text-xs flex items-center gap-1 cursor-pointer">
+                Berikutnya <ChevronRight size={13} />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Modal Form Tambah / Edit KPM with DYNAMIC CONDITIONAL INPUTS */}
       {showAddModal && (
