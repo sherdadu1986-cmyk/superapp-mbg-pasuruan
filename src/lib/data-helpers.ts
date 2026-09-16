@@ -518,11 +518,9 @@ export function calculateKpmPortions(kpm: any) {
     return { total: 0, porsiKecil: 0, siswaBesar: 0, tendik: 0, porsiBesar: 0, guruTendik: 0 }
   }
 
-  const jenjang = (kpm.kategori || kpm.jenis || kpm.jenis_kelompok || '').toUpperCase()
-  const nama = (kpm.nama || kpm.nama_kelompok || '').toUpperCase()
-
-  // 1. Ekstraksi Tenaga Pendidik & Pendukung
-  const tendik = Number(kpm.guru || 0) + Number(kpm.tendik || 0) || Number(kpm.jumlah_tendik || 0) || (Number(kpm.target_guru || 0) + Number(kpm.target_tendik || 0))
+  const jenjang = String(kpm.kategori || kpm.jenis || kpm.jenis_kelompok || '').toUpperCase()
+  const nama = String(kpm.nama || kpm.nama_kelompok || '').toUpperCase()
+  const subKat = String(kpm.sub_kategori || kpm.subKategori || '').toUpperCase()
 
   // Extract sub_kategori JSON if present
   let parsedSubKat: any = {}
@@ -534,12 +532,73 @@ export function calculateKpmPortions(kpm: any) {
     parsedSubKat = kpm.sub_kategori
   }
 
+  // 1. Deteksi apakah ini Kelompok Posyandu / 3B / Komunitas Non-Sekolah
+  const isPosyandu3B = 
+    jenjang.includes('POSYANDU') || 
+    jenjang.includes('3B') || 
+    jenjang.includes('BALITA') || 
+    nama.includes('POSYANDU') || 
+    nama.includes('BALITA') || 
+    nama.includes('IBU') ||
+    subKat.includes('BALITA') ||
+    subKat.includes('BUMIL') ||
+    subKat.includes('BUSUI')
+
+  if (isPosyandu3B) {
+    // Ambil data dari field spesifik 3B di database Supabase atau sub_kategori JSON
+    const balitaL = Number(kpm.balitaLaki ?? parsedSubKat.balitaLaki ?? 0)
+    const balitaP = Number(kpm.balitaPerem ?? parsedSubKat.balitaPerem ?? 0)
+    const balita = (balitaL + balitaP) || Number(kpm.balita || kpm.balita_12_plus || kpm.porsi_kecil || 0)
+
+    const bumil = Number(kpm.ibu_hamil || kpm.bumil || parsedSubKat.bumil || 0)
+    const busui = Number(kpm.ibu_menyusui || kpm.busui || parsedSubKat.busui || 0)
+
+    const isBumilBusuiSubKat = subKat.includes('BUMIL') || subKat.includes('BUSUI') || jenjang.includes('BUMIL') || jenjang.includes('BUSUI')
+    const isBalitaSubKat = subKat.includes('BALITA') || jenjang.includes('BALITA')
+
+    const totalRaw = Number(kpm.alokasi_total || kpm.total || kpm.jumlah_penerima || kpm.jumlah_porsi || (Number(kpm.target_pria || 0) + Number(kpm.target_wanita || 0) + Number(kpm.target_guru || 0)) || 0)
+
+    let porsiKecil = balita
+    let siswaBesar = bumil + busui
+
+    if (porsiKecil === 0 && siswaBesar === 0 && totalRaw > 0) {
+      if (isBumilBusuiSubKat) {
+        siswaBesar = totalRaw
+        porsiKecil = 0
+      } else if (isBalitaSubKat) {
+        porsiKecil = totalRaw
+        siswaBesar = 0
+      } else {
+        porsiKecil = Number(kpm.porsi_kecil || 0)
+        const besarRaw = Number(kpm.porsi_besar || 0)
+        siswaBesar = besarRaw
+        if (porsiKecil === 0 && siswaBesar === 0) {
+          porsiKecil = totalRaw
+        }
+      }
+    }
+
+    const total3B = totalRaw > 0 ? totalRaw : (porsiKecil + siswaBesar)
+
+    return {
+      total: total3B,
+      porsiKecil: porsiKecil,
+      siswaBesar: siswaBesar,
+      tendik: 0,
+      porsiBesar: siswaBesar,
+      guruTendik: 0
+    }
+  }
+
+  // 2. Tenaga Pendidik & Pendukung untuk Lembaga Sekolah
+  const tendik = Number(kpm.guru || 0) + Number(kpm.tendik || 0) || Number(kpm.jumlah_tendik || 0) || (Number(kpm.target_guru || 0) + Number(kpm.target_tendik || 0))
+
+  // 3. Rombel SD / MI
   const s_l_1_3 = kpm.siswa_l_1_3 !== undefined ? kpm.siswa_l_1_3 : (kpm.sd13Laki !== undefined ? kpm.sd13Laki : parsedSubKat.sd13Laki)
   const s_p_1_3 = kpm.siswa_p_1_3 !== undefined ? kpm.siswa_p_1_3 : (kpm.sd13Perem !== undefined ? kpm.sd13Perem : parsedSubKat.sd13Perem)
   const s_l_4_6 = kpm.siswa_l_4_6 !== undefined ? kpm.siswa_l_4_6 : (kpm.sd46Laki !== undefined ? kpm.sd46Laki : parsedSubKat.sd46Laki)
   const s_p_4_6 = kpm.siswa_p_4_6 !== undefined ? kpm.siswa_p_4_6 : (kpm.sd46Perem !== undefined ? kpm.sd46Perem : parsedSubKat.sd46Perem)
 
-  // 2. Cek apakah memiliki breakdown data kelas (SD / MI)
   const hasSdBreakdown = (
     s_l_1_3 !== undefined || 
     s_p_1_3 !== undefined || 
@@ -551,28 +610,23 @@ export function calculateKpmPortions(kpm: any) {
   let siswaBesar = 0
 
   if (hasSdBreakdown && (jenjang.includes('SD') || jenjang.includes('MI') || nama.includes('SDN') || nama.includes('MIS') || nama.includes('MI'))) {
-    // KELAS 1-3 = PORSI KECIL
     porsiKecil = (Number(s_l_1_3) || 0) + (Number(s_p_1_3) || 0)
-    // KELAS 4-6 = PORSI BESAR (SISWA)
     siswaBesar = (Number(s_l_4_6) || 0) + (Number(s_p_4_6) || 0)
   } else if (/^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(nama) || jenjang.includes('TK') || jenjang.includes('KB') || jenjang.includes('PAUD') || jenjang.includes('RA')) {
-    // JENJANG PAUD/TK/KB/RA: Seluruh murid adalah PORSI KECIL, porsi besar siswa = 0
     const totalAlokasi = Number(kpm.alokasi_total || kpm.total || kpm.jumlah_penerima || (Number(kpm.target_pria || 0) + Number(kpm.target_wanita || 0) + tendik) || 0)
     porsiKecil = totalAlokasi > tendik ? totalAlokasi - tendik : totalAlokasi
     siswaBesar = 0
   } else if (jenjang.includes('SMP') || jenjang.includes('MTS') || nama.includes('SMPN') || nama.includes('MTSN')) {
-    // JENJANG SMP/MTS: Seluruh murid adalah PORSI BESAR
     porsiKecil = 0
     const totalAlokasi = Number(kpm.alokasi_total || kpm.total || kpm.jumlah_penerima || (Number(kpm.target_pria || 0) + Number(kpm.target_wanita || 0) + tendik) || 0)
     siswaBesar = totalAlokasi > tendik ? totalAlokasi - tendik : totalAlokasi
   } else {
-    // Fallback umum / Posyandu 3B
     porsiKecil = Number(kpm.porsi_kecil || 0)
     const besarRaw = Number(kpm.porsi_besar || 0)
-    siswaBesar = besarRaw > tendik ? besarRaw - tendik : besarRaw
+    siswaBesar = besarRaw > tendik ? (besarRaw - tendik) : besarRaw
   }
 
-  const total = porsiKecil + siswaBesar + tendik
+  const total = Number(kpm.alokasi_total || kpm.total || kpm.jumlah_penerima || (porsiKecil + siswaBesar + tendik))
 
   return {
     total,
