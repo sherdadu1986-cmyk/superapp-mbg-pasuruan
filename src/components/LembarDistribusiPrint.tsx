@@ -209,7 +209,7 @@ export default function LembarDistribusiPrint({
   const { rows, totals, holidayKpmNames, aktifCount } = useMemo(() => {
     let grandTotal = 0
     let grandKecil = 0
-    let grandBesar = 0
+    let grandSiswaBesar = 0
     let grandTendik = 0
     let active = 0
     const holidayNames: string[] = []
@@ -226,7 +226,7 @@ export default function LembarDistribusiPrint({
       noHpPic: string
       total: number
       porsiKecil: number
-      porsiBesar: number
+      porsiSiswaBesar: number
       guruTendik: number
       isLibur: boolean
     }> = []
@@ -256,7 +256,7 @@ export default function LembarDistribusiPrint({
           noHpPic,
           total: 0,
           porsiKecil: 0,
-          porsiBesar: 0,
+          porsiSiswaBesar: 0,
           guruTendik: 0,
           isLibur: true
         })
@@ -265,10 +265,21 @@ export default function LembarDistribusiPrint({
 
       active += 1
       const breakdown = calculateKpmPortion(item)
-      grandTotal += breakdown.total
-      grandKecil += breakdown.porsiKecil
-      grandBesar += breakdown.porsiBesar
-      grandTendik += breakdown.guruTendik
+      const t = breakdown.total
+      const k = breakdown.porsiKecil
+      const tend = breakdown.guruTendik
+      const besarRaw = breakdown.porsiBesar
+
+      let sb = besarRaw > tend ? (besarRaw - tend) : 0
+      const isPaudTkKb = /^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(item.nama || '')
+      if (isPaudTkKb) {
+        sb = 0
+      }
+
+      grandTotal += t
+      grandKecil += k
+      grandSiswaBesar += sb
+      grandTendik += tend
 
       processed.push({
         no: processed.length + 1,
@@ -278,10 +289,10 @@ export default function LembarDistribusiPrint({
         kategori: item.kategori,
         rute,
         noHpPic,
-        total: breakdown.total,
-        porsiKecil: breakdown.porsiKecil,
-        porsiBesar: breakdown.porsiBesar,
-        guruTendik: breakdown.guruTendik,
+        total: t,
+        porsiKecil: k,
+        porsiSiswaBesar: sb,
+        guruTendik: tend,
         isLibur: false
       })
     })
@@ -291,7 +302,7 @@ export default function LembarDistribusiPrint({
       totals: {
         grandTotal,
         grandKecil,
-        grandBesar,
+        grandSiswaBesar,
         grandTendik
       },
       holidayKpmNames: holidayNames,
@@ -520,18 +531,21 @@ export default function LembarDistribusiPrint({
               </div>
 
               {/* 3. Tabel Rekapitulasi Porsi (25 KPM - Scale Fitted & Balanced for Full A4) */}
-              <div className="border border-slate-300 rounded-md overflow-hidden">
-                <table className="w-full text-left border-collapse text-[11px] leading-tight font-medium">
-                  <thead>
-                    <tr className="bg-[#0f172a] text-white text-[10px] font-bold uppercase tracking-wider">
-                      <th className="py-2 px-2 text-center w-7 border-b border-slate-700">NO</th>
-                      <th className="py-2 px-2 border-b border-slate-700">NAMA KPM / LEMBAGA</th>
-                      <th className="py-2 px-2 text-center border-b border-slate-700 w-16">RUTE</th>
-                      <th className="py-2 px-2 text-center border-b border-slate-700 w-28">KONTAK PIC</th>
-                      <th className="py-2 px-2 text-right border-b border-slate-700 w-20">TOTAL PORSI</th>
-                      <th className="py-2 px-2 text-right border-b border-slate-700 w-20">PORSI KECIL</th>
-                      <th className="py-2 px-2 text-right border-b border-slate-700 w-20">PORSI BESAR</th>
-                      <th className="py-2 px-2 text-right border-b border-slate-700 w-24">TENDIK/KADER</th>
+              <div className="border border-slate-400 rounded-md overflow-hidden">
+                <table className="w-full text-left border-collapse text-[10.5px] leading-tight font-medium">
+                  <thead className="bg-[#0e2a5c] text-white text-center font-bold text-[10px] uppercase tracking-wider">
+                    <tr>
+                      <th rowSpan={2} className="border border-slate-600 py-1.5 px-2 text-center w-7">NO</th>
+                      <th rowSpan={2} className="border border-slate-600 py-1.5 px-2 text-left">PENERIMA MANFAAT / SEKOLAH</th>
+                      <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-14">RUTE</th>
+                      <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-24">KONTAK PIC</th>
+                      <th rowSpan={2} className="border border-slate-600 py-1.5 px-2 text-right w-16">TOTAL</th>
+                      <th colSpan={3} className="border border-slate-600 py-1 px-1 text-center uppercase tracking-wide">PORSI</th>
+                    </tr>
+                    <tr className="bg-[#0e2a5c] text-white text-[9px]">
+                      <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-amber-300">KECIL</th>
+                      <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-blue-300">SISWA</th>
+                      <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-white">TENDIK</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-semibold text-[#0f172a]">
@@ -549,23 +563,23 @@ export default function LembarDistribusiPrint({
                                 : 'bg-[#f8fafc] hover:bg-slate-50'
                             }
                           >
-                            <td className="py-1.5 px-2 text-center font-mono text-slate-500 text-[10px]">
+                            <td className="py-1 px-2 text-center font-mono text-slate-500 text-[10px] border border-slate-300">
                               {row.no}
                             </td>
-                            <td className="py-1.5 px-2">
+                            <td className="py-1 px-2 border border-slate-300">
                               {row.isLibur ? (
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-slate-400 line-through text-[11px]">{row.nama}</span>
-                                  <span className="text-[8px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-1 py-0.2 rounded uppercase">
+                                  <span className="font-semibold text-slate-400 line-through text-[10.5px]">{row.nama}</span>
+                                  <span className="text-[7.5px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-1 py-0.2 rounded uppercase">
                                     [LIBUR - 0 PORSI]
                                   </span>
                                 </div>
                               ) : (
-                                <span className="font-extrabold text-[#0f172a] block text-[11px]">{row.nama}</span>
+                                <span className="font-extrabold text-[#0f172a] block text-[10.5px]">{row.nama}</span>
                               )}
                             </td>
-                            <td className="py-1.5 px-2 text-center">
-                              <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border ${
+                            <td className="py-1 px-2 text-center border border-slate-300">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
                                 row.rute === 'Kiri'
                                   ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                                   : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -573,17 +587,17 @@ export default function LembarDistribusiPrint({
                                 {row.rute}
                               </span>
                             </td>
-                            <td className="py-1.5 px-2 text-center font-mono text-[10px] text-slate-700">
+                            <td className="py-1 px-2 text-center font-mono text-[9.5px] text-slate-700 border border-slate-300">
                               {row.noHpPic || '-'}
                             </td>
-                            <td className="py-1.5 px-2 text-right font-black font-mono text-[11px]">
+                            <td className="py-1 px-2 text-right font-black font-mono text-[10.5px] border border-slate-300">
                               {row.isLibur ? (
                                 <span className="text-slate-400 font-normal">0</span>
                               ) : (
                                 <span className="text-[#0f172a] font-black">{row.total.toLocaleString('id-ID')}</span>
                               )}
                             </td>
-                            <td className="py-1.5 px-2 text-right font-mono font-bold text-[11px]">
+                            <td className="py-1 px-2 text-right font-mono font-bold text-[10.5px] border border-slate-300">
                               {row.isLibur ? (
                                 <span className="text-slate-300 font-normal">-</span>
                               ) : row.porsiKecil > 0 ? (
@@ -592,16 +606,16 @@ export default function LembarDistribusiPrint({
                                 <span className="text-slate-300 font-normal">-</span>
                               )}
                             </td>
-                            <td className="py-1.5 px-2 text-right font-mono font-bold text-[11px]">
+                            <td className="py-1 px-2 text-right font-mono font-bold text-[10.5px] border border-slate-300">
                               {row.isLibur ? (
                                 <span className="text-slate-300 font-normal">-</span>
-                              ) : row.porsiBesar > 0 ? (
-                                <span className="text-[#1d4ed8] font-black">{row.porsiBesar.toLocaleString('id-ID')}</span>
+                              ) : row.porsiSiswaBesar > 0 ? (
+                                <span className="text-[#1d4ed8] font-black">{row.porsiSiswaBesar.toLocaleString('id-ID')}</span>
                               ) : (
                                 <span className="text-slate-300 font-normal">-</span>
                               )}
                             </td>
-                            <td className="py-1.5 px-2 text-right font-mono font-semibold text-[11px]">
+                            <td className="py-1 px-2 text-right font-mono font-semibold text-[10.5px] border border-slate-300">
                               {row.isLibur ? (
                                 <span className="text-slate-300 font-normal">-</span>
                               ) : row.guruTendik > 0 ? (
@@ -615,27 +629,27 @@ export default function LembarDistribusiPrint({
                       })
                     ) : (
                       <tr>
-                        <td colSpan={8} className="py-3 text-center text-slate-400 italic text-[11px]">
+                        <td colSpan={8} className="py-3 text-center text-slate-400 italic text-[11px] border border-slate-300">
                           Belum ada data KPM terdaftar.
                         </td>
                       </tr>
                     )}
                   </tbody>
-                  <tfoot className="bg-[#1e293b] text-white font-bold border-t-2 border-[#0f172a] text-[12px]">
+                  <tfoot className="bg-[#0e2a5c] text-white font-bold border-t-2 border-[#0f172a] text-[11px]">
                     <tr>
-                      <td colSpan={4} className="py-2 px-2 font-black uppercase tracking-wider text-white">
+                      <td colSpan={4} className="border border-slate-600 py-1.5 px-2 text-left font-black uppercase tracking-wider text-white">
                         TOTAL KESELURUHAN
                       </td>
-                      <td className="py-2 px-2 text-right font-mono text-white font-black text-[12.5px]">
+                      <td className="border border-slate-600 py-1.5 px-2 text-right font-mono text-white font-black text-[11.5px]">
                         {totals.grandTotal.toLocaleString('id-ID')}
                       </td>
-                      <td className="py-2 px-2 text-right font-mono text-amber-300 font-black text-[12.5px]">
+                      <td className="border border-slate-600 py-1.5 px-2 text-right font-mono text-amber-300 font-black text-[11.5px]">
                         {totals.grandKecil.toLocaleString('id-ID')}
                       </td>
-                      <td className="py-2 px-2 text-right font-mono text-blue-200 font-black text-[12.5px]">
-                        {totals.grandBesar.toLocaleString('id-ID')}
+                      <td className="border border-slate-600 py-1.5 px-2 text-right font-mono text-blue-200 font-black text-[11.5px]">
+                        {totals.grandSiswaBesar.toLocaleString('id-ID')}
                       </td>
-                      <td className="py-2 px-2 text-right font-mono text-slate-200 font-bold text-[11.5px]">
+                      <td className="border border-slate-600 py-1.5 px-2 text-right font-mono text-white font-bold text-[11px]">
                         {totals.grandTendik.toLocaleString('id-ID')}
                       </td>
                     </tr>

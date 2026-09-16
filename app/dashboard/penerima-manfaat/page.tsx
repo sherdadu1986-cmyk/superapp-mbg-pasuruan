@@ -178,7 +178,7 @@ export default function BerandaOperasionalPage() {
   const ringkasanOperasional = React.useMemo(() => {
     let total = 0
     let kecil = 0
-    let besar = 0
+    let siswaBesar = 0
     let tendik = 0
     let aktifCount = 0
     let liburCount = 0
@@ -193,14 +193,25 @@ export default function BerandaOperasionalPage() {
       }
 
       const breakdown = calculateKpmPortion(item)
-      total += breakdown.total
-      kecil += breakdown.porsiKecil
-      besar += breakdown.porsiBesar
-      tendik += breakdown.guruTendik
+      const t = breakdown.total
+      const k = breakdown.porsiKecil
+      const tend = breakdown.guruTendik
+      const besarRaw = breakdown.porsiBesar
+
+      let sb = besarRaw > tend ? (besarRaw - tend) : 0
+      const isPaudTkKb = /^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(item.nama || (item as any).nama_kelompok || '')
+      if (isPaudTkKb) {
+        sb = 0
+      }
+
+      total += t
+      kecil += k
+      siswaBesar += sb
+      tendik += tend
       aktifCount += 1
     })
 
-    return { total, kecil, besar, tendik, aktifCount, liburCount }
+    return { total, kecil, siswaBesar, tendik, aktifCount, liburCount }
   }, [kpmList, liburKpmIds])
 
   // Real-Time Clock Timer
@@ -894,22 +905,25 @@ export default function BerandaOperasionalPage() {
             </div>
 
             {/* Tabel Ringkas Distribusi (Full Unclipped Table) */}
-            <div className="border border-slate-100 rounded-xl overflow-x-auto shadow-2xs">
+            <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs">
               <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider">
+                <thead className="bg-[#0e2a5c] text-white text-center font-bold text-[11px]">
                   <tr>
-                    <th className="py-2.5 px-3 text-center w-10 border-b border-slate-800">NO</th>
-                    <th className="py-2.5 px-3 border-b border-slate-800">NAMA KPM / LEMBAGA</th>
-                    <th className="py-2.5 px-3 text-center border-b border-slate-800">STATUS HARIAN</th>
-                    <th className="py-2.5 px-3 text-center border-b border-slate-800">RUTE DISTRIBUSI</th>
-                    <th className="py-2.5 px-3 text-center border-b border-slate-800">NO HP PIC / KONTAK</th>
-                    <th className="py-2.5 px-3 text-right border-b border-slate-800">TOTAL</th>
-                    <th className="py-2.5 px-3 text-right border-b border-slate-800">KECIL</th>
-                    <th className="py-2.5 px-3 text-right border-b border-slate-800">BESAR</th>
-                    <th className="py-2.5 px-3 text-right border-b border-slate-800">TENDIK</th>
+                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 w-10">NO</th>
+                    <th rowSpan={2} className="border border-slate-700 py-2 px-3 text-left">NAMA KPM / LEMBAGA</th>
+                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">STATUS HARIAN</th>
+                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">RUTE DISTRIBUSI</th>
+                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">NO HP PIC / KONTAK</th>
+                    <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 text-right w-14">TOTAL</th>
+                    <th colSpan={3} className="border border-slate-700 py-1.5 px-2 uppercase tracking-wide">PORSI</th>
+                  </tr>
+                  <tr className="bg-[#0e2a5c] text-white text-center font-bold text-[10px]">
+                    <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-amber-300">KECIL</th>
+                    <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-blue-300">SISWA</th>
+                    <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-white">TENDIK</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+                <tbody className="divide-y divide-slate-200 font-medium text-slate-700 bg-white">
                   {kpmList.length > 0 ? (
                     kpmList.map((item, idx) => {
                       const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
@@ -917,15 +931,26 @@ export default function BerandaOperasionalPage() {
                       const breakdown = calculateKpmPortion(item)
                       const setting = getKpmSetting(itemKey, item, idx)
 
+                      const total = breakdown.total
+                      const kecil = breakdown.porsiKecil
+                      const tendik = breakdown.guruTendik
+                      const besarRaw = breakdown.porsiBesar
+
+                      let siswaBesar = besarRaw > tendik ? (besarRaw - tendik) : 0
+                      const isPaudTkKb = /^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(item.nama || (item as any).nama_kelompok || '')
+                      if (isPaudTkKb) {
+                        siswaBesar = 0
+                      }
+
                       return (
                         <tr
                           key={itemKey}
-                          className={`transition-colors ${isLibur ? 'bg-rose-50/30' : 'hover:bg-slate-50/80'}`}
+                          className={`transition-colors ${isLibur ? 'bg-rose-50/30' : idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
                         >
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-400 text-[11px] font-bold">
+                          <td className="py-2 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border border-slate-200">
                             {idx + 1}
                           </td>
-                          <td className="py-2.5 px-3">
+                          <td className="py-2 px-3 border border-slate-200">
                             <span
                               className={`font-semibold block truncate max-w-[180px] ${
                                 isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
@@ -935,7 +960,7 @@ export default function BerandaOperasionalPage() {
                               {item.nama}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-center">
+                          <td className="py-2 px-3 text-center border border-slate-200">
                             <button
                               type="button"
                               onClick={() => toggleLibur(itemKey)}
@@ -949,7 +974,7 @@ export default function BerandaOperasionalPage() {
                               {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
                             </button>
                           </td>
-                          <td className="py-2.5 px-3 text-center">
+                          <td className="py-2 px-3 text-center border border-slate-200">
                             <select
                               value={setting.rute}
                               onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
@@ -963,7 +988,7 @@ export default function BerandaOperasionalPage() {
                               <option value="Kanan">Rute Kanan</option>
                             </select>
                           </td>
-                          <td className="py-2.5 px-3 text-center">
+                          <td className="py-2 px-3 text-center border border-slate-200">
                             <input
                               type="text"
                               placeholder="08xxxxxxxxxx"
@@ -972,41 +997,41 @@ export default function BerandaOperasionalPage() {
                               className="w-28 text-xs px-1.5 py-1 border border-slate-200 rounded font-mono focus:border-blue-500 focus:bg-blue-50/20 focus:outline-none text-center"
                             />
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono">
+                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
                             {isLibur ? (
                               <span className="font-bold text-slate-400">
                                 0 <span className="text-[9px] text-rose-500 font-normal">(Libur)</span>
                               </span>
                             ) : (
                               <span className="font-bold text-slate-900">
-                                {breakdown.total.toLocaleString('id-ID')}
+                                {total.toLocaleString('id-ID')}
                               </span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono">
+                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
                             {isLibur ? (
                               <span className="font-bold text-slate-300">-</span>
                             ) : (
                               <span className="font-bold text-amber-700">
-                                {breakdown.porsiKecil > 0 ? breakdown.porsiKecil.toLocaleString('id-ID') : '-'}
+                                {kecil > 0 ? kecil.toLocaleString('id-ID') : '-'}
                               </span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono">
+                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
                             {isLibur ? (
                               <span className="font-bold text-slate-300">-</span>
                             ) : (
-                              <span className="font-bold text-indigo-900">
-                                {breakdown.porsiBesar > 0 ? breakdown.porsiBesar.toLocaleString('id-ID') : '-'}
+                              <span className="font-bold text-blue-700">
+                                {siswaBesar > 0 ? siswaBesar.toLocaleString('id-ID') : '-'}
                               </span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono">
+                          <td className="py-2 px-3 text-right font-mono border border-slate-200">
                             {isLibur ? (
                               <span className="font-semibold text-slate-300">-</span>
                             ) : (
-                              <span className="font-semibold text-slate-600">
-                                {breakdown.guruTendik > 0 ? breakdown.guruTendik.toLocaleString('id-ID') : '-'}
+                              <span className="font-semibold text-slate-700">
+                                {tendik > 0 ? tendik.toLocaleString('id-ID') : '-'}
                               </span>
                             )}
                           </td>
@@ -1015,7 +1040,7 @@ export default function BerandaOperasionalPage() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
+                      <td colSpan={9} className="py-8 text-center text-slate-400 font-medium border border-slate-200">
                         Belum ada data KPM terdaftar.
                       </td>
                     </tr>
@@ -1023,19 +1048,19 @@ export default function BerandaOperasionalPage() {
                 </tbody>
                 <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs shadow-2xs">
                   <tr>
-                    <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
+                    <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px] border border-slate-200">
                       TOTAL KESELURUHAN ({ringkasanOperasional.aktifCount} KPM AKTIF)
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black">
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black border border-slate-200">
                       {ringkasanOperasional.total.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
+                    <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black border border-slate-200">
                       {ringkasanOperasional.kecil.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-indigo-950 font-black">
-                      {ringkasanOperasional.besar.toLocaleString('id-ID')}
+                    <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black border border-slate-200">
+                      {ringkasanOperasional.siswaBesar.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold">
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold border border-slate-200">
                       {ringkasanOperasional.tendik.toLocaleString('id-ID')}
                     </td>
                   </tr>

@@ -103,7 +103,7 @@ export default function CetakLembarDistribusiPage() {
   const { rows, totals, holidayKpmNames, aktifCount } = useMemo(() => {
     let grandTotal = 0
     let grandKecil = 0
-    let grandBesar = 0
+    let grandSiswaBesar = 0
     let grandTendik = 0
     let active = 0
     const holidayNames: string[] = []
@@ -120,7 +120,7 @@ export default function CetakLembarDistribusiPage() {
       noHpPic: string
       total: number
       porsiKecil: number
-      porsiBesar: number
+      porsiSiswaBesar: number
       guruTendik: number
       isLibur: boolean
     }> = []
@@ -150,7 +150,7 @@ export default function CetakLembarDistribusiPage() {
           noHpPic,
           total: 0,
           porsiKecil: 0,
-          porsiBesar: 0,
+          porsiSiswaBesar: 0,
           guruTendik: 0,
           isLibur: true
         })
@@ -159,10 +159,21 @@ export default function CetakLembarDistribusiPage() {
 
       active += 1
       const breakdown = calculateKpmPortion(item)
-      grandTotal += breakdown.total
-      grandKecil += breakdown.porsiKecil
-      grandBesar += breakdown.porsiBesar
-      grandTendik += breakdown.guruTendik
+      const t = breakdown.total
+      const k = breakdown.porsiKecil
+      const tend = breakdown.guruTendik
+      const besarRaw = breakdown.porsiBesar
+
+      let sb = besarRaw > tend ? (besarRaw - tend) : 0
+      const isPaudTkKb = /^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(item.nama || '')
+      if (isPaudTkKb) {
+        sb = 0
+      }
+
+      grandTotal += t
+      grandKecil += k
+      grandSiswaBesar += sb
+      grandTendik += tend
 
       processed.push({
         no: processed.length + 1,
@@ -172,10 +183,10 @@ export default function CetakLembarDistribusiPage() {
         kategori: item.kategori,
         rute,
         noHpPic,
-        total: breakdown.total,
-        porsiKecil: breakdown.porsiKecil,
-        porsiBesar: breakdown.porsiBesar,
-        guruTendik: breakdown.guruTendik,
+        total: t,
+        porsiKecil: k,
+        porsiSiswaBesar: sb,
+        guruTendik: tend,
         isLibur: false
       })
     })
@@ -185,7 +196,7 @@ export default function CetakLembarDistribusiPage() {
       totals: {
         grandTotal,
         grandKecil,
-        grandBesar,
+        grandSiswaBesar,
         grandTendik
       },
       holidayKpmNames: holidayNames,
@@ -338,97 +349,102 @@ export default function CetakLembarDistribusiPage() {
           </div>
 
           {/* 3. TABEL KPM (Padding Padat & Pas) */}
-          <table className="w-full border-collapse text-[9.5px] border border-slate-300 rounded overflow-hidden">
-            <thead>
-              <tr className="bg-slate-900 text-white font-bold text-[9px]">
-                <th className="py-1 px-1.5 text-center w-7">NO</th>
-                <th className="py-1 px-2 text-left">NAMA KPM / LEMBAGA</th>
-                <th className="py-1 px-1.5 text-center w-14">RUTE</th>
-                <th className="py-1 px-1.5 text-center w-24">KONTAK PIC</th>
-                <th className="py-1 px-1.5 text-center w-16">TOTAL PORSI</th>
-                <th className="py-1 px-1.5 text-center text-amber-300 w-16">PORSI KECIL</th>
-                <th className="py-1 px-1.5 text-center text-blue-300 w-16">PORSI BESAR</th>
-                <th className="py-1 px-1.5 text-center w-20">TENDIK/KADER</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
-              {rows.length > 0 ? (
-                rows.map((row, idx) => (
-                  <tr
-                    key={row.id}
-                    className={
-                      row.isLibur
-                        ? 'bg-rose-50 text-slate-400'
-                        : idx % 2 === 1
-                        ? 'bg-slate-50/70'
-                        : 'bg-white'
-                    }
-                  >
-                    <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px]">{row.no}</td>
-                    <td className="py-0.5 px-2 font-semibold">
-                      {row.isLibur ? (
-                        <>
-                          <span className="line-through">{row.nama}</span>
-                          <span className="ml-1.5 text-[7.5px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
-                            [LIBUR - 0 PORSI]
-                          </span>
-                        </>
-                      ) : (
-                        row.nama
-                      )}
-                    </td>
-                    <td className="py-0.5 px-1.5 text-center font-bold">
-                      <span className={`px-1 py-0.2 rounded text-[8px] border ${
-                        row.rute === 'Kiri' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      }`}>
-                        {row.rute}
-                      </span>
-                    </td>
-                    <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] text-slate-700">
-                      {row.noHpPic || '-'}
-                    </td>
-                    <td className="py-0.5 px-1.5 text-center font-bold">
-                      {row.isLibur ? 0 : row.total.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-0.5 px-1.5 text-center text-amber-700 font-bold">
-                      {row.isLibur ? '-' : row.porsiKecil > 0 ? row.porsiKecil.toLocaleString('id-ID') : '-'}
-                    </td>
-                    <td className="py-0.5 px-1.5 text-center text-blue-700 font-bold">
-                      {row.isLibur ? '-' : row.porsiBesar > 0 ? row.porsiBesar.toLocaleString('id-ID') : '-'}
-                    </td>
-                    <td className="py-0.5 px-1.5 text-center font-medium">
-                      {row.isLibur ? '-' : row.guruTendik > 0 ? row.guruTendik.toLocaleString('id-ID') : '-'}
+          <div className="border border-slate-400 rounded overflow-hidden">
+            <table className="w-full border-collapse text-[9.5px]">
+              <thead className="bg-[#0e2a5c] text-white font-bold text-[9px] uppercase tracking-wider">
+                <tr>
+                  <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-7">NO</th>
+                  <th rowSpan={2} className="border border-slate-600 py-1.5 px-2 text-left">PENERIMA MANFAAT / SEKOLAH</th>
+                  <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-14">RUTE</th>
+                  <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-24">KONTAK PIC</th>
+                  <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-right w-16">TOTAL</th>
+                  <th colSpan={3} className="border border-slate-600 py-1 px-1 text-center uppercase tracking-wide">PORSI</th>
+                </tr>
+                <tr className="bg-[#0e2a5c] text-white text-[8.5px]">
+                  <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-amber-300">KECIL</th>
+                  <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-blue-300">SISWA</th>
+                  <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-white">TENDIK</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
+                {rows.length > 0 ? (
+                  rows.map((row, idx) => (
+                    <tr
+                      key={row.id}
+                      className={
+                        row.isLibur
+                          ? 'bg-rose-50 text-slate-400'
+                          : idx % 2 === 1
+                          ? 'bg-slate-50/70'
+                          : 'bg-white'
+                      }
+                    >
+                      <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] border border-slate-300">{row.no}</td>
+                      <td className="py-0.5 px-2 font-semibold border border-slate-300">
+                        {row.isLibur ? (
+                          <>
+                            <span className="line-through">{row.nama}</span>
+                            <span className="ml-1.5 text-[7.5px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
+                              [LIBUR - 0 PORSI]
+                            </span>
+                          </>
+                        ) : (
+                          row.nama
+                        )}
+                      </td>
+                      <td className="py-0.5 px-1.5 text-center font-bold border border-slate-300">
+                        <span className={`px-1 py-0.2 rounded text-[8px] border ${
+                          row.rute === 'Kiri' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          {row.rute}
+                        </span>
+                      </td>
+                      <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] text-slate-700 border border-slate-300">
+                        {row.noHpPic || '-'}
+                      </td>
+                      <td className="py-0.5 px-1.5 text-right font-bold border border-slate-300">
+                        {row.isLibur ? 0 : row.total.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-0.5 px-1.5 text-right text-amber-700 font-bold border border-slate-300">
+                        {row.isLibur ? '-' : row.porsiKecil > 0 ? row.porsiKecil.toLocaleString('id-ID') : '-'}
+                      </td>
+                      <td className="py-0.5 px-1.5 text-right text-blue-700 font-bold border border-slate-300">
+                        {row.isLibur ? '-' : row.porsiSiswaBesar > 0 ? row.porsiSiswaBesar.toLocaleString('id-ID') : '-'}
+                      </td>
+                      <td className="py-0.5 px-1.5 text-right font-medium border border-slate-300">
+                        {row.isLibur ? '-' : row.guruTendik > 0 ? row.guruTendik.toLocaleString('id-ID') : '-'}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="py-2 text-center text-slate-400 italic border border-slate-300">
+                      Belum ada data KPM terdaftar untuk rute ini.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="py-2 text-center text-slate-400 italic">
-                    Belum ada data KPM terdaftar untuk rute ini.
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="bg-[#0e2a5c] text-white font-bold text-[9.5px]">
+                  <td colSpan={4} className="border border-slate-600 py-1 px-2 text-left tracking-wider">
+                    TOTAL KESELURUHAN
+                  </td>
+                  <td className="border border-slate-600 py-1 px-1.5 text-right font-black">
+                    {totals.grandTotal.toLocaleString('id-ID')}
+                  </td>
+                  <td className="border border-slate-600 py-1 px-1.5 text-right text-amber-300 font-black">
+                    {totals.grandKecil.toLocaleString('id-ID')}
+                  </td>
+                  <td className="border border-slate-600 py-1 px-1.5 text-right text-blue-200 font-black">
+                    {totals.grandSiswaBesar.toLocaleString('id-ID')}
+                  </td>
+                  <td className="border border-slate-600 py-1 px-1.5 text-right text-white font-bold">
+                    {totals.grandTendik.toLocaleString('id-ID')}
                   </td>
                 </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="bg-slate-900 text-white font-bold text-[9.5px]">
-                <td colSpan={4} className="py-1 px-2 text-left tracking-wider">
-                  TOTAL KESELURUHAN
-                </td>
-                <td className="py-1 px-1.5 text-center font-black">
-                  {totals.grandTotal.toLocaleString('id-ID')}
-                </td>
-                <td className="py-1 px-1.5 text-center text-amber-300 font-black">
-                  {totals.grandKecil.toLocaleString('id-ID')}
-                </td>
-                <td className="py-1 px-1.5 text-center text-blue-300 font-black">
-                  {totals.grandBesar.toLocaleString('id-ID')}
-                </td>
-                <td className="py-1 px-1.5 text-center">
-                  {totals.grandTendik.toLocaleString('id-ID')}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+              </tfoot>
+            </table>
+          </div>
 
           {/* 4. CATATAN LIBUR */}
           {holidayKpmNames.length > 0 && (
