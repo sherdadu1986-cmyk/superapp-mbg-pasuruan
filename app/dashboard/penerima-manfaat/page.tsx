@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   Building2, Users, CheckCircle2, RotateCw, GraduationCap, Heart, ArrowRight,
   Clock, Utensils, UtensilsCrossed, Calendar, Edit3, Plus, Printer,
-  FileCheck, ShieldCheck, Database, Award, Activity, Truck, MapPin, Sparkles, Package, Search
+  FileCheck, ShieldCheck, Database, Award, Activity, Truck, MapPin, Sparkles, Package, Search, Tv
 } from 'lucide-react'
 import {
   fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB, sortKpmList,
@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { RingkasanLogistikHarian } from '@/components/RingkasanLogistikHarian'
+import KioskModeDisplay from '@/components/KioskModeDisplay'
 
 export const dynamic = 'force-dynamic'
 
@@ -376,6 +377,7 @@ export default function BerandaOperasionalPage() {
 
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [isPrinting, setIsPrinting] = useState(false)
+  const [showKioskModal, setShowKioskModal] = useState(false)
 
   const handlePrintDistribution = () => {
     setIsPrinting(true)
@@ -751,6 +753,20 @@ export default function BerandaOperasionalPage() {
               {mounted && currentTime ? formatIndonesianDate(currentTime) : 'Memuat waktu...'}
             </span>
           </div>
+
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined' && document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {})
+              }
+              setShowKioskModal(true)
+            }}
+            className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 cursor-pointer active:scale-95 border border-blue-400/40"
+            title="Buka Mode Presentasi TV Dinding"
+          >
+            <Tv size={15} className="animate-pulse text-cyan-300" />
+            <span>Mode Layar TV</span>
+          </button>
 
           <button
             onClick={handleRefresh}
@@ -1606,6 +1622,17 @@ export default function BerandaOperasionalPage() {
         onClose={() => setShowPrintModal(false)}
         initialKpmList={kpmList}
         liburKpmIds={liburKpmIds}
+      />
+
+      {/* Executive Kiosk TV Display Overlay Component */}
+      <KioskModeDisplay
+        isOpen={showKioskModal}
+        onClose={() => setShowKioskModal(false)}
+        initialKpmList={kpmList}
+        initialBnbaList={bnbaList}
+        initialMenuDb={menuDb}
+        liburKpmIds={liburKpmIds}
+        distribusiSettings={distribusiSettings}
       />
     </div>
   )

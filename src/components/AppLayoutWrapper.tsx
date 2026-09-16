@@ -14,8 +14,10 @@ import {
   Menu, 
   X,
   ChevronDown,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Tv
 } from 'lucide-react'
+import KioskModeDisplay from '@/components/KioskModeDisplay'
 
 interface SubMenuItem {
   name: string;
@@ -66,6 +68,7 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({})
+  const [isKioskOpen, setIsKioskOpen] = useState(false)
 
   const menuSections: MenuSection[] = [
     {
@@ -261,8 +264,23 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           </div>
         </div>
 
-        {/* Right Header: User Profile Badge */}
+        {/* Right Header: Kiosk Mode Trigger + User Profile Badge */}
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined' && document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {})
+              }
+              setIsKioskOpen(true)
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/70 hover:bg-white/90 border border-white/80 backdrop-blur-md shadow-xs transition-all duration-300 text-slate-800 font-semibold text-xs cursor-pointer active:scale-95"
+            title="Buka Mode Presentasi TV Dinding"
+          >
+            <Tv size={15} className="text-blue-600 animate-pulse" />
+            <span>Mode Layar TV</span>
+          </button>
+
           <div className="flex items-center gap-2.5 bg-white/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/70 shadow-2xs">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center border border-white/80 shadow-xs flex-shrink-0">
               AS
@@ -325,6 +343,12 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           {children}
         </main>
       </div>
+
+      {/* Executive Kiosk TV Display Overlay Component */}
+      <KioskModeDisplay
+        isOpen={isKioskOpen}
+        onClose={() => setIsKioskOpen(false)}
+      />
     </div>
   )
 }
