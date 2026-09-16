@@ -103,7 +103,7 @@ export function RingkasanLogistikHarian({
   }, [kpmList, liburKpmIds, distribusiSettings])
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 hover:shadow-md transition duration-200">
+    <div className="bg-white/70 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] rounded-2xl p-5 space-y-4 hover:bg-white/80 hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.12)] transition-all duration-300">
       {/* Header Container */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">

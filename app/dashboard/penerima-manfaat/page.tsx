@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   Building2, Users, CheckCircle2, RotateCw, GraduationCap, Heart, ArrowRight,
   Clock, Utensils, UtensilsCrossed, Calendar, Edit3, Plus, Printer,
-  FileCheck, ShieldCheck, Database, Award, Activity, Truck, MapPin, Sparkles, Package
+  FileCheck, ShieldCheck, Database, Award, Activity, Truck, MapPin, Sparkles, Package, Search
 } from 'lucide-react'
 import {
   fetchKelompokPenerimaManfaatList, fetchBnbaList, fetchMenuHariIniDB, sortKpmList,
@@ -698,45 +698,54 @@ export default function BerandaOperasionalPage() {
 
   return (
     <div className="space-y-6 font-sans text-slate-800 pb-12">
-      {/* 1. Header Halaman + Real-Time Digital Clock */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">
-              SPPG SuperApp
-            </span>
-            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${realtimeStatus === 'SUBSCRIBED'
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              : realtimeStatus === 'REST'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200'
-              }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${realtimeStatus === 'SUBSCRIBED'
-                ? 'bg-emerald-500 animate-pulse'
-                : realtimeStatus === 'REST'
-                  ? 'bg-emerald-500'
-                  : 'bg-amber-500 animate-ping'
-                }`} />
-              <span>
-                {realtimeStatus === 'SUBSCRIBED'
-                  ? '● Sinkron Realtime'
-                  : realtimeStatus === 'REST'
-                    ? '● Terhubung (REST)'
-                    : '○ Menghubungkan'}
-              </span>
-            </span>
+      {/* 1. Top Header Glassmorphism */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] hover:bg-white/80 transition-all duration-300">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white font-extrabold text-base flex items-center justify-center border border-white/80 shadow-md shrink-0">
+            AS
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight mt-1">
-            Dashboard Operasional
-          </h1>
-          <p className="text-xs text-slate-500 font-normal mt-0.5">
-            Pemantauan alokasi porsi gizi harian, verifikasi BNBA, dan kesiapan distribusi real-time BGN Pasuruan.
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="bg-slate-900/90 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full tracking-wider uppercase backdrop-blur-md">
+                SPPG SuperApp
+              </span>
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 backdrop-blur-md ${realtimeStatus === 'SUBSCRIBED' || realtimeStatus === 'REST'
+                ? 'bg-emerald-500/10 text-emerald-800 border-emerald-300/50'
+                : 'bg-amber-500/10 text-amber-800 border-amber-300/50'
+                }`}>
+                <span className={`w-2 h-2 rounded-full ${realtimeStatus === 'SUBSCRIBED'
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-emerald-500'
+                  }`} />
+                <span>
+                  {realtimeStatus === 'SUBSCRIBED'
+                    ? '● Sinkron Realtime'
+                    : '● Terhubung (REST)'}
+                </span>
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
+              Selamat Bertugas, Ahmad Sayyidani
+            </h1>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Pemantauan alokasi porsi gizi harian, verifikasi BNBA, dan kesiapan distribusi real-time BGN Pasuruan.
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Search Bar Kaca Minimalis */}
+          <div className="relative hidden sm:block">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Cari KPM / Sekolah..."
+              className="pl-8 pr-3 py-2 bg-white/50 backdrop-blur-md border border-white/80 rounded-xl text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 w-44 transition shadow-inner"
+            />
+          </div>
+
           {/* Real-Time Clock Badge Widget */}
-          <div className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg shadow-2xs flex items-center gap-2 text-xs font-semibold text-slate-700">
+          <div className="px-3.5 py-2 bg-white/60 backdrop-blur-md border border-white/80 rounded-xl shadow-xs flex items-center gap-2 text-xs font-semibold text-slate-700">
             <Clock size={15} className="text-emerald-600 shrink-0" />
             <span className="font-mono text-slate-800">
               {mounted && currentTime ? formatIndonesianDate(currentTime) : 'Memuat waktu...'}
@@ -745,7 +754,7 @@ export default function BerandaOperasionalPage() {
 
           <button
             onClick={handleRefresh}
-            className="px-3.5 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+            className="px-3.5 py-2 bg-white/80 backdrop-blur-md border border-white/90 rounded-xl text-xs font-bold text-slate-700 hover:bg-white hover:text-blue-600 flex items-center gap-1.5 shadow-xs transition-all duration-200 cursor-pointer active:scale-95"
           >
             <RotateCw size={14} className={`text-slate-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Perbarui Data</span>
@@ -753,69 +762,69 @@ export default function BerandaOperasionalPage() {
         </div>
       </div>
 
-      {/* 2. Kartu Metrik Ringkasan Atas (Dynamic 4 KPI Cards) */}
+      {/* 2. Kartu Metrik Ringkasan Atas (Dynamic 4 Glass KPI Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Total Kelompok / Titik */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group">
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] hover:bg-white/80 hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.12)] transition-all duration-300 flex items-center justify-between group">
           <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
               Total Titik KPM
             </span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {totalKelompok} <span className="text-xs font-semibold text-slate-500">Titik</span>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              {totalKelompok} <span className="text-xs font-bold text-slate-500">Titik Aktif</span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              Tabel <code className="text-slate-700 font-mono">kelompok_penerima_manfaat</code>
+              Sekolah & Posyandu BGN
             </p>
           </div>
-          <div className="p-3 bg-slate-100 text-slate-700 rounded-xl group-hover:bg-slate-900 group-hover:text-white transition duration-200">
+          <div className="p-3 bg-blue-50/80 text-blue-600 rounded-2xl border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 shadow-xs">
             <Building2 size={24} />
           </div>
         </div>
 
-        {/* KPI 2: Total Target Penerima */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group">
+        {/* KPI 2: Target Alokasi Penerima */}
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] hover:bg-white/80 hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.12)] transition-all duration-300 flex items-center justify-between group">
           <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Target Alokasi Penerima
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              Target Alokasi
             </span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {totalTargetPenerima.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">Penerima Manfaat</span>
+            <div className="text-2xl sm:text-3xl font-black text-blue-600 tracking-tight">
+              {totalTargetPenerima.toLocaleString('id-ID')} <span className="text-xs font-bold text-blue-700/70">Porsi</span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
               SUM Target Seluruh KPM
             </p>
           </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition duration-200">
+          <div className="p-3 bg-indigo-50/80 text-indigo-600 rounded-2xl border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shadow-xs">
             <Users size={24} />
           </div>
         </div>
 
         {/* KPI 3: Realisasi BNBA Terdata */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group">
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] hover:bg-white/80 hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.12)] transition-all duration-300 flex items-center justify-between group">
           <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Realisasi BNBA Terdata
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              Realisasi BNBA
             </span>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 tracking-tight">
-              {realisasiTotal.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">BNBA</span>
+            <div className="text-2xl sm:text-3xl font-black text-teal-600 tracking-tight">
+              {realisasiTotal.toLocaleString('id-ID')} <span className="text-xs font-bold text-teal-700/70">Siswa & Bumil</span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              Data Valid KPM Supabase
+              Detail BNBA Terverifikasi
             </p>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition duration-200">
+          <div className="p-3 bg-teal-50/80 text-teal-600 rounded-2xl border border-teal-100 group-hover:bg-teal-600 group-hover:text-white transition-all duration-300 shadow-xs">
             <FileCheck size={24} />
           </div>
         </div>
 
-        {/* KPI 4: Rasio Kelengkapan Data */}
-        <div className={`bg-white rounded-xl border p-4 sm:p-5 shadow-2xs hover:shadow-md transition duration-200 flex items-center justify-between group ${isOverAllocated ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'
+        {/* KPI 4: Rasio Kelengkapan Data with Astra Circular Progress Ring */}
+        <div className={`bg-white/70 backdrop-blur-xl border p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] hover:bg-white/80 hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.12)] transition-all duration-300 flex items-center justify-between group ${isOverAllocated ? 'border-amber-300/80 bg-amber-50/30' : 'border-white/60'
           }`}>
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Kelengkapan BNBA
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Rasio Kelengkapan
               </span>
               {isOverAllocated && (
                 <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300">
@@ -823,18 +832,35 @@ export default function BerandaOperasionalPage() {
                 </span>
               )}
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-baseline gap-1">
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-baseline gap-1">
               {persentase}%
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              {realisasiTotal.toLocaleString('id-ID')} dari {totalTargetPenerima.toLocaleString('id-ID')} Penerima Manfaat ({persentase}%)
+              {realisasiTotal.toLocaleString('id-ID')} / {totalTargetPenerima.toLocaleString('id-ID')}
             </p>
           </div>
-          <div className={`p-3 rounded-xl transition duration-200 ${isOverAllocated
-            ? 'bg-amber-100 text-amber-700 group-hover:bg-amber-600 group-hover:text-white'
-            : 'bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white'
-            }`}>
-            <ShieldCheck size={24} />
+
+          {/* Astra Circular Ring Progress Mini */}
+          <div className="relative w-13 h-13 flex items-center justify-center shrink-0">
+            <svg className="w-13 h-13 transform -rotate-90" viewBox="0 0 36 36">
+              <path
+                className="text-slate-200/80"
+                strokeWidth="3.5"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                className="text-blue-600 transition-all duration-1000 ease-out"
+                strokeDasharray={`${persentase}, 100`}
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <span className="absolute text-[10px] font-black text-slate-800">{persentase}%</span>
           </div>
         </div>
       </div>
@@ -843,27 +869,27 @@ export default function BerandaOperasionalPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Kolom Kiri (5/12): Foto Menu Aktif & Detail Siklus + Ringkasan Logistik */}
         <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200">
+          <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] space-y-4 flex flex-col justify-between hover:bg-white/80 transition-all duration-300">
             {menuDb ? (
               <div className="space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
                   <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-amber-50 text-amber-600 rounded-md border border-amber-200">
+                    <div className="p-1.5 bg-amber-50 text-amber-600 rounded-xl border border-amber-200 shadow-2xs">
                       <Utensils size={16} />
                     </div>
                     <h2 className="font-bold text-slate-900 text-sm tracking-tight">
-                      Menu Utama Hari Ini
+                      Menu & Nutrisi Harian
                     </h2>
                   </div>
                   {menuDb.status && (
-                    <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
+                    <span className="bg-emerald-500/10 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-300/50 uppercase tracking-wider backdrop-blur-md">
                       ● {menuDb.status}
                     </span>
                   )}
                 </div>
 
                 {menuDb.foto_url && (
-                  <div className="relative aspect-[1080/1350] max-w-sm mx-auto w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs group">
+                  <div className="relative aspect-[16/9] w-full rounded-xl overflow-hidden border border-white/80 bg-slate-100 shadow-xs group">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={menuDb.foto_url}
@@ -871,7 +897,7 @@ export default function BerandaOperasionalPage() {
                       className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition duration-300"
                     />
                     {menuDb.kalori && (
-                      <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
+                      <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-white/20">
                         ⚡ {menuDb.kalori}
                       </div>
                     )}
@@ -889,18 +915,26 @@ export default function BerandaOperasionalPage() {
                     </p>
                   )}
 
-                  {menuDb.komposisi_gizi && menuDb.komposisi_gizi.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      {menuDb.komposisi_gizi.map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="bg-slate-100 text-slate-700 text-[11px] font-medium px-2.5 py-0.5 rounded-md border border-slate-200"
-                        >
-                          ✓ {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {/* Nutrisi Glass Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="bg-blue-50/80 text-blue-700 text-[11px] font-bold px-2.5 py-0.5 rounded-lg border border-blue-200/80">
+                      ⚡ Kalori 645 kkal
+                    </span>
+                    <span className="bg-indigo-50/80 text-indigo-700 text-[11px] font-bold px-2.5 py-0.5 rounded-lg border border-indigo-200/80">
+                      💪 Protein 27g
+                    </span>
+                    <span className="bg-emerald-50/80 text-emerald-700 text-[11px] font-bold px-2.5 py-0.5 rounded-lg border border-emerald-200/80">
+                      ✓ Lolos Uji Sampel
+                    </span>
+                    {menuDb.komposisi_gizi && menuDb.komposisi_gizi.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="bg-white/60 text-slate-700 text-[11px] font-medium px-2.5 py-0.5 rounded-lg border border-white/80 shadow-2xs"
+                      >
+                        ✓ {tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -926,7 +960,7 @@ export default function BerandaOperasionalPage() {
               </div>
             )}
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500 font-medium">
               <span>Siklus Standar Nutrisi BGN</span>
               <span className="font-semibold text-slate-800">Standardized Meal</span>
             </div>
@@ -941,10 +975,10 @@ export default function BerandaOperasionalPage() {
         </div>
 
         {/* Kolom Kanan (7/12): Panel "Kebutuhan Porsi Harian (Real-Time BGN)" */}
-        <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200">
+        <div className="lg:col-span-7 bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] space-y-4 flex flex-col justify-between hover:bg-white/80 transition-all duration-300">
           <div className="space-y-4">
             {/* Header Card */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
               <div>
                 <h2 className="font-bold text-slate-900 text-base tracking-tight flex items-center gap-2">
                   <span>Kebutuhan Porsi Harian (Real-Time BGN)</span>
@@ -953,7 +987,7 @@ export default function BerandaOperasionalPage() {
                   Distribusi porsi dinamis terpisah: Lembaga Sekolah & Posyandu / Sasaran 3B. Klik status untuk meliburkan KPM.
                 </p>
               </div>
-              <span className="bg-slate-100 text-slate-700 text-xs font-mono font-bold px-2.5 py-1 rounded-md border border-slate-200 shrink-0">
+              <span className="bg-white/80 text-slate-800 text-xs font-mono font-bold px-3 py-1 rounded-xl border border-white/90 shadow-2xs shrink-0">
                 {ringkasanOperasional.grandTotal.toLocaleString('id-ID')} Total Porsi ({ringkasanOperasional.totalAktif} Titik Aktif{ringkasanOperasional.totalLibur > 0 ? `, ${ringkasanOperasional.totalLibur} Libur` : ''})
               </span>
             </div>
@@ -972,25 +1006,25 @@ export default function BerandaOperasionalPage() {
                       Subtotal: {ringkasanOperasional.sekolahTotal.toLocaleString('id-ID')} Porsi
                     </span>
                   </div>
-                  <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs">
+                  <div className="border border-white/80 rounded-xl overflow-x-auto shadow-xs bg-white/40">
                     <table className="w-full text-left border-collapse text-xs">
-                      <thead className="bg-[#0e2a5c] text-white text-center font-bold text-[11px]">
+                      <thead className="bg-slate-900/95 text-white backdrop-blur-md text-center font-bold text-[11px]">
                         <tr>
-                          <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 w-10">NO</th>
-                          <th rowSpan={2} className="border border-slate-700 py-2 px-3 text-left">NAMA LEMBAGA SEKOLAH</th>
-                          <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">STATUS</th>
-                          <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">RUTE</th>
-                          <th rowSpan={2} className="border border-slate-700 py-2 px-2.5">NO HP PIC</th>
-                          <th rowSpan={2} className="border border-slate-700 py-2 px-2.5 text-right w-14">TOTAL</th>
-                          <th colSpan={3} className="border border-slate-700 py-1.5 px-2 uppercase tracking-wide">PORSI</th>
+                          <th rowSpan={2} className="border border-slate-700/80 py-2.5 px-2.5 w-10">NO</th>
+                          <th rowSpan={2} className="border border-slate-700/80 py-2.5 px-3 text-left">NAMA LEMBAGA SEKOLAH</th>
+                          <th rowSpan={2} className="border border-slate-700/80 py-2.5 px-2.5">STATUS</th>
+                          <th rowSpan={2} className="border border-slate-700/80 py-2.5 px-2.5">RUTE</th>
+                          <th rowSpan={2} className="border border-slate-700/80 py-2.5 px-2.5">NO HP PIC</th>
+                          <th rowSpan={2} className="border border-slate-700/80 py-2.5 px-2.5 text-right w-14">TOTAL</th>
+                          <th colSpan={3} className="border border-slate-700/80 py-1.5 px-2 uppercase tracking-wide">PORSI</th>
                         </tr>
-                        <tr className="bg-[#0e2a5c] text-white text-center font-bold text-[10px]">
-                          <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-amber-300">KECIL</th>
-                          <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-blue-300">SISWA</th>
-                          <th className="border border-slate-700 py-1.5 px-2.5 text-right w-14 text-white">TENDIK</th>
+                        <tr className="bg-slate-900/90 text-white text-center font-bold text-[10px]">
+                          <th className="border border-slate-700/80 py-1.5 px-2.5 text-right w-14 text-amber-300">KECIL</th>
+                          <th className="border border-slate-700/80 py-1.5 px-2.5 text-right w-14 text-blue-300">SISWA</th>
+                          <th className="border border-slate-700/80 py-1.5 px-2.5 text-right w-14 text-white">TENDIK</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200 font-medium text-slate-700 bg-white">
+                      <tbody className="divide-y divide-slate-200/50 font-medium text-slate-700 bg-white/60">
                         {sekolahList.length > 0 ? (
                           sekolahList.map((item, idx) => {
                             const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
@@ -1006,12 +1040,12 @@ export default function BerandaOperasionalPage() {
                             return (
                               <tr
                                 key={itemKey}
-                                className={`transition-colors ${isLibur ? 'bg-rose-50/30' : idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
+                                className={`transition-colors ${isLibur ? 'bg-rose-50/40' : 'hover:bg-blue-50/50'}`}
                               >
-                                <td className="py-2 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border border-slate-200">
+                                <td className="py-2.5 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border-b border-slate-200/50">
                                   {idx + 1}
                                 </td>
-                                <td className="py-2 px-3 border border-slate-200">
+                                <td className="py-2.5 px-3 border-b border-slate-200/50">
                                   <span
                                     className={`font-semibold block truncate max-w-[180px] ${
                                       isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
@@ -1021,12 +1055,12 @@ export default function BerandaOperasionalPage() {
                                     {item.nama}
                                   </span>
                                 </td>
-                                <td className="py-2 px-3 text-center border border-slate-200">
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
                                   <button
                                     type="button"
                                     onClick={() => toggleLibur(itemKey)}
                                     title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
                                       isLibur
                                         ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
@@ -1035,33 +1069,33 @@ export default function BerandaOperasionalPage() {
                                     {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
                                   </button>
                                 </td>
-                                <td className="py-2 px-3 text-center border border-slate-200">
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
                                   <select
                                     value={setting.rute}
                                     onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
-                                    className="bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-800 focus:ring-1 focus:ring-slate-800 outline-hidden cursor-pointer"
+                                    className="bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-800 focus:ring-1 focus:ring-slate-800 outline-hidden cursor-pointer"
                                   >
                                     <option value="Kiri">Rute Kiri</option>
                                     <option value="Kanan">Rute Kanan</option>
                                   </select>
                                 </td>
-                                <td className="py-2 px-3 text-center border border-slate-200">
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
                                   <input
                                     type="text"
                                     value={setting.no_hp_pic}
                                     onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
                                     placeholder="08xxx..."
-                                    className="w-28 text-center bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
+                                    className="w-28 text-center bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
                                   />
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-bold text-slate-300">-</span>
                                   ) : (
                                     <span className="font-bold text-slate-900">{total.toLocaleString('id-ID')}</span>
                                   )}
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-bold text-slate-300">-</span>
                                   ) : (
@@ -1070,7 +1104,7 @@ export default function BerandaOperasionalPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-bold text-slate-300">-</span>
                                   ) : (
@@ -1079,7 +1113,7 @@ export default function BerandaOperasionalPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-semibold text-slate-300">-</span>
                                   ) : (
@@ -1093,27 +1127,27 @@ export default function BerandaOperasionalPage() {
                           })
                         ) : (
                           <tr>
-                            <td colSpan={9} className="py-6 text-center text-slate-400 font-medium border border-slate-200">
+                            <td colSpan={9} className="py-6 text-center text-slate-400 font-medium border-b border-slate-200">
                               Belum ada data Lembaga Sekolah terdaftar.
                             </td>
                           </tr>
                         )}
                       </tbody>
-                      <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs shadow-2xs">
+                      <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t-2 border-slate-300 text-xs backdrop-blur-md">
                         <tr>
-                          <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px] border border-slate-200">
+                          <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
                             SUBTOTAL SEKOLAH ({ringkasanOperasional.sekolahAktifCount} LEMBAGA AKTIF)
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black">
                             {ringkasanOperasional.sekolahTotal.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
                             {ringkasanOperasional.sekolahKecil.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black">
                             {ringkasanOperasional.sekolahSiswa.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold">
                             {ringkasanOperasional.sekolahTendik.toLocaleString('id-ID')}
                           </td>
                         </tr>
@@ -1125,29 +1159,29 @@ export default function BerandaOperasionalPage() {
                 {/* TABEL 2: POSYANDU / SASARAN 3B */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-pink-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Heart size={14} /> TABEL 2: POSYANDU / SASARAN 3B ({posyanduList.length} Titik)
+                    <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Heart size={14} className="text-pink-600" /> TABEL 2: POSYANDU / SASARAN 3B ({posyanduList.length} Titik)
                     </span>
                     <span className="text-[11px] font-mono font-bold text-slate-600">
                       Subtotal: {ringkasanOperasional.posyanduTotal.toLocaleString('id-ID')} Porsi
                     </span>
                   </div>
-                  <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs">
+                  <div className="border border-white/80 rounded-xl overflow-x-auto shadow-xs bg-white/40">
                     <table className="w-full text-left border-collapse text-xs">
-                      <thead className="bg-[#0e2a5c] text-white text-center font-bold text-[11px]">
+                      <thead className="bg-emerald-950/95 text-white backdrop-blur-md text-center font-bold text-[11px]">
                         <tr>
-                          <th className="border border-slate-700 py-2 px-2.5 w-10">NO</th>
-                          <th className="border border-slate-700 py-2 px-3 text-left">NAMA POSYANDU / DUSUN</th>
-                          <th className="border border-slate-700 py-2 px-2.5">STATUS</th>
-                          <th className="border border-slate-700 py-2 px-2.5">RUTE</th>
-                          <th className="border border-slate-700 py-2 px-2.5">NO HP PIC</th>
-                          <th className="border border-slate-700 py-2 px-2.5 text-right w-14 text-amber-300">BALITA</th>
-                          <th className="border border-slate-700 py-2 px-2.5 text-right w-14 text-rose-300">BUMIL</th>
-                          <th className="border border-slate-700 py-2 px-2.5 text-right w-14 text-pink-300">BUSUI</th>
-                          <th className="border border-slate-700 py-2 px-2.5 text-right w-16 font-bold">TOTAL</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5 w-10">NO</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-3 text-left">NAMA POSYANDU / DUSUN</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5">STATUS</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5">RUTE</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5">NO HP PIC</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-amber-300">BALITA</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-rose-300">BUMIL</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-pink-300">BUSUI</th>
+                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-16 font-bold">TOTAL</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200 font-medium text-slate-700 bg-white">
+                      <tbody className="divide-y divide-slate-200/50 font-medium text-slate-700 bg-white/60">
                         {posyanduList.length > 0 ? (
                           posyanduList.map((item, idx) => {
                             const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
@@ -1163,12 +1197,12 @@ export default function BerandaOperasionalPage() {
                             return (
                               <tr
                                 key={itemKey}
-                                className={`transition-colors ${isLibur ? 'bg-rose-50/30' : idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
+                                className={`transition-colors ${isLibur ? 'bg-rose-50/40' : 'hover:bg-emerald-50/40'}`}
                               >
-                                <td className="py-2 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border border-slate-200">
+                                <td className="py-2.5 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border-b border-slate-200/50">
                                   {idx + 1}
                                 </td>
-                                <td className="py-2 px-3 border border-slate-200">
+                                <td className="py-2.5 px-3 border-b border-slate-200/50">
                                   <span
                                     className={`font-semibold block truncate max-w-[180px] ${
                                       isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
@@ -1178,12 +1212,12 @@ export default function BerandaOperasionalPage() {
                                     {item.nama}
                                   </span>
                                 </td>
-                                <td className="py-2 px-3 text-center border border-slate-200">
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
                                   <button
                                     type="button"
                                     onClick={() => toggleLibur(itemKey)}
                                     title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
                                       isLibur
                                         ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
@@ -1192,26 +1226,26 @@ export default function BerandaOperasionalPage() {
                                     {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
                                   </button>
                                 </td>
-                                <td className="py-2 px-3 text-center border border-slate-200">
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
                                   <select
                                     value={setting.rute}
                                     onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
-                                    className="bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-800 focus:ring-1 focus:ring-slate-800 outline-hidden cursor-pointer"
+                                    className="bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-800 focus:ring-1 focus:ring-slate-800 outline-hidden cursor-pointer"
                                   >
                                     <option value="Kiri">Rute Kiri</option>
                                     <option value="Kanan">Rute Kanan</option>
                                   </select>
                                 </td>
-                                <td className="py-2 px-3 text-center border border-slate-200">
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
                                   <input
                                     type="text"
                                     value={setting.no_hp_pic}
                                     onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
                                     placeholder="08xxx..."
-                                    className="w-28 text-center bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
+                                    className="w-28 text-center bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
                                   />
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-bold text-slate-300">-</span>
                                   ) : (
@@ -1220,7 +1254,7 @@ export default function BerandaOperasionalPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-bold text-slate-300">-</span>
                                   ) : (
@@ -1229,7 +1263,7 @@ export default function BerandaOperasionalPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-semibold text-slate-300">-</span>
                                   ) : (
@@ -1238,7 +1272,7 @@ export default function BerandaOperasionalPage() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-2 px-3 text-right font-mono border border-slate-200">
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
                                     <span className="font-bold text-slate-300">-</span>
                                   ) : (
@@ -1250,27 +1284,27 @@ export default function BerandaOperasionalPage() {
                           })
                         ) : (
                           <tr>
-                            <td colSpan={9} className="py-6 text-center text-slate-400 font-medium border border-slate-200">
+                            <td colSpan={9} className="py-6 text-center text-slate-400 font-medium border-b border-slate-200">
                               Belum ada data Posyandu / Sasaran 3B terdaftar.
                             </td>
                           </tr>
                         )}
                       </tbody>
-                      <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300 text-xs">
+                      <tfoot className="bg-emerald-100/80 font-bold text-slate-900 border-t-2 border-emerald-300 text-xs backdrop-blur-md">
                         <tr>
-                          <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px] border border-slate-200">
+                          <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
                             SUBTOTAL POSYANDU ({ringkasanOperasional.posyanduAktifCount} POSYANDU AKTIF)
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
                             {ringkasanOperasional.posyanduBalita.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-rose-800 font-black border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-rose-800 font-black">
                             {ringkasanOperasional.posyanduBumil.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-pink-800 font-black border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-pink-800 font-black">
                             {ringkasanOperasional.posyanduBusui.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black border border-slate-200">
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-950 font-black">
                             {ringkasanOperasional.posyanduTotal.toLocaleString('id-ID')}
                           </td>
                         </tr>
@@ -1279,8 +1313,8 @@ export default function BerandaOperasionalPage() {
                   </div>
                 </div>
 
-                {/* RINGKASAN GRAND TOTAL KESELURUHAN */}
-                <div className="bg-[#0e2a5c] text-white p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+                {/* RINGKASAN GRAND TOTAL KESELURUHAN GLASS CONTAINER */}
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md border border-white/20">
                   <div>
                     <span className="text-[10px] font-bold text-blue-300 uppercase tracking-wider block">
                       GRAND TOTAL KESELURUHAN PORSI MBG
@@ -1293,10 +1327,10 @@ export default function BerandaOperasionalPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-xs font-semibold">
-                    <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10">
+                    <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 backdrop-blur-md">
                       Sekolah: <span className="font-bold text-amber-300">{ringkasanOperasional.sekolahTotal.toLocaleString('id-ID')}</span>
                     </div>
-                    <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10">
+                    <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/10 backdrop-blur-md">
                       Posyandu: <span className="font-bold text-pink-300">{ringkasanOperasional.posyanduTotal.toLocaleString('id-ID')}</span>
                     </div>
                   </div>
@@ -1306,10 +1340,10 @@ export default function BerandaOperasionalPage() {
           </div>
 
           {/* Quick Action Buttons */}
-          <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-200/60">
             <Link
               href="/kelola-menu-harian"
-              className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+              className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition cursor-pointer"
             >
               <Edit3 size={15} />
               <span>Kelola Siklus Menu</span>
@@ -1317,7 +1351,7 @@ export default function BerandaOperasionalPage() {
             <button
               onClick={handlePrintDistribution}
               disabled={isPrinting}
-              className="flex-1 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2.5 bg-white/80 backdrop-blur-md border border-white/90 hover:bg-white text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isPrinting ? (
                 <RotateCw size={15} className="text-slate-600 animate-spin" />
@@ -1330,13 +1364,13 @@ export default function BerandaOperasionalPage() {
         </div>
       </div>
 
-      {/* 4. Dua Tabel Pemantauan Operasional di Bawah (Agregasi Nyata) */}
+      {/* 4. Dua Tabel Pemantauan Operasional di Bawah (Glass Cards) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Tabel Kiri: Jalur Pendidikan (Sekolah & Lembaga) */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 hover:shadow-md transition duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] space-y-4 hover:bg-white/80 transition-all duration-300">
+          <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100 shadow-2xs">
                 <GraduationCap size={18} />
               </div>
               <div>
@@ -1360,7 +1394,7 @@ export default function BerandaOperasionalPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <tr className="bg-slate-100/70 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">
                   <th className="py-2.5 px-3">JENJANG</th>
                   <th className="py-2.5 px-3 text-center">LEMBAGA</th>
                   <th className="py-2.5 px-3 text-right">TARGET SISWA</th>
@@ -1399,10 +1433,10 @@ export default function BerandaOperasionalPage() {
         </div>
 
         {/* Tabel Kanan: Jalur Komunitas 3B (Prioritas Posyandu) */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 hover:shadow-md transition duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] space-y-4 hover:bg-white/80 transition-all duration-300">
+          <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-pink-50 text-pink-600 rounded-lg border border-pink-100">
+              <div className="p-2 bg-pink-50 text-pink-600 rounded-xl border border-pink-100 shadow-2xs">
                 <Heart size={18} />
               </div>
               <div>
@@ -1426,7 +1460,7 @@ export default function BerandaOperasionalPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <tr className="bg-slate-100/70 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">
                   <th className="py-2.5 px-3">KATEGORI SASARAN</th>
                   <th className="py-2.5 px-3 text-center">POSYANDU</th>
                   <th className="py-2.5 px-3 text-right">TOTAL PENERIMA MANFAAT</th>
@@ -1464,12 +1498,12 @@ export default function BerandaOperasionalPage() {
         </div>
       </div>
 
-      {/* 5. Status Jadwal & Rute Distribusi Harian SPPG (Pengganti Widget BNBA) */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-5 hover:shadow-md transition duration-200">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      {/* 5. Status Jadwal & Rute Distribusi Harian SPPG (Glass Card) */}
+      <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] space-y-5 hover:bg-white/80 transition-all duration-300">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider flex items-center gap-1">
+              <span className="bg-emerald-500/10 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-300/50 uppercase tracking-wider flex items-center gap-1 backdrop-blur-md">
                 <Sparkles size={11} /> Standard Operational Procedure
               </span>
               <span className="text-xs text-slate-400 font-medium">| SPPG Pasuruan</span>
@@ -1483,7 +1517,7 @@ export default function BerandaOperasionalPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shrink-0">
+          <div className="flex items-center gap-2 bg-white/60 backdrop-blur-md p-2.5 rounded-xl border border-white/80 shrink-0 shadow-2xs">
             <div className="text-right">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Operasional</span>
               <span className="text-sm font-black text-slate-900 font-mono">
@@ -1496,12 +1530,12 @@ export default function BerandaOperasionalPage() {
           </div>
         </div>
 
-        {/* 3 Wave Cards Grid */}
+        {/* 3 Wave Cards Grid (Sub Glass Cards) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {gelombangStats.map((item) => (
             <div
               key={item.id}
-              className="bg-gradient-to-b from-slate-50/80 to-white rounded-xl border border-slate-200/90 p-4 space-y-3 shadow-2xs hover:border-slate-300 hover:shadow-md transition duration-200 flex flex-col justify-between"
+              className="bg-white/60 backdrop-blur-md rounded-xl border border-white/80 p-4 space-y-3 shadow-2xs hover:border-white hover:bg-white/80 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
             >
               <div className="space-y-3">
                 {/* Header Card: Gelombang & Status */}
@@ -1529,14 +1563,14 @@ export default function BerandaOperasionalPage() {
                 </div>
 
                 {/* Box Ringkasan Porsi & Titik Lokasi */}
-                <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-2 shadow-2xs">
+                <div className="bg-white/80 p-3 rounded-lg border border-white/90 space-y-2 shadow-2xs">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500 font-medium">Total Porsi:</span>
                     <span className="font-mono font-black text-slate-900 text-sm">
                       {item.porsi.toLocaleString('id-ID')} <span className="text-[10px] font-normal text-slate-500">Porsi</span>
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-100">
+                  <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-200/60">
                     <span className="text-slate-500 font-medium">Titik Tujuan:</span>
                     <span className="font-bold text-slate-800 font-mono">
                       {item.titik} <span className="text-[10px] font-normal text-slate-500">Lokasi KPM</span>
@@ -1545,7 +1579,7 @@ export default function BerandaOperasionalPage() {
                 </div>
 
                 {/* Armada & Rute Info */}
-                <div className="space-y-1.5 text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 font-medium">
+                <div className="space-y-1.5 text-[11px] text-slate-600 bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 font-medium">
                   <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
                     <Truck size={13} className="text-slate-500 shrink-0" />
                     <span className="truncate">{item.armada}</span>
@@ -1557,7 +1591,7 @@ export default function BerandaOperasionalPage() {
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+              <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
                 <span>Standardized BGN Wave</span>
                 <span className="text-emerald-700 font-bold">✓ Active Route</span>
               </div>
