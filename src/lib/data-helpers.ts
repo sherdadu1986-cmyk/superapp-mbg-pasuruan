@@ -638,6 +638,52 @@ export function calculateKpmPortions(kpm: any) {
   }
 }
 
+export function getPosyanduBreakdown(kpm: any) {
+  if (!kpm) return { balita: 0, bumil: 0, busui: 0, total: 0 }
+
+  let parsedSubKat: any = {}
+  if (typeof kpm.sub_kategori === 'string' && kpm.sub_kategori.trim().startsWith('{')) {
+    try { parsedSubKat = JSON.parse(kpm.sub_kategori) } catch {}
+  } else if (typeof kpm.sub_kategori === 'object' && kpm.sub_kategori !== null) {
+    parsedSubKat = kpm.sub_kategori
+  }
+
+  const subKat = String(kpm.sub_kategori || kpm.subKategori || kpm.jenis || kpm.kategori || '').toUpperCase()
+
+  const balitaL = Number(kpm.balitaLaki ?? parsedSubKat.balitaLaki ?? 0)
+  const balitaP = Number(kpm.balitaPerem ?? parsedSubKat.balitaPerem ?? 0)
+  let balita = (balitaL + balitaP) || Number(kpm.balita || kpm.balita_12_plus || 0)
+
+  let bumil = Number(kpm.ibu_hamil || kpm.bumil || parsedSubKat.bumil || 0)
+  let busui = Number(kpm.ibu_menyusui || kpm.busui || parsedSubKat.busui || 0)
+
+  const totalRaw = Number(kpm.alokasi_total || kpm.total || kpm.jumlah_penerima || kpm.jumlah_porsi || (Number(kpm.target_pria || 0) + Number(kpm.target_wanita || 0) + Number(kpm.target_guru || 0)) || 0)
+
+  if (balita === 0 && bumil === 0 && busui === 0 && totalRaw > 0) {
+    if (subKat.includes('BUMIL')) {
+      bumil = totalRaw
+    } else if (subKat.includes('BUSUI')) {
+      busui = totalRaw
+    } else if (subKat.includes('BALITA')) {
+      balita = totalRaw
+    } else {
+      balita = Number(kpm.porsi_kecil || 0)
+      const besarRaw = Number(kpm.porsi_besar || 0)
+      if (besarRaw > 0) {
+        bumil = Math.floor(besarRaw / 2)
+        busui = besarRaw - bumil
+      }
+      if (balita === 0 && bumil === 0 && busui === 0) {
+        balita = totalRaw
+      }
+    }
+  }
+
+  const total = totalRaw > 0 ? totalRaw : (balita + bumil + busui)
+
+  return { balita, bumil, busui, total }
+}
+
 export const calculateKpmPortion = calculateKpmPortions
 
 export async function fetchKelompokPenerimaManfaatList(): Promise<KelompokPenerimaManfaat[]> {
