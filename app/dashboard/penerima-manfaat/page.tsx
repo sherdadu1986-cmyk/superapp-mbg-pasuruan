@@ -13,6 +13,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 import { TableSkeleton } from '@/components/TableSkeleton'
+import { RingkasanLogistikHarian } from '@/components/RingkasanLogistikHarian'
 
 export const dynamic = 'force-dynamic'
 
@@ -840,94 +841,103 @@ export default function BerandaOperasionalPage() {
 
       {/* 3. Area Menu Harian & Ringkasan Alokasi Porsi (2 Kolom Responsif Bagian Tengah) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Kolom Kiri (5/12): Foto Menu Aktif & Detail Siklus */}
-        <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200">
-          {menuDb ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-amber-50 text-amber-600 rounded-md border border-amber-200">
-                    <Utensils size={16} />
+        {/* Kolom Kiri (5/12): Foto Menu Aktif & Detail Siklus + Ringkasan Logistik */}
+        <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200">
+            {menuDb ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-50 text-amber-600 rounded-md border border-amber-200">
+                      <Utensils size={16} />
+                    </div>
+                    <h2 className="font-bold text-slate-900 text-sm tracking-tight">
+                      Menu Utama Hari Ini
+                    </h2>
                   </div>
-                  <h2 className="font-bold text-slate-900 text-sm tracking-tight">
-                    Menu Utama Hari Ini
-                  </h2>
+                  {menuDb.status && (
+                    <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
+                      ● {menuDb.status}
+                    </span>
+                  )}
                 </div>
-                {menuDb.status && (
-                  <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
-                    ● {menuDb.status}
-                  </span>
-                )}
-              </div>
 
-              {menuDb.foto_url && (
-                <div className="relative aspect-[1080/1350] max-w-sm mx-auto w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={menuDb.foto_url}
-                    alt={menuDb.nama_menu || 'Foto Menu'}
-                    className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition duration-300"
-                  />
-                  {menuDb.kalori && (
-                    <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
-                      ⚡ {menuDb.kalori}
+                {menuDb.foto_url && (
+                  <div className="relative aspect-[1080/1350] max-w-sm mx-auto w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={menuDb.foto_url}
+                      alt={menuDb.nama_menu || 'Foto Menu'}
+                      className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition duration-300"
+                    />
+                    {menuDb.kalori && (
+                      <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md">
+                        ⚡ {menuDb.kalori}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
+                    {menuDb.nama_menu}
+                  </h3>
+                  {menuDb.tanggal && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                      <Calendar size={13} className="text-slate-400" />
+                      <span>{menuDb.tanggal}</span>
+                    </p>
+                  )}
+
+                  {menuDb.komposisi_gizi && menuDb.komposisi_gizi.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {menuDb.komposisi_gizi.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="bg-slate-100 text-slate-700 text-[11px] font-medium px-2.5 py-0.5 rounded-md border border-slate-200"
+                        >
+                          ✓ {tag}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
-              )}
-
-              <div className="space-y-2">
-                <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
-                  {menuDb.nama_menu}
-                </h3>
-                {menuDb.tanggal && (
-                  <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                    <Calendar size={13} className="text-slate-400" />
-                    <span>{menuDb.tanggal}</span>
+              </div>
+            ) : (
+              <div className="space-y-4 py-8 text-center flex flex-col items-center justify-center my-auto">
+                <div className="p-4 bg-amber-50 text-amber-600 rounded-full border border-amber-200/60 shadow-2xs">
+                  <Utensils size={30} />
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    Menu Hari Ini Belum Dipublikasikan
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                    Siklus menu diperbarui setiap hari. Silakan unggah menu harian terbaru melalui menu Kelola Menu Harian.
                   </p>
-                )}
+                </div>
+                <Link
+                  href="/kelola-menu-harian"
+                  className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>Unggah Menu Sekarang</span>
+                </Link>
+              </div>
+            )}
 
-                {menuDb.komposisi_gizi && menuDb.komposisi_gizi.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    {menuDb.komposisi_gizi.map((tag, idx) => (
-                      <span
-                        key={idx}
-                        className="bg-slate-100 text-slate-700 text-[11px] font-medium px-2.5 py-0.5 rounded-md border border-slate-200"
-                      >
-                        ✓ {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+              <span>Siklus Standar Nutrisi BGN</span>
+              <span className="font-semibold text-slate-800">Standardized Meal</span>
             </div>
-          ) : (
-            <div className="space-y-4 py-8 text-center flex flex-col items-center justify-center my-auto">
-              <div className="p-4 bg-amber-50 text-amber-600 rounded-full border border-amber-200/60 shadow-2xs">
-                <Utensils size={30} />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
-                  Menu Hari Ini Belum Dipublikasikan
-                </h3>
-                <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                  Siklus menu diperbarui setiap hari. Silakan unggah menu harian terbaru melalui menu Kelola Menu Harian.
-                </p>
-              </div>
-              <Link
-                href="/kelola-menu-harian"
-                className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer"
-              >
-                <Plus size={15} />
-                <span>Unggah Menu Sekarang</span>
-              </Link>
-            </div>
-          )}
-
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Siklus Standar Nutrisi BGN</span>
-            <span className="font-semibold text-slate-800">Standardized Meal</span>
           </div>
+
+          {/* Widget Operational Ringkasan Logistik & Packing Dapur */}
+          <RingkasanLogistikHarian
+            kpmList={kpmList}
+            liburKpmIds={liburKpmIds}
+            distribusiSettings={distribusiSettings}
+          />
         </div>
 
         {/* Kolom Kanan (7/12): Panel "Kebutuhan Porsi Harian (Real-Time BGN)" */}
