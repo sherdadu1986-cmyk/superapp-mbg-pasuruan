@@ -1022,6 +1022,13 @@ const getBnbaCountForGroup = (
       })
     }
 
+    const porsiKecilComputed = isSd 
+      ? (parseNumberSafe(formSdSiswaLaki13) + parseNumberSafe(formSdSiswaPerem13)) 
+      : portionSummary.kecil
+    const porsiBesarComputed = isSd 
+      ? (parseNumberSafe(formSdSiswaLaki46) + parseNumberSafe(formSdSiswaPerem46) + targetGuruVal + targetTendikVal) 
+      : portionSummary.besar
+
     if (editingItem) {
       const updatedPimpinan = formPimpinan.trim() || '-'
       const updatedHp = formHp.trim() || '-'
@@ -1042,6 +1049,8 @@ const getBnbaCountForGroup = (
         target_guru: targetGuruVal,
         target_tendik: targetTendikVal,
         jumlah_penerima: totalPenerima,
+        porsi_kecil: porsiKecilComputed,
+        porsi_besar: porsiBesarComputed,
         pimpinan: updatedPimpinan !== '-' ? updatedPimpinan : null,
         hp: updatedHp !== '-' ? updatedHp : null,
         email: updatedEmail !== '-' ? updatedEmail : null,
@@ -1094,6 +1103,8 @@ const getBnbaCountForGroup = (
         target_guru: targetGuruVal,
         target_tendik: targetTendikVal,
         jumlah_penerima: totalPenerima,
+        porsi_kecil: porsiKecilComputed,
+        porsi_besar: porsiBesarComputed,
         pimpinan: newPimpinan !== '-' ? newPimpinan : undefined,
         hp: newHp !== '-' ? newHp : undefined,
         email: newEmail !== '-' ? newEmail : undefined,

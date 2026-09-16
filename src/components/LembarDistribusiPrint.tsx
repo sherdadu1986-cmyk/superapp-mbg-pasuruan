@@ -267,14 +267,8 @@ export default function LembarDistribusiPrint({
       const breakdown = calculateKpmPortion(item)
       const t = breakdown.total
       const k = breakdown.porsiKecil
-      const tend = breakdown.guruTendik
-      const besarRaw = breakdown.porsiBesar
-
-      let sb = besarRaw > tend ? (besarRaw - tend) : 0
-      const isPaudTkKb = /^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(item.nama || '')
-      if (isPaudTkKb) {
-        sb = 0
-      }
+      const tend = breakdown.tendik
+      const sb = breakdown.siswaBesar
 
       grandTotal += t
       grandKecil += k

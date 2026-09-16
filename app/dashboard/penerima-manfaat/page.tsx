@@ -193,21 +193,10 @@ export default function BerandaOperasionalPage() {
       }
 
       const breakdown = calculateKpmPortion(item)
-      const t = breakdown.total
-      const k = breakdown.porsiKecil
-      const tend = breakdown.guruTendik
-      const besarRaw = breakdown.porsiBesar
-
-      let sb = besarRaw > tend ? (besarRaw - tend) : 0
-      const isPaudTkKb = /^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(item.nama || (item as any).nama_kelompok || '')
-      if (isPaudTkKb) {
-        sb = 0
-      }
-
-      total += t
-      kecil += k
-      siswaBesar += sb
-      tendik += tend
+      total += breakdown.total
+      kecil += breakdown.porsiKecil
+      siswaBesar += breakdown.siswaBesar
+      tendik += breakdown.tendik
       aktifCount += 1
     })
 
@@ -933,14 +922,8 @@ export default function BerandaOperasionalPage() {
 
                       const total = breakdown.total
                       const kecil = breakdown.porsiKecil
-                      const tendik = breakdown.guruTendik
-                      const besarRaw = breakdown.porsiBesar
-
-                      let siswaBesar = besarRaw > tendik ? (besarRaw - tendik) : 0
-                      const isPaudTkKb = /^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(item.nama || (item as any).nama_kelompok || '')
-                      if (isPaudTkKb) {
-                        siswaBesar = 0
-                      }
+                      const siswaBesar = breakdown.siswaBesar
+                      const tendik = breakdown.tendik
 
                       return (
                         <tr

@@ -403,11 +403,22 @@ export interface KelompokPenerimaManfaat {
   target_guru?: number
   target_tendik?: number
   jumlah_penerima: number
+  porsi_kecil?: number
+  porsi_besar?: number
+  siswa_l_1_3?: number
+  siswa_p_1_3?: number
+  siswa_l_4_6?: number
+  siswa_p_4_6?: number
+  guru?: number
+  tendik?: number
+  alokasi_total?: number
+  total?: number
   pimpinan?: string
   hp?: string
   email?: string
   status: string
   created_at?: string
+  updated_at?: string
   surat_pernyataan_url?: string
   mou_url?: string
 }
@@ -502,48 +513,78 @@ export function sortKpmList<T = any>(list: T[]): T[] {
   })
 }
 
-export function calculateKpmPortion(item: KelompokPenerimaManfaat) {
-  const kat = (item.kategori || '').toUpperCase()
-  const subKat = (item.sub_kategori || '').toUpperCase()
-  const total = item.jumlah_penerima || (item.target_pria || 0) + (item.target_wanita || 0) || 0
-  const guruTendik = (item.target_guru || 0) + (item.target_tendik || 0)
+export function calculateKpmPortions(kpm: any) {
+  if (!kpm) {
+    return { total: 0, porsiKecil: 0, siswaBesar: 0, tendik: 0, porsiBesar: 0, guruTendik: 0 }
+  }
+
+  const jenjang = (kpm.kategori || kpm.jenis || kpm.jenis_kelompok || '').toUpperCase()
+  const nama = (kpm.nama || kpm.nama_kelompok || '').toUpperCase()
+
+  // 1. Ekstraksi Tenaga Pendidik & Pendukung
+  const tendik = Number(kpm.guru || 0) + Number(kpm.tendik || 0) || Number(kpm.jumlah_tendik || 0) || (Number(kpm.target_guru || 0) + Number(kpm.target_tendik || 0))
+
+  // Extract sub_kategori JSON if present
+  let parsedSubKat: any = {}
+  if (typeof kpm.sub_kategori === 'string' && kpm.sub_kategori.trim().startsWith('{')) {
+    try {
+      parsedSubKat = JSON.parse(kpm.sub_kategori)
+    } catch {}
+  } else if (typeof kpm.sub_kategori === 'object' && kpm.sub_kategori !== null) {
+    parsedSubKat = kpm.sub_kategori
+  }
+
+  const s_l_1_3 = kpm.siswa_l_1_3 !== undefined ? kpm.siswa_l_1_3 : (kpm.sd13Laki !== undefined ? kpm.sd13Laki : parsedSubKat.sd13Laki)
+  const s_p_1_3 = kpm.siswa_p_1_3 !== undefined ? kpm.siswa_p_1_3 : (kpm.sd13Perem !== undefined ? kpm.sd13Perem : parsedSubKat.sd13Perem)
+  const s_l_4_6 = kpm.siswa_l_4_6 !== undefined ? kpm.siswa_l_4_6 : (kpm.sd46Laki !== undefined ? kpm.sd46Laki : parsedSubKat.sd46Laki)
+  const s_p_4_6 = kpm.siswa_p_4_6 !== undefined ? kpm.siswa_p_4_6 : (kpm.sd46Perem !== undefined ? kpm.sd46Perem : parsedSubKat.sd46Perem)
+
+  // 2. Cek apakah memiliki breakdown data kelas (SD / MI)
+  const hasSdBreakdown = (
+    s_l_1_3 !== undefined || 
+    s_p_1_3 !== undefined || 
+    s_l_4_6 !== undefined || 
+    s_p_4_6 !== undefined
+  )
 
   let porsiKecil = 0
-  let porsiBesar = 0
+  let siswaBesar = 0
 
-  if (kat.includes('KB') || kat.includes('PAUD') || kat.includes('TK') || kat.includes('RA')) {
-    const siswa = Math.max(0, total - guruTendik)
-    porsiKecil = siswa
-    porsiBesar = guruTendik
-  } else if (kat.includes('SD') || kat.includes('MI')) {
-    const siswa = Math.max(0, total - guruTendik)
-    const porsiKecilSiswa = Math.round(siswa * 0.5)
-    const porsiBesarSiswa = siswa - porsiKecilSiswa
-    porsiKecil = porsiKecilSiswa
-    porsiBesar = porsiBesarSiswa + guruTendik
-  } else if (kat.includes('SMP') || kat.includes('MTS') || kat.includes('SMA') || kat.includes('SMK') || kat.includes('MA')) {
-    porsiBesar = total
-  } else if (kat.includes('POSYANDU') || kat.includes('3B')) {
-    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
-      porsiBesar = total
-    } else {
-      porsiKecil = total
-    }
+  if (hasSdBreakdown && (jenjang.includes('SD') || jenjang.includes('MI') || nama.includes('SDN') || nama.includes('MIS') || nama.includes('MI'))) {
+    // KELAS 1-3 = PORSI KECIL
+    porsiKecil = (Number(s_l_1_3) || 0) + (Number(s_p_1_3) || 0)
+    // KELAS 4-6 = PORSI BESAR (SISWA)
+    siswaBesar = (Number(s_l_4_6) || 0) + (Number(s_p_4_6) || 0)
+  } else if (/^(KB|TK|POS PAUD|PAUD|RA)\b/i.test(nama) || jenjang.includes('TK') || jenjang.includes('KB') || jenjang.includes('PAUD') || jenjang.includes('RA')) {
+    // JENJANG PAUD/TK/KB/RA: Seluruh murid adalah PORSI KECIL, porsi besar siswa = 0
+    const totalAlokasi = Number(kpm.alokasi_total || kpm.total || kpm.jumlah_penerima || (Number(kpm.target_pria || 0) + Number(kpm.target_wanita || 0) + tendik) || 0)
+    porsiKecil = totalAlokasi > tendik ? totalAlokasi - tendik : totalAlokasi
+    siswaBesar = 0
+  } else if (jenjang.includes('SMP') || jenjang.includes('MTS') || nama.includes('SMPN') || nama.includes('MTSN')) {
+    // JENJANG SMP/MTS: Seluruh murid adalah PORSI BESAR
+    porsiKecil = 0
+    const totalAlokasi = Number(kpm.alokasi_total || kpm.total || kpm.jumlah_penerima || (Number(kpm.target_pria || 0) + Number(kpm.target_wanita || 0) + tendik) || 0)
+    siswaBesar = totalAlokasi > tendik ? totalAlokasi - tendik : totalAlokasi
   } else {
-    if (subKat.includes('BUMIL') || subKat.includes('BUSUI')) {
-      porsiBesar = total
-    } else {
-      porsiKecil = total
-    }
+    // Fallback umum / Posyandu 3B
+    porsiKecil = Number(kpm.porsi_kecil || 0)
+    const besarRaw = Number(kpm.porsi_besar || 0)
+    siswaBesar = besarRaw > tendik ? besarRaw - tendik : besarRaw
   }
+
+  const total = porsiKecil + siswaBesar + tendik
 
   return {
     total,
     porsiKecil,
-    porsiBesar,
-    guruTendik
+    siswaBesar,
+    tendik,
+    porsiBesar: siswaBesar + tendik,
+    guruTendik: tendik
   }
 }
+
+export const calculateKpmPortion = calculateKpmPortions
 
 export async function fetchKelompokPenerimaManfaatList(): Promise<KelompokPenerimaManfaat[]> {
   try {
@@ -568,20 +609,27 @@ export async function fetchKelompokPenerimaManfaatList(): Promise<KelompokPeneri
 }
 
 export async function saveKelompokPenerimaManfaat(kpm: KelompokPenerimaManfaat): Promise<KelompokPenerimaManfaat> {
+  const portions = calculateKpmPortions(kpm)
+  const payloadKpm: KelompokPenerimaManfaat = {
+    ...kpm,
+    porsi_kecil: kpm.porsi_kecil !== undefined ? kpm.porsi_kecil : portions.porsiKecil,
+    porsi_besar: kpm.porsi_besar !== undefined ? kpm.porsi_besar : portions.porsiBesar
+  }
+
   const currentList = await fetchKelompokPenerimaManfaatList()
-  const updatedList = [kpm, ...currentList.filter(item => item.kode !== kpm.kode)]
+  const updatedList = [payloadKpm, ...currentList.filter(item => item.kode !== payloadKpm.kode)]
   if (typeof window !== 'undefined') {
     localStorage.setItem('sppg_kpm_list', JSON.stringify(updatedList))
     window.dispatchEvent(new Event('storage'))
   }
 
   try {
-    const { data, error } = await supabase.from('kelompok_penerima_manfaat').insert(kpm).select().single()
+    const { data, error } = await supabase.from('kelompok_penerima_manfaat').insert(payloadKpm).select().single()
     if (!error && data) return data
   } catch {
     // fallback
   }
-  return kpm
+  return payloadKpm
 }
 
 export async function deleteKelompokPenerimaManfaat(idOrKode: string): Promise<boolean> {
