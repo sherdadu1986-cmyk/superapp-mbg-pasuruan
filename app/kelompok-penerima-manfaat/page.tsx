@@ -1960,6 +1960,88 @@ const getBnbaCountForGroup = (
     }
   }
 
+  // Real-time Adaptive Audit Summary Calculation for Active BNBA Group
+  const bnbaAuditSummary = useMemo(() => {
+    if (!activeBnbaGroup) return null
+
+    const categoryStr = (activeBnbaGroup.jenis || activeBnbaGroup.nama || '').toUpperCase()
+    const is3B = categoryStr.includes('POSYANDU') || categoryStr.includes('3B') || categoryStr.includes('IBU') || categoryStr.includes('BAYI') || categoryStr.includes('BALITA') || categoryStr.includes('BUMIL') || categoryStr.includes('BUSUI') || categoryStr.includes('DUSUN')
+    const isSd = categoryStr.includes('SD') || categoryStr.includes('MI')
+
+    const totalTerisi = bnbaList.length
+    const totalTarget = activeBnbaGroup.totalTarget || 0
+    const selisih = totalTerisi - totalTarget
+
+    // 1. Posyandu 3B Breakdown
+    let balitaL = 0
+    let balitaP = 0
+    let bumil = 0
+    let busui = 0
+
+    // 2. SD / MI Breakdown
+    let sd13L = 0
+    let sd13P = 0
+    let sd46L = 0
+    let sd46P = 0
+    let guruTendik = 0
+
+    // 3. General Breakdown
+    let muridCount = 0
+
+    for (const item of bnbaList) {
+      const pos = (item.posisi || '').toLowerCase()
+      const jk = (item.jenis_kelamin || item.jk || 'L').toUpperCase()
+      const kls = (item.kelas || '').toString()
+
+      if (pos.includes('balita') || pos.includes('bayi')) {
+        if (jk === 'L') balitaL++
+        else balitaP++
+      } else if (pos.includes('bumil') || pos.includes('hamil')) {
+        bumil++
+      } else if (pos.includes('busui') || pos.includes('menyusui')) {
+        busui++
+      } else if (pos.includes('guru') || pos.includes('tendik')) {
+        guruTendik++
+      } else {
+        const numMatch = kls.match(/\d+/)
+        const classNum = numMatch ? parseInt(numMatch[0], 10) : 0
+        if (classNum >= 1 && classNum <= 3) {
+          if (jk === 'L') sd13L++
+          else sd13P++
+        } else if (classNum >= 4 && classNum <= 6) {
+          if (jk === 'L') sd46L++
+          else sd46P++
+        } else {
+          muridCount++
+        }
+      }
+    }
+
+    const totalBalita = balitaL + balitaP
+    const totalSd13 = sd13L + sd13P
+    const totalSd46 = sd46L + sd46P
+
+    return {
+      mode: is3B ? '3b' : isSd ? 'sd' : 'umum',
+      totalTerisi,
+      totalTarget,
+      selisih,
+      balitaL,
+      balitaP,
+      totalBalita,
+      bumil,
+      busui,
+      sd13L,
+      sd13P,
+      totalSd13,
+      sd46L,
+      sd46P,
+      totalSd46,
+      guruTendik,
+      muridCount
+    }
+  }, [activeBnbaGroup, bnbaList])
+
   const filteredBnbaList = useMemo(() => {
     const q = bnbaSearch.toLowerCase()
     const list = bnbaList.filter(item => 
@@ -2989,6 +3071,76 @@ const getBnbaCountForGroup = (
                 <X size={18} />
               </button>
             </div>
+
+            {/* Audit Summary Bar (Liquid Glass Style) */}
+            {bnbaAuditSummary && (
+              <div className="px-4 py-2.5 bg-slate-50/90 backdrop-blur-md border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mr-1 flex items-center gap-1">
+                    📊 Audit Data:
+                  </span>
+
+                  {bnbaAuditSummary.mode === '3b' && (
+                    <>
+                      {/* Badge Balita */}
+                      <span className="bg-blue-100 text-blue-800 font-semibold text-xs px-2.5 py-1 rounded-lg border border-blue-200 flex items-center gap-1 shadow-2xs">
+                        👶 Balita: <strong className="font-extrabold">{bnbaAuditSummary.totalBalita}</strong> (L: {bnbaAuditSummary.balitaL}, P: {bnbaAuditSummary.balitaP})
+                      </span>
+                      {/* Badge Bumil */}
+                      <span className="bg-rose-100 text-rose-800 font-semibold text-xs px-2.5 py-1 rounded-lg border border-rose-200 flex items-center gap-1 shadow-2xs">
+                        🤰 Bumil: <strong className="font-extrabold">{bnbaAuditSummary.bumil}</strong>
+                      </span>
+                      {/* Badge Busui */}
+                      <span className="bg-purple-100 text-purple-800 font-semibold text-xs px-2.5 py-1 rounded-lg border border-purple-200 flex items-center gap-1 shadow-2xs">
+                        🤱 Busui: <strong className="font-extrabold">{bnbaAuditSummary.busui}</strong>
+                      </span>
+                    </>
+                  )}
+
+                  {bnbaAuditSummary.mode === 'sd' && (
+                    <>
+                      {/* Badge Kelas 1-3 */}
+                      <span className="bg-sky-100 text-sky-800 font-semibold text-xs px-2.5 py-1 rounded-lg border border-sky-200 flex items-center gap-1 shadow-2xs">
+                        🎒 Kelas 1-3: <strong className="font-extrabold">{bnbaAuditSummary.totalSd13}</strong> (L: {bnbaAuditSummary.sd13L}, P: {bnbaAuditSummary.sd13P})
+                      </span>
+                      {/* Badge Kelas 4-6 */}
+                      <span className="bg-indigo-100 text-indigo-800 font-semibold text-xs px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1 shadow-2xs">
+                        📚 Kelas 4-6: <strong className="font-extrabold">{bnbaAuditSummary.totalSd46}</strong> (L: {bnbaAuditSummary.sd46L}, P: {bnbaAuditSummary.sd46P})
+                      </span>
+                      {/* Badge Guru / Tendik */}
+                      {bnbaAuditSummary.guruTendik > 0 && (
+                        <span className="bg-amber-100 text-amber-800 font-semibold text-xs px-2.5 py-1 rounded-lg border border-amber-200 flex items-center gap-1 shadow-2xs">
+                          🧑‍🏫 Guru/Tendik: <strong className="font-extrabold">{bnbaAuditSummary.guruTendik}</strong>
+                        </span>
+                      )}
+                    </>
+                  )}
+
+                  {bnbaAuditSummary.mode === 'umum' && (
+                    <span className="bg-slate-200 text-slate-800 font-semibold text-xs px-2.5 py-1 rounded-lg border border-slate-300 flex items-center gap-1 shadow-2xs">
+                      👥 Total Penerima: <strong className="font-extrabold">{bnbaAuditSummary.totalTerisi}</strong> orang
+                    </span>
+                  )}
+                </div>
+
+                {/* Audit Status Badge (Far Right) */}
+                <div>
+                  {bnbaAuditSummary.totalTerisi === bnbaAuditSummary.totalTarget ? (
+                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs px-3 py-1 rounded-lg shadow-2xs flex items-center gap-1.5">
+                      ✅ Data Pas ({bnbaAuditSummary.totalTerisi}/{bnbaAuditSummary.totalTarget})
+                    </span>
+                  ) : bnbaAuditSummary.totalTerisi < bnbaAuditSummary.totalTarget ? (
+                    <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-xs px-3 py-1 rounded-lg shadow-2xs flex items-center gap-1.5">
+                      ⚠️ Kurang {bnbaAuditSummary.totalTarget - bnbaAuditSummary.totalTerisi} Data (Terisi {bnbaAuditSummary.totalTerisi}/{bnbaAuditSummary.totalTarget})
+                    </span>
+                  ) : (
+                    <span className="bg-red-100 text-red-800 border border-red-300 font-extrabold text-xs px-3 py-1 rounded-lg shadow-2xs flex items-center gap-1.5">
+                      ❌ Kelebihan {bnbaAuditSummary.totalTerisi - bnbaAuditSummary.totalTarget} Data ({bnbaAuditSummary.totalTerisi}/{bnbaAuditSummary.totalTarget})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="p-3 border-b border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="text-xs font-semibold text-slate-700">
