@@ -152,3 +152,6 @@ SET kelompok_id = COALESCE(
 WHERE (kelompok_id IS NULL OR kelompok_id = '' OR kelompok_id = '20518988') 
   AND (nisn_nik ILIKE '%20518988%' OR kelompok_id = '20518988');
 
+-- Notify PostgREST to reload schema cache
+NOTIFY pgrst, 'reload schema';
+

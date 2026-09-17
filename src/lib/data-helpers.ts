@@ -724,8 +724,21 @@ export async function saveKelompokPenerimaManfaat(kpm: KelompokPenerimaManfaat):
   }
 
   try {
-    const { data, error } = await supabase.from('kelompok_penerima_manfaat').insert(payloadKpm).select().single()
-    if (!error && data) return data
+    const {
+      porsi_besar,
+      porsi_kecil,
+      porsiBesar,
+      porsiKecil,
+      rincianTerisi,
+      keteranganStatus,
+      keteranganMsg,
+      suratPernyataanUrl,
+      mouUrl,
+      ...cleanSupabasePayload
+    } = payloadKpm as any
+
+    const { data, error } = await supabase.from('kelompok_penerima_manfaat').insert(cleanSupabasePayload).select().single()
+    if (!error && data) return { ...data, porsi_kecil: payloadKpm.porsi_kecil, porsi_besar: payloadKpm.porsi_besar }
   } catch {
     // fallback
   }

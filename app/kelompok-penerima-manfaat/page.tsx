@@ -1057,7 +1057,7 @@ const getBnbaCountForGroup = (
         nama: formNama.trim(),
         kategori: is3B ? 'POSYANDU_3B' : formKategori,
         sub_kategori: subKatSummary,
-        identitas_npsn_tmp: identitasVal,
+        identitas_npsn_tmp: identitasVal || '-',
         wilayah: fullWilayah,
         kepemilikan: formKepemilikan,
         kecamatan: formKecamatan.trim(),
@@ -1068,8 +1068,6 @@ const getBnbaCountForGroup = (
         target_guru: targetGuruVal,
         target_tendik: targetTendikVal,
         jumlah_penerima: totalPenerima,
-        porsi_kecil: porsiKecilComputed,
-        porsi_besar: porsiBesarComputed,
         pimpinan: updatedPimpinan !== '-' ? updatedPimpinan : null,
         hp: updatedHp !== '-' ? updatedHp : null,
         email: updatedEmail !== '-' ? updatedEmail : null,
@@ -1099,18 +1097,18 @@ const getBnbaCountForGroup = (
       }
 
       await loadData()
-      triggerToast(`Perubahan data "${formNama}" berhasil disimpan ke Supabase!`)
+      showToast({ type: 'success', title: 'Berhasil Memperbarui', message: `Data kelompok "${formNama}" berhasil disimpan.` })
     } else {
       const randomCode = `K${Math.floor(1000000000 + Math.random() * 9000000000)}`
       const newPimpinan = formPimpinan.trim() || '-'
       const newHp = formHp.trim() || '-'
       const newEmail = formEmail.trim() || '-'
 
-      const newKpmSupabase: KelompokPenerimaManfaat = {
+      const newKpmSupabase: any = {
         nama: formNama.trim(),
         kategori: is3B ? 'POSYANDU_3B' : formKategori,
         sub_kategori: subKatSummary,
-        identitas_npsn_tmp: identitasVal,
+        identitas_npsn_tmp: identitasVal || '-',
         kode: randomCode,
         wilayah: fullWilayah,
         kepemilikan: formKepemilikan,
@@ -1122,8 +1120,6 @@ const getBnbaCountForGroup = (
         target_guru: targetGuruVal,
         target_tendik: targetTendikVal,
         jumlah_penerima: totalPenerima,
-        porsi_kecil: porsiKecilComputed,
-        porsi_besar: porsiBesarComputed,
         pimpinan: newPimpinan !== '-' ? newPimpinan : undefined,
         hp: newHp !== '-' ? newHp : undefined,
         email: newEmail !== '-' ? newEmail : undefined,
