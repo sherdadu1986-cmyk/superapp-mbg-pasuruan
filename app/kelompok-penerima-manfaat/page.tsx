@@ -17,6 +17,8 @@ import {
   saveBnbaItem,
   saveBnbaBulk,
   deleteBnbaItem,
+  clearBnbaByKelompokId,
+  deleteBnbaBulkIds,
   type KelompokPenerimaManfaat,
   type PenerimaManfaatBnba
 } from '@/lib/data-helpers'
@@ -635,6 +637,19 @@ const getBnbaCountForGroup = (
       supabase.removeChannel(channel)
     }
   }, [])
+
+  // Lock browser navigation during deletion to prevent data corruption
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDeleting || isBulkDeleting) {
+        e.preventDefault()
+        e.returnValue = 'Proses penghapusan sedang berlangsung. Dilarang menutup atau merefresh halaman ini agar data tidak korup!'
+        return e.returnValue
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDeleting, isBulkDeleting])
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg)
@@ -1316,16 +1331,28 @@ const getBnbaCountForGroup = (
 
   const handleDeleteBnba = async (bnbaId: string) => {
     if (!activeBnbaGroup) return
-    await deleteBnbaItem(bnbaId)
-    const updatedList = await fetchBnbaList(activeBnbaGroup.id)
-    setBnbaList(updatedList)
-    setAllBnbaRecords(prev => prev.filter(b => b.id !== bnbaId))
-    setSelectedBnbaIds(prev => prev.filter(id => id !== bnbaId))
-    triggerToast('Data perorangan BNBA berhasil dihapus.')
+    setIsDeleting(true)
+    try {
+      const { error } = await supabase.from('penerima_manfaat_bnba').delete().eq('id', bnbaId)
+      if (error) {
+        showToast({ type: 'error', title: 'Gagal Menghapus BNBA', message: error.message })
+        return
+      }
+      await deleteBnbaBulkIds([bnbaId])
+      const updatedList = bnbaList.filter(b => b.id !== bnbaId)
+      setBnbaList(updatedList)
+      setAllBnbaRecords(prev => prev.filter(b => b.id !== bnbaId))
+      setSelectedBnbaIds(prev => prev.filter(id => id !== bnbaId))
+      triggerToast('Data perorangan BNBA berhasil dihapus.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   // Standalone & Bulk Handler for clearing BNBA data safely with valid UUID
   const handleClearBnba = async (kpm: any) => {
+    setIsDeleting(true)
+    setIsBulkDeleting(true)
     try {
       // 1. Validasi UUID KPM
       let targetUuid = kpm.id;
@@ -1357,7 +1384,7 @@ const getBnbaCountForGroup = (
         }
       }
 
-      // 2. Eksekusi penghapusan dengan targetUuid yang valid
+      // 2. Eksekusi INSTANT 1-QUERY Bulk Delete via HTTP query ke Supabase (< 1 detik)
       const { error: deleteError } = await supabase
         .from('penerima_manfaat_bnba')
         .delete()
@@ -1365,9 +1392,10 @@ const getBnbaCountForGroup = (
 
       if (deleteError) throw deleteError;
 
-      // Clean local storage / state
-      for (const item of bnbaList) {
-        await deleteBnbaItem(item.id)
+      // Clean local storage / state in 1-shot (tanpa loop per-baris)
+      await clearBnbaByKelompokId(targetUuid)
+      if (kpm.id !== targetUuid) {
+        await clearBnbaByKelompokId(kpm.id)
       }
 
       setBnbaList([])
@@ -1392,12 +1420,16 @@ const getBnbaCountForGroup = (
         title: 'Gagal Menghapus BNBA',
         message: err.message || 'Terjadi kesalahan pada format ID database.'
       });
+    } finally {
+      setIsDeleting(false)
+      setIsBulkDeleting(false)
     }
   };
 
   // Bulk / Mass Delete BNBA Records (Selected or Clear All)
   const handleExecuteBulkDelete = async () => {
     if (!activeBnbaGroup || !bulkDeleteType) return
+    setIsDeleting(true)
     setIsBulkDeleting(true)
 
     try {
@@ -1406,6 +1438,7 @@ const getBnbaCountForGroup = (
       if (bulkDeleteType === 'selected') {
         if (selectedBnbaIds.length === 0) return
 
+        // ONE-SHOT Bulk Delete via Supabase IN clause (< 1 detik)
         const { error } = await supabase
           .from('penerima_manfaat_bnba')
           .delete()
@@ -1421,16 +1454,14 @@ const getBnbaCountForGroup = (
           return
         }
 
-        for (const id of selectedBnbaIds) {
-          await deleteBnbaItem(id)
-        }
+        // Clean local storage in 1-shot (tanpa loop per-baris)
+        await deleteBnbaBulkIds(selectedBnbaIds)
 
-        const updatedList = await fetchBnbaList(activeBnbaGroup.id)
-        const finalList = updatedList.filter(b => !selectedBnbaIds.includes(b.id))
-        setBnbaList(finalList)
+        const updatedList = bnbaList.filter(b => !selectedBnbaIds.includes(b.id))
+        setBnbaList(updatedList)
         setAllBnbaRecords(prev => prev.filter(b => !selectedBnbaIds.includes(b.id)))
 
-        const newCount = finalList.length
+        const newCount = updatedList.length
         setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: newCount } : null)
         setKpmItems(prev => prev.map(k => (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === activeKelompokUuid) ? { ...k, rincianTerisi: newCount } : k))
 
@@ -1453,6 +1484,7 @@ const getBnbaCountForGroup = (
         message: err.message || 'Error server'
       })
     } finally {
+      setIsDeleting(false)
       setIsBulkDeleting(false)
       setShowBulkDeleteConfirmModal(false)
       setBulkDeleteType(null)
@@ -3410,6 +3442,41 @@ const getBnbaCountForGroup = (
                   onLoad={() => setIsPreviewLoading(false)}
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Liquid Glass Progress & Protection Overlay Modal during Deletion */}
+      {(isDeleting || isBulkDeleting) && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-fadeIn pointer-events-auto">
+          <div className="relative w-full max-w-md bg-rose-950/90 border border-rose-500/50 rounded-3xl p-6 text-white shadow-[0_16px_50px_rgba(244,63,94,0.35)] backdrop-blur-2xl flex flex-col items-center text-center space-y-4 animate-scaleUp">
+            
+            {/* Spinning Loader & Warning Icon */}
+            <div className="relative flex items-center justify-center w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-4 border-rose-500/20 border-t-rose-400 animate-spin" />
+              <div className="w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-300 font-bold text-xl animate-pulse">
+                ⚠️
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-base font-extrabold tracking-tight text-rose-100 flex items-center justify-center gap-2">
+                <span>⚠️ SEDANG MENGHAPUS DATA SECARA PERMANEN</span>
+              </h3>
+              <p className="text-xs font-medium text-rose-200/90 leading-relaxed">
+                Mohon tunggu sebentar. <strong className="text-rose-100 font-bold underline">DILARANG MENUTUP, ME-REFRESH, ATAU MENINGGALKAN HALAMAN INI</strong> agar tidak terjadi inkonsistensi data pada database BGN.
+              </p>
+            </div>
+
+            {/* Progress bar pulse indicator */}
+            <div className="w-full bg-rose-900/40 rounded-full h-2.5 overflow-hidden border border-rose-500/30">
+              <div className="bg-gradient-to-r from-rose-500 via-amber-400 to-rose-400 h-full w-full animate-pulse rounded-full" />
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] text-rose-300/80 font-semibold pt-1">
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+              Memproses penghapusan massal dalam 1 query...
             </div>
           </div>
         </div>

@@ -1099,6 +1099,28 @@ export async function deleteBnbaItem(id: string): Promise<boolean> {
   return true
 }
 
+export async function clearBnbaByKelompokId(kelompokId: string): Promise<boolean> {
+  const currentList = await fetchBnbaList()
+  const updatedList = currentList.filter(i => i.kelompok_id !== kelompokId)
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LS_BNBA, JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+  return true
+}
+
+export async function deleteBnbaBulkIds(ids: string[]): Promise<boolean> {
+  if (!ids || ids.length === 0) return true
+  const idSet = new Set(ids)
+  const currentList = await fetchBnbaList()
+  const updatedList = currentList.filter(i => !idSet.has(i.id))
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LS_BNBA, JSON.stringify(updatedList))
+    window.dispatchEvent(new Event('storage'))
+  }
+  return true
+}
+
 // ─── Data Relawan SPPG Helpers ───────────────────────────────
 
 export interface RelawanSppg {
