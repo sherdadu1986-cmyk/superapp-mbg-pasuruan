@@ -22,6 +22,7 @@ import {
 } from '@/lib/data-helpers'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 import { TableSkeleton } from '@/components/TableSkeleton'
+import { showToast } from '@/components/toast'
 
 export interface DetailKpmItem {
   id: string
@@ -210,7 +211,7 @@ export default function KelompokPenerimaManfaatPage() {
 
       if (uploadErr) {
         console.error('Storage upload error:', uploadErr)
-        alert(`Gagal upload: ${uploadErr.message}`)
+        showToast({ type: 'error', title: 'Gagal Upload', message: uploadErr.message })
         setIsUploadingDoc(false)
         return
       }
@@ -224,7 +225,7 @@ export default function KelompokPenerimaManfaatPage() {
       const publicUrl = urlData?.publicUrl || ''
 
       if (!publicUrl) {
-        alert('Gagal memperoleh Public URL dari Supabase Storage.')
+        showToast({ type: 'error', title: 'Gagal Upload', message: 'Gagal memperoleh Public URL dari Supabase Storage.' })
         setIsUploadingDoc(false)
         return
       }
@@ -293,7 +294,7 @@ export default function KelompokPenerimaManfaatPage() {
       triggerToast(`Berhasil mengunggah ${docLabel} untuk ${item.nama}`)
     } catch (err: any) {
       console.error('Exception doc upload:', err)
-      alert(`Gagal upload: ${err.message || 'Terjadi kesalahan'}`)
+      showToast({ type: 'error', title: 'Gagal Upload Dokumen', message: err.message || 'Terjadi kesalahan' })
     } finally {
       setIsUploadingDoc(false)
       setUploadingDocItem(null)
@@ -368,7 +369,7 @@ export default function KelompokPenerimaManfaatPage() {
       triggerToast(`Dokumen ${docLabel} berhasil dihapus dari ${item.nama}`)
     } catch (err: any) {
       console.error('Exception deleting doc:', err)
-      alert(`Gagal menghapus dokumen: ${err.message || 'Error'}`)
+      showToast({ type: 'error', title: 'Gagal Menghapus Dokumen', message: err.message || 'Error' })
     }
   }
 
@@ -637,6 +638,7 @@ const getBnbaCountForGroup = (
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg)
+    showToast(msg)
     setTimeout(() => setToastMsg(null), 3500)
   }
 
@@ -921,7 +923,7 @@ const getBnbaCountForGroup = (
 
       if (error) {
         console.error("Gagal delete Supabase:", error.message)
-        alert("Gagal menghapus dari Supabase: " + error.message)
+        showToast({ type: 'error', title: 'Gagal Menghapus KPM', message: error.message })
         return
       }
 
@@ -933,7 +935,7 @@ const getBnbaCountForGroup = (
       triggerToast(`Kelompok "${targetItem.nama}" berhasil dihapus.`)
     } catch (err: any) {
       console.error("Exception delete Supabase:", err)
-      alert("Gagal menghapus: " + (err.message || 'Error server'))
+      showToast({ type: 'error', title: 'Gagal Menghapus KPM', message: err.message || 'Error server' })
     } finally {
       setIsDeleting(false)
       setDeleteConfirmItem(null)
@@ -1076,7 +1078,7 @@ const getBnbaCountForGroup = (
 
       if (updateErr) {
         console.error('Gagal update KPM di Supabase:', updateErr.message)
-        alert('Gagal meng-update data KPM di Supabase: ' + updateErr.message)
+        showToast({ type: 'error', title: 'Gagal Update KPM', message: updateErr.message })
         setSaving(false)
         return
       }
@@ -1122,7 +1124,7 @@ const getBnbaCountForGroup = (
 
       if (insertErr) {
         console.error('Gagal tambah KPM baru ke Supabase:', insertErr.message)
-        alert('Gagal menambah KPM ke Supabase: ' + insertErr.message)
+        showToast({ type: 'error', title: 'Gagal Menambah KPM', message: insertErr.message })
         setSaving(false)
         return
       }
@@ -1248,7 +1250,7 @@ const getBnbaCountForGroup = (
 
         if (error) {
           console.error('Error updating BNBA in Supabase:', error)
-          alert('Gagal meng-update BNBA: ' + error.message)
+          showToast({ type: 'error', title: 'Gagal Update BNBA', message: error.message })
           return
         }
 
@@ -1275,7 +1277,7 @@ const getBnbaCountForGroup = (
 
         if (error) {
           console.error('Error inserting single BNBA to Supabase:', error)
-          alert('Gagal menyimpan BNBA: ' + error.message)
+          showToast({ type: 'error', title: 'Gagal Menyimpan BNBA', message: error.message })
           return
         }
 
@@ -1306,7 +1308,7 @@ const getBnbaCountForGroup = (
       }
     } catch (err: any) {
       console.error('Exception saving BNBA item:', err)
-      alert('Gagal menyimpan data BNBA: ' + (err.message || 'Terjadi kesalahan'))
+      showToast({ type: 'error', title: 'Gagal Menyimpan BNBA', message: err.message || 'Terjadi kesalahan' })
     } finally {
       setSavingBnba(false)
     }
@@ -1321,6 +1323,77 @@ const getBnbaCountForGroup = (
     setSelectedBnbaIds(prev => prev.filter(id => id !== bnbaId))
     triggerToast('Data perorangan BNBA berhasil dihapus.')
   }
+
+  // Standalone & Bulk Handler for clearing BNBA data safely with valid UUID
+  const handleClearBnba = async (kpm: any) => {
+    try {
+      // 1. Validasi UUID KPM
+      let targetUuid = kpm.id;
+
+      // Regex validator format UUID v4
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      // Jika kpm.id bukan UUID (misal berisi '000000' atau NPSN), cari UUID aslinya di tabel master
+      if (!isUuid.test(targetUuid)) {
+        const npsnVal = (kpm.identitas_npsn_tmp || kpm.npsnReg) && (kpm.identitas_npsn_tmp || kpm.npsnReg) !== '000000' ? (kpm.identitas_npsn_tmp || kpm.npsnReg) : null
+        let query = supabase.from('kelompok_penerima_manfaat').select('id')
+        if (npsnVal) {
+          query = query.or(`nama.ilike.%${kpm.nama}%,identitas_npsn_tmp.eq.${npsnVal}`)
+        } else {
+          query = query.ilike('nama', `%${kpm.nama}%`)
+        }
+
+        const { data: kpmRecord, error: findError } = await query.limit(1).maybeSingle();
+
+        if (findError || !kpmRecord?.id || !isUuid.test(kpmRecord.id)) {
+          const resolvedUuid = await resolveSupabaseKelompokUuid(kpm)
+          if (isUuid.test(resolvedUuid)) {
+            targetUuid = resolvedUuid
+          } else {
+            throw new Error('Gagal menemukan ID referensi UUID kelompok ini.');
+          }
+        } else {
+          targetUuid = kpmRecord.id;
+        }
+      }
+
+      // 2. Eksekusi penghapusan dengan targetUuid yang valid
+      const { error: deleteError } = await supabase
+        .from('penerima_manfaat_bnba')
+        .delete()
+        .eq('kelompok_id', targetUuid);
+
+      if (deleteError) throw deleteError;
+
+      // Clean local storage / state
+      for (const item of bnbaList) {
+        await deleteBnbaItem(item.id)
+      }
+
+      setBnbaList([])
+      setAllBnbaRecords(prev => prev.filter(b => b.kelompok_id !== kpm.id && b.kelompok_id !== targetUuid))
+
+      setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: 0 } : null)
+      setKpmItems(prev => prev.map(k => (k.id === kpm.id || k.npsnReg === kpm.id || k.id === targetUuid) ? { ...k, rincianTerisi: 0 } : k))
+
+      // 3. Tampilkan Notifikasi Sukses
+      showToast({
+        type: 'success',
+        title: 'Data BNBA Dikosongkan',
+        message: `Seluruh data penerima untuk ${kpm.nama || 'kelompok ini'} berhasil dihapus.`
+      });
+
+      // Refresh data tabel
+      await loadData();
+    } catch (err: any) {
+      console.error('Error delete BNBA:', err);
+      showToast({
+        type: 'error',
+        title: 'Gagal Menghapus BNBA',
+        message: err.message || 'Terjadi kesalahan pada format ID database.'
+      });
+    }
+  };
 
   // Bulk / Mass Delete BNBA Records (Selected or Clear All)
   const handleExecuteBulkDelete = async () => {
@@ -1340,7 +1413,11 @@ const getBnbaCountForGroup = (
 
         if (error) {
           console.error('Error bulk deleting BNBA in Supabase:', error)
-          alert('Gagal menghapus data terpilih: ' + error.message)
+          showToast({
+            type: 'error',
+            title: 'Gagal Menghapus Data Terpilih',
+            message: error.message
+          })
           return
         }
 
@@ -1357,38 +1434,24 @@ const getBnbaCountForGroup = (
         setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: newCount } : null)
         setKpmItems(prev => prev.map(k => (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === activeKelompokUuid) ? { ...k, rincianTerisi: newCount } : k))
 
-        triggerToast(`Berhasil menghapus ${selectedBnbaIds.length} data BNBA terpilih.`)
+        showToast({
+          type: 'success',
+          title: 'Data BNBA Dihapus',
+          message: `Berhasil menghapus ${selectedBnbaIds.length} data BNBA terpilih.`
+        })
         setSelectedBnbaIds([])
       } else if (bulkDeleteType === 'all') {
         if (bnbaList.length === 0) return
-
-        const { error } = await supabase
-          .from('penerima_manfaat_bnba')
-          .delete()
-          .or(`kelompok_id.eq.${activeKelompokUuid},kelompok_id.eq.${activeBnbaGroup.id},kelompok_id.eq.${activeBnbaGroup.npsnReg}`)
-
-        if (error) {
-          console.error('Error clearing all BNBA in Supabase:', error)
-          alert('Gagal mengosongkan data BNBA: ' + error.message)
-          return
-        }
-
-        for (const item of bnbaList) {
-          await deleteBnbaItem(item.id)
-        }
-
-        setBnbaList([])
-        setAllBnbaRecords(prev => prev.filter(b => b.kelompok_id !== activeBnbaGroup.id && b.kelompok_id !== activeKelompokUuid && b.kelompok_id !== activeBnbaGroup.npsnReg))
-
-        setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: 0 } : null)
-        setKpmItems(prev => prev.map(k => (k.id === activeBnbaGroup.id || k.npsnReg === activeBnbaGroup.id || k.id === activeKelompokUuid) ? { ...k, rincianTerisi: 0 } : k))
-
-        triggerToast(`Seluruh data BNBA kelompok "${activeBnbaGroup.nama}" berhasil dikosongkan.`)
+        await handleClearBnba(activeBnbaGroup)
         setSelectedBnbaIds([])
       }
     } catch (err: any) {
       console.error('Exception bulk deleting BNBA:', err)
-      alert('Terjadi kesalahan saat menghapus data BNBA: ' + (err.message || 'Error server'))
+      showToast({
+        type: 'error',
+        title: 'Gagal Menghapus BNBA',
+        message: err.message || 'Error server'
+      })
     } finally {
       setIsBulkDeleting(false)
       setShowBulkDeleteConfirmModal(false)
@@ -1621,7 +1684,7 @@ const getBnbaCountForGroup = (
         const rawRowsAsArray: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false })
 
         if ((!rawRowsWithHeader || rawRowsWithHeader.length === 0) && (!rawRowsAsArray || rawRowsAsArray.length < 2)) {
-          alert('File Excel kosong atau tidak memiliki baris data.')
+          showToast({ type: 'warning', title: 'File Excel Kosong', message: 'File Excel kosong atau tidak memiliki baris data.' })
           return
         }
 
@@ -1695,7 +1758,7 @@ const getBnbaCountForGroup = (
         }).filter((item) => item.nama_lengkap !== '' || item.nisn_nik !== '')
 
         if (parsedItems.length === 0) {
-          alert('Tidak ditemukan data valid dalam file Excel (pastikan NIK/NISN & Nama Lengkap terisi).')
+          showToast({ type: 'warning', title: 'Data Tidak Valid', message: 'Tidak ditemukan data valid dalam file Excel (pastikan NIK/NISN & Nama Lengkap terisi).' })
           return
         }
 
@@ -1703,7 +1766,7 @@ const getBnbaCountForGroup = (
         setShowImportConfirmModal(true)
       } catch (err: any) {
         console.error('Error parsing Excel file:', err)
-        alert('Gagal membaca file Excel/CSV: ' + (err.message || 'Format file tidak sesuai'))
+        showToast({ type: 'error', title: 'Gagal Membaca Excel', message: err.message || 'Format file tidak sesuai' })
       } finally {
         e.target.value = ''
       }
@@ -1800,7 +1863,7 @@ const getBnbaCountForGroup = (
 
       if (error) {
         console.error("Gagal Import BNBA:", error)
-        alert("Gagal mengimpor data: " + error.message)
+        showToast({ type: 'error', title: 'Gagal Import BNBA', message: error.message })
         return
       }
 
@@ -1863,7 +1926,7 @@ const getBnbaCountForGroup = (
       setImportPreviewData([])
     } catch (err: any) {
       console.error('Exception importing BNBA:', err)
-      alert('Gagal mengimpor data: ' + (err.message || 'Terjadi kesalahan sistem'))
+      showToast({ type: 'error', title: 'Gagal Import BNBA', message: err.message || 'Terjadi kesalahan sistem' })
     } finally {
       setIsImporting(false)
     }
