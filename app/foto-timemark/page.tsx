@@ -88,6 +88,12 @@ export default function FotoTimemarkPage() {
   const [bgImageUrl, setBgImageUrl] = useState<string | null>('/menu-today.png')
   const [isGettingGps, setIsGettingGps] = useState(false)
 
+  // Photo Drag / Pan & Zoom State
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const isDraggingRef = useRef(false)
+  const startPosRef = useRef({ x: 0, y: 0 })
+
   // Canvas Reference
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [canvasAspectRatio, setCanvasAspectRatio] = useState<number>(4 / 3)
@@ -165,6 +171,8 @@ export default function FotoTimemarkPage() {
       reader.onload = (event) => {
         if (event.target?.result) {
           setBgImageUrl(event.target.result as string)
+          setOffset({ x: 0, y: 0 })
+          setZoom(1)
           showToast('Gambar latar baru berjaya dimuat naik!', 'success')
         }
       }
@@ -205,9 +213,17 @@ export default function FotoTimemarkPage() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Target Canvas Resolution (default 1440 x 1080 for high definition output)
-    let targetWidth = 1440
-    let targetHeight = 1080
+    // Rigid Hardcoded Canvas Resolution (Landscape 4:3)
+    const CANVAS_WIDTH = 1600
+    const CANVAS_HEIGHT = 1200
+
+    canvas.width = CANVAS_WIDTH
+    canvas.height = CANVAS_HEIGHT
+
+    const scale = CANVAS_WIDTH / 1200
+
+    // Clear Canvas
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
 
     // Load Background Image if available
     let bgImg: HTMLImageElement | null = null
@@ -215,20 +231,10 @@ export default function FotoTimemarkPage() {
       try {
         bgImg = await loadImage(bgImageUrl)
         bgImgRef.current = bgImg
-        if (bgImg.width && bgImg.height) {
-          targetWidth = Math.max(1200, bgImg.width)
-          targetHeight = Math.max(900, bgImg.height)
-          setCanvasAspectRatio(targetWidth / targetHeight)
-        }
       } catch (err) {
         console.warn('Fallback drawing without bg image:', err)
       }
     }
-
-    canvas.width = targetWidth
-    canvas.height = targetHeight
-
-    const scale = targetWidth / 1200
 
     // Wait for Roboto Condensed & Inter webfonts to load
     if (typeof document !== 'undefined' && document.fonts) {
@@ -242,31 +248,51 @@ export default function FotoTimemarkPage() {
       }
     }
 
-    // 1. Draw Background Image or Dynamic Gradient Fallback
+    // 1. Draw Background Image or Dynamic Gradient Fallback (Cover + Pan Offset)
     if (bgImg) {
-      ctx.drawImage(bgImg, 0, 0, targetWidth, targetHeight)
+      const imgRatio = bgImg.width / bgImg.height
+      const canvasRatio = CANVAS_WIDTH / CANVAS_HEIGHT
+      let drawW: number, drawH: number
+
+      // Cover mode (filling 1600x1200)
+      if (imgRatio > canvasRatio) {
+        drawH = CANVAS_HEIGHT * zoom
+        drawW = drawH * imgRatio
+      } else {
+        drawW = CANVAS_WIDTH * zoom
+        drawH = drawW / imgRatio
+      }
+
+      // Convert screen drag offset to 1600x1200 canvas scale
+      const rect = canvas.getBoundingClientRect()
+      const scaleFactor = rect.width > 0 ? CANVAS_WIDTH / rect.width : 1
+
+      const posX = (CANVAS_WIDTH - drawW) / 2 + (offset.x * scaleFactor)
+      const posY = (CANVAS_HEIGHT - drawH) / 2 + (offset.y * scaleFactor)
+
+      ctx.drawImage(bgImg, posX, posY, drawW, drawH)
     } else {
-      const grad = ctx.createLinearGradient(0, 0, targetWidth, targetHeight)
+      const grad = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
       grad.addColorStop(0, '#1e293b')
       grad.addColorStop(0.5, '#0f172a')
       grad.addColorStop(1, '#020617')
       ctx.fillStyle = grad
-      ctx.fillRect(0, 0, targetWidth, targetHeight)
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
 
       // Decorative grid pattern for empty fallback
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'
-      ctx.lineWidth = 2
-      const step = 60
-      for (let x = 0; x < targetWidth; x += step) {
+      ctx.lineWidth = 2 * scale
+      const step = 60 * scale
+      for (let x = 0; x < CANVAS_WIDTH; x += step) {
         ctx.beginPath()
         ctx.moveTo(x, 0)
-        ctx.lineTo(x, targetHeight)
+        ctx.lineTo(x, CANVAS_HEIGHT)
         ctx.stroke()
       }
-      for (let y = 0; y < targetHeight; y += step) {
+      for (let y = 0; y < CANVAS_HEIGHT; y += step) {
         ctx.beginPath()
         ctx.moveTo(0, y)
-        ctx.lineTo(targetWidth, y)
+        ctx.lineTo(CANVAS_WIDTH, y)
         ctx.stroke()
       }
     }
@@ -394,7 +420,7 @@ export default function FotoTimemarkPage() {
     // OVERLAY 2: Watermark Vertikal Sisi Kanan
     // -------------------------------------------------------------
     ctx.save()
-    ctx.translate(targetWidth - (24 * scale), targetHeight / 2)
+    ctx.translate(CANVAS_WIDTH - (24 * scale), CANVAS_HEIGHT / 2)
     ctx.rotate((-90 * Math.PI) / 180)
     ctx.font = `500 ${14 * scale}px "Inter", sans-serif`
     ctx.fillStyle = '#FFFFFF'
@@ -414,7 +440,7 @@ export default function FotoTimemarkPage() {
     const marginBottom = 32 * scale
 
     // b. Baris Kode Foto (Paling Bawah)
-    const yCode = targetHeight - marginBottom
+    const yCode = CANVAS_HEIGHT - marginBottom
     const codeX = 28 * scale
 
     // c. Posisi Vertikal Baris Teks (GPS -> Alamat -> Tanggal)
@@ -424,7 +450,7 @@ export default function FotoTimemarkPage() {
     ctx.save()
     ctx.font = `500 ${16 * scale}px "Inter", sans-serif`
     const fullAddr = address || 'Wonorejo, Wonorejo, Pasuruan, Jawa Timur, 67173'
-    const maxAddrLineWidth = targetWidth - (44 * scale) - (60 * scale)
+    const maxAddrLineWidth = CANVAS_WIDTH - (44 * scale) - (60 * scale)
 
     let addrLine1 = fullAddr
     let addrLine2 = ''
@@ -650,8 +676,8 @@ export default function FotoTimemarkPage() {
     ctx.shadowOffsetX = 1.5 * scale
     ctx.shadowOffsetY = 1.5 * scale
 
-    const stampY = targetHeight - (46 * scale)
-    const rightMarginX = targetWidth - (36 * scale)
+    const stampY = CANVAS_HEIGHT - (46 * scale)
+    const rightMarginX = CANVAS_WIDTH - (36 * scale)
 
     ctx.font = `700 ${22 * scale}px "Inter", sans-serif`
     const timeWordWidth = ctx.measureText('Time').width
@@ -673,7 +699,7 @@ export default function FotoTimemarkPage() {
     ctx.textAlign = 'right'
     ctx.fillText('Foto 100% akurat', rightMarginX, stampY + (18 * scale))
     ctx.restore()
-  }, [activity, timeStr, dateStr, address, gpsCoords, timemarkCode, showBgnLogo, showRegionalLogo, customLogoUrl, bgImageUrl])
+  }, [activity, timeStr, dateStr, address, gpsCoords, timemarkCode, showBgnLogo, showRegionalLogo, customLogoUrl, bgImageUrl, offset, zoom])
 
   // Trigger re-render whenever dependency state changes
   useEffect(() => {
@@ -963,13 +989,85 @@ export default function FotoTimemarkPage() {
               </div>
             </div>
 
+            {/* Touch / Pan Drag Instruction Badge */}
+            <div className="flex items-center justify-between text-xs font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-800 rounded-xl px-3.5 py-2">
+              <span className="flex items-center gap-1.5">
+                <span>👆</span>
+                <span>Sentuh dan geser foto untuk mengatur posisi wajah/objek sebelum didownload</span>
+              </span>
+              {(offset.x !== 0 || offset.y !== 0 || zoom !== 1) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOffset({ x: 0, y: 0 })
+                    setZoom(1)
+                  }}
+                  className="text-[11px] underline hover:text-amber-900 font-bold shrink-0 ml-2"
+                >
+                  Reset Posisi
+                </button>
+              )}
+            </div>
+
             {/* High-Resolution Live Canvas Display */}
-            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex items-center justify-center min-h-[380px]">
+            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex items-center justify-center">
               <canvas
                 ref={canvasRef}
-                className="w-full h-auto max-h-[650px] object-contain block transition-all"
-                style={{ aspectRatio: `${canvasAspectRatio}` }}
+                className="w-full aspect-[4/3] object-contain rounded-2xl shadow-xl touch-none select-none block cursor-grab active:cursor-grabbing"
+                onTouchStart={(e) => {
+                  if (e.touches.length === 1) {
+                    isDraggingRef.current = true
+                    startPosRef.current = {
+                      x: e.touches[0].clientX - offset.x,
+                      y: e.touches[0].clientY - offset.y,
+                    }
+                  }
+                }}
+                onTouchMove={(e) => {
+                  if (!isDraggingRef.current || e.touches.length !== 1) return
+                  const newX = e.touches[0].clientX - startPosRef.current.x
+                  const newY = e.touches[0].clientY - startPosRef.current.y
+                  setOffset({ x: newX, y: newY })
+                }}
+                onTouchEnd={() => {
+                  isDraggingRef.current = false
+                }}
+                onMouseDown={(e) => {
+                  isDraggingRef.current = true
+                  startPosRef.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }
+                }}
+                onMouseMove={(e) => {
+                  if (!isDraggingRef.current) return
+                  setOffset({
+                    x: e.clientX - startPosRef.current.x,
+                    y: e.clientY - startPosRef.current.y,
+                  })
+                }}
+                onMouseUp={() => {
+                  isDraggingRef.current = false
+                }}
+                onMouseLeave={() => {
+                  isDraggingRef.current = false
+                }}
               />
+            </div>
+
+            {/* Zoom Slider Control */}
+            <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-slate-100/80 border border-slate-200">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-700 shrink-0">
+                <Sliders size={14} className="text-blue-600" />
+                <span>Zoom: {zoom.toFixed(1)}x</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="2.5"
+                step="0.05"
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <span className="text-xs text-slate-500 font-medium shrink-0">1x - 2.5x</span>
             </div>
 
             {/* Liquid Glass Download Button */}
