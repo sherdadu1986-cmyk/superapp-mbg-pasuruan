@@ -193,7 +193,7 @@ export default function FotoTimemarkPage() {
       const img = new Image()
       img.crossOrigin = 'anonymous'
       img.onload = () => resolve(img)
-      img.onerror = () => reject(new Error(`Failed to load image: ${src}`))
+      img.onerror = (err) => reject(err)
       img.src = src
     })
   }
@@ -227,6 +227,20 @@ export default function FotoTimemarkPage() {
 
     canvas.width = targetWidth
     canvas.height = targetHeight
+
+    const scale = targetWidth / 1200
+
+    // Wait for Roboto Condensed & Inter webfonts to load
+    if (typeof document !== 'undefined' && document.fonts) {
+      try {
+        await Promise.all([
+          document.fonts.load(`bold ${44 * scale}px "Roboto Condensed"`),
+          document.fonts.load(`bold ${20 * scale}px "Inter"`),
+        ])
+      } catch (e) {
+        console.warn('Font loading notice:', e)
+      }
+    }
 
     // 1. Draw Background Image or Dynamic Gradient Fallback
     if (bgImg) {
@@ -285,8 +299,6 @@ export default function FotoTimemarkPage() {
       console.warn('Image preloading notice:', e)
     }
 
-    const scale = targetWidth / 1200
-
     // -------------------------------------------------------------
     // OVERLAY 1: Mini-Map (Sudut Kiri Atas)
     // -------------------------------------------------------------
@@ -295,7 +307,7 @@ export default function FotoTimemarkPage() {
     const mapWidth = 210 * scale
     const mapHeight = 210 * scale
 
-    // Background Card #FFFFFF, radius 14 * scale
+    // Background Card #FFFFFF, radius 12 * scale
     ctx.save()
     ctx.shadowColor = 'rgba(0, 0, 0, 0.35)'
     ctx.shadowBlur = 12 * scale
@@ -303,7 +315,7 @@ export default function FotoTimemarkPage() {
 
     ctx.fillStyle = '#FFFFFF'
     ctx.beginPath()
-    ctx.roundRect(mapX, mapY, mapWidth, mapHeight, 14 * scale)
+    ctx.roundRect(mapX, mapY, mapWidth, mapHeight, 12 * scale)
     ctx.fill()
     ctx.strokeStyle = 'rgba(226, 232, 240, 0.9)'
     ctx.lineWidth = 1.5 * scale
@@ -338,7 +350,7 @@ export default function FotoTimemarkPage() {
     const pinX = mapX + mapWidth / 2
     const pinY = mapX + mapHeight / 2 - 4 * scale
 
-    // Radar Cone (Kerucut Transparan Arah Hadap ~120-140 deg)
+    // Radar Cone (Kerucut Transparan Arah Hadap rgba(52, 211, 153, 0.45))
     ctx.save()
     ctx.fillStyle = 'rgba(52, 211, 153, 0.45)'
     ctx.beginPath()
@@ -366,13 +378,13 @@ export default function FotoTimemarkPage() {
     ctx.save()
     ctx.translate(mapX + mapWidth - 45 * scale, mapY + 55 * scale)
     ctx.rotate((-35 * Math.PI) / 180)
-    ctx.font = `700 ${11 * scale}px sans-serif`
+    ctx.font = `700 ${11 * scale}px "Inter", sans-serif`
     ctx.fillStyle = '#475569'
     ctx.fillText('.WOSARI-PASURUAN', 0, 0)
     ctx.restore()
 
     // Tulisan "Peta" kecil di kiri bawah
-    ctx.font = `italic 700 ${11 * scale}px sans-serif`
+    ctx.font = `italic 700 ${11 * scale}px "Inter", sans-serif`
     ctx.fillStyle = 'rgba(15, 23, 42, 0.75)'
     ctx.textAlign = 'left'
     ctx.fillText('Peta', mapX + 12 * scale, mapY + mapHeight - 12 * scale)
@@ -384,10 +396,10 @@ export default function FotoTimemarkPage() {
     ctx.save()
     ctx.translate(targetWidth - (24 * scale), targetHeight / 2)
     ctx.rotate((-90 * Math.PI) / 180)
-    ctx.font = `500 ${14 * scale}px sans-serif`
+    ctx.font = `500 ${14 * scale}px "Inter", sans-serif`
     ctx.fillStyle = '#FFFFFF'
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
-    ctx.shadowBlur = 6 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)'
+    ctx.shadowBlur = 4 * scale
     ctx.shadowOffsetX = 1.5 * scale
     ctx.shadowOffsetY = 1.5 * scale
     ctx.textAlign = 'center'
@@ -406,11 +418,11 @@ export default function FotoTimemarkPage() {
     const codeX = 28 * scale
 
     // c. Posisi Vertikal Baris Teks (GPS -> Alamat -> Tanggal)
-    const yGps = yCode - (30 * scale)
+    const yGps = yCode - (38 * scale)
 
     // Alamat Line-Height & Multi-line Handling
     ctx.save()
-    ctx.font = `400 ${18 * scale}px sans-serif`
+    ctx.font = `500 ${16 * scale}px "Inter", sans-serif`
     const fullAddr = address || 'Wonorejo, Wonorejo, Pasuruan, Jawa Timur, 67173'
     const maxAddrLineWidth = targetWidth - (44 * scale) - (60 * scale)
 
@@ -437,33 +449,34 @@ export default function FotoTimemarkPage() {
     const yAddr1 = hasTwoAddrLines ? yAddr2 - (24 * scale) : yGps - (24 * scale)
     const yDate = yAddr1 - (28 * scale)
 
-    // d. Garis Vertikal Oranye Solid #FF8A00
+    // d. Garis Vertikal Oranye Solid #FF8C00 (Lebar 5 * scale)
+    // Mulai dari bagian atas teks Hari/Tanggal sampai batas bawah baris Koordinat GPS
     const lineX = 28 * scale
-    const lineYTop = yDate - (18 * scale)
+    const lineYTop = yDate - (16 * scale)
     const lineYBottom = yGps + (4 * scale)
     const lineH = lineYBottom - lineYTop
 
-    ctx.fillStyle = '#FF8A00'
+    ctx.fillStyle = '#FF8C00'
     ctx.beginPath()
-    ctx.roundRect(lineX, lineYTop, 4 * scale, lineH, 2 * scale)
+    ctx.roundRect(lineX, lineYTop, 5 * scale, lineH, 2.5 * scale)
     ctx.fill()
 
-    // e. Render Teks Informasi (Tanggal, Alamat, GPS) dengan Drop Shadow Kuat
+    // e. Render Teks Informasi (Tanggal, Alamat, GPS) dengan Shadow Hitam Pekat
     ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
-    ctx.shadowBlur = 6 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)'
+    ctx.shadowBlur = 4 * scale
     ctx.shadowOffsetX = 1.5 * scale
     ctx.shadowOffsetY = 1.5 * scale
 
     const textX = 44 * scale
 
-    // Baris 1: Hari & Tanggal (22 * scale Bold #FFFFFF)
-    ctx.font = `700 ${22 * scale}px sans-serif`
+    // Baris 1: Hari & Tanggal (Font Bold 20 * scale "Inter", #FFFFFF)
+    ctx.font = `700 ${20 * scale}px "Inter", sans-serif`
     ctx.fillStyle = '#FFFFFF'
     ctx.fillText(dateStr || 'Kamis, 17 September 2026', textX, yDate)
 
-    // Baris 2 & 3: Alamat Lengkap (18 * scale Regular #FFFFFF)
-    ctx.font = `400 ${18 * scale}px sans-serif`
+    // Baris 2 & 3: Alamat Lengkap (Font Medium 16 * scale "Inter", #FFFFFF)
+    ctx.font = `500 ${16 * scale}px "Inter", sans-serif`
     if (hasTwoAddrLines) {
       ctx.fillText(addrLine1, textX, yAddr1)
       ctx.fillText(addrLine2, textX, yAddr2)
@@ -471,18 +484,18 @@ export default function FotoTimemarkPage() {
       ctx.fillText(fullAddr, textX, yAddr1)
     }
 
-    // Baris 4: Koordinat GPS (18 * scale Regular #FFFFFF)
+    // Baris 4: Koordinat GPS (Font Medium 16 * scale "Inter", #FFFFFF)
     ctx.fillText(gpsCoords || '7.721269°S, 112.798141°E', textX, yGps)
     ctx.restore()
 
-    // f. Render Baris Kode Foto (Di Bawah Rentang Garis Oranye)
+    // f. Render Baris Kode Foto (Di Bawah Rentang Garis Oranye dengan Margin Ekstra)
     ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
-    ctx.shadowBlur = 6 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)'
+    ctx.shadowBlur = 4 * scale
     ctx.shadowOffsetX = 1.5 * scale
     ctx.shadowOffsetY = 1.5 * scale
 
-    // Ikon Perisai Centang Outline #FFFFFF (18 * scale)
+    // Ikon Perisai Centang Outline #FFFFFF
     const shieldW = 16 * scale
     const shieldH = 18 * scale
     const shieldX = codeX
@@ -505,19 +518,19 @@ export default function FotoTimemarkPage() {
     ctx.lineTo(shieldX + 12 * scale, shieldY + 5 * scale)
     ctx.stroke()
 
-    // Teks: "Kode Foto: " + Kode Unik
+    // Teks: "Kode Foto: " (Font Regular 15 * scale "Inter", #FFFFFF) + Kode Unik
     ctx.fillStyle = '#FFFFFF'
-    ctx.font = `400 ${16 * scale}px sans-serif`
+    ctx.font = `400 ${15 * scale}px "Inter", sans-serif`
     ctx.fillText('Kode Foto: ', codeX + shieldW + (10 * scale), yCode)
 
     const labelWidth = ctx.measureText('Kode Foto: ').width
-    ctx.font = `700 ${16 * scale}px sans-serif`
-    ctx.fillStyle = '#E2E8F0'
+    ctx.font = `700 ${15 * scale}px "Inter", sans-serif`
+    ctx.fillStyle = '#FFFFFF'
     ctx.fillText(timemarkCode, codeX + shieldW + (10 * scale) + labelWidth, yCode)
     ctx.restore()
 
     // -------------------------------------------------------------
-    // OVERLAY 4: Kotak Putih Jam & Logo (Di Atas Baris Tanggal dengan GAP 24 * scale)
+    // OVERLAY 4: Kotak Putih Jam & Logo (Di Atas Baris Tanggal)
     // -------------------------------------------------------------
     const bottomWhiteBox = yDate - (24 * scale)
     const whiteBoxHeight = 64 * scale
@@ -526,14 +539,14 @@ export default function FotoTimemarkPage() {
     const paddingX = 12 * scale
 
     const timeFontSize = 44 * scale
-    ctx.font = `900 ${timeFontSize}px sans-serif`
+    ctx.font = `700 ${timeFontSize}px "Roboto Condensed", "Inter", sans-serif`
     const timeText = timeStr || '05:09'
     const timeWidth = ctx.measureText(timeText).width
 
     const hasActivity = Boolean(activity && activity.trim())
     let activityBadgeWidth = 0
     if (hasActivity) {
-      ctx.font = `800 ${22 * scale}px sans-serif`
+      ctx.font = `800 ${22 * scale}px "Inter", sans-serif`
       activityBadgeWidth = ctx.measureText(activity.toUpperCase()).width + (28 * scale)
     }
 
@@ -581,16 +594,16 @@ export default function FotoTimemarkPage() {
       ctx.fill()
 
       ctx.fillStyle = '#111827'
-      ctx.font = `800 ${22 * scale}px sans-serif`
+      ctx.font = `800 ${22 * scale}px "Inter", sans-serif`
       ctx.textAlign = 'center'
       ctx.fillText(activity.toUpperCase(), currX + (activityBadgeWidth / 2), badgeY + (badgeH / 2) + (7 * scale))
 
       currX += activityBadgeWidth + (14 * scale)
     }
 
-    // 3b. Diagonal Stripe Arsiran Pattern & Angka Jam Digital (Biru Tua Navy #0B2F64)
+    // 3b. Diagonal Stripe Arsiran Pattern & Angka Jam Digital (Biru Tua Navy #0B2D64)
     ctx.save()
-    ctx.strokeStyle = 'rgba(11, 47, 100, 0.08)'
+    ctx.strokeStyle = 'rgba(11, 45, 100, 0.08)'
     ctx.lineWidth = 2 * scale
     for (let stripeX = currX; stripeX < currX + timeWidth; stripeX += 8 * scale) {
       ctx.beginPath()
@@ -600,14 +613,14 @@ export default function FotoTimemarkPage() {
     }
     ctx.restore()
 
-    ctx.fillStyle = '#0B2F64'
-    ctx.font = `900 ${timeFontSize}px sans-serif`
+    ctx.fillStyle = '#0B2D64'
+    ctx.font = `700 ${timeFontSize}px "Roboto Condensed", "Inter", sans-serif`
     ctx.textAlign = 'left'
     ctx.fillText(timeText, currX, whiteBoxY + (48 * scale))
 
     currX += timeWidth + gapAfterTime
 
-    // 3c. Garis Pemisah Vertikal & HANYA LOGO BGN (dan Custom Logo)
+    // 3c. Garis Pemisah Vertikal & Logo BGN
     if (logosTotalWidth > 0) {
       const divY = whiteBoxY + (whiteBoxHeight - (36 * scale)) / 2
       ctx.fillStyle = '#E2E8F0'
@@ -629,29 +642,37 @@ export default function FotoTimemarkPage() {
     }
 
     // -------------------------------------------------------------
-    // OVERLAY 5: Watermark Timemark Kanan Bawah
+    // OVERLAY 5: Watermark Timemark Kanan Bawah ("Time" + "mark" Two-Tone)
     // -------------------------------------------------------------
     ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
-    ctx.shadowBlur = 6 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.95)'
+    ctx.shadowBlur = 4 * scale
     ctx.shadowOffsetX = 1.5 * scale
     ctx.shadowOffsetY = 1.5 * scale
-    ctx.textAlign = 'right'
 
-    const stampRightX = targetWidth - (32 * scale)
-    const stampY = targetHeight - (52 * scale)
+    const stampY = targetHeight - (46 * scale)
+    const rightMarginX = targetWidth - (36 * scale)
 
-    // Baris 1: "Timemark" (#FFB800)
-    ctx.fillStyle = '#FFB800'
-    ctx.font = `900 ${24 * scale}px sans-serif`
-    ctx.fillText('Timemark', stampRightX, stampY)
+    ctx.font = `700 ${22 * scale}px "Inter", sans-serif`
+    const timeWordWidth = ctx.measureText('Time').width
+    const markWordWidth = ctx.measureText('mark').width
+    const totalBrandWidth = timeWordWidth + markWordWidth
+    const brandStartX = rightMarginX - totalBrandWidth
 
-    // Baris 2: "Foto 100% akurat" (#FFFFFF)
+    // Kata "Time": Warna Kuning Cerah (#FDCB02)
+    ctx.fillStyle = '#FDCB02'
+    ctx.textAlign = 'left'
+    ctx.fillText('Time', brandStartX, stampY)
+
+    // Kata "mark": Warna Putih Bersih (#FFFFFF)
     ctx.fillStyle = '#FFFFFF'
-    ctx.font = `400 ${14 * scale}px sans-serif`
-    ctx.fillText('Foto 100% akurat', stampRightX, stampY + (20 * scale))
-    ctx.restore()
+    ctx.fillText('mark', brandStartX + timeWordWidth, stampY)
 
+    // Baris Bawah: "Foto 100% akurat" Warna Putih (#FFFFFF), Font Regular 13 * scale
+    ctx.font = `400 ${13 * scale}px "Inter", sans-serif`
+    ctx.textAlign = 'right'
+    ctx.fillText('Foto 100% akurat', rightMarginX, stampY + (18 * scale))
+    ctx.restore()
   }, [activity, timeStr, dateStr, address, gpsCoords, timemarkCode, showBgnLogo, showRegionalLogo, customLogoUrl, bgImageUrl])
 
   // Trigger re-render whenever dependency state changes
