@@ -16,7 +16,8 @@ import {
   UtensilsCrossed,
   Tv,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Camera
 } from 'lucide-react'
 import KioskModeDisplay from '@/components/KioskModeDisplay'
 
@@ -153,6 +154,12 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           icon: <UtensilsCrossed size={18} className="text-amber-600" />,
           path: '/kelola-menu-harian',
           active: pathname === '/kelola-menu-harian' || pathname === '/kelola-menu'
+        },
+        {
+          name: 'Dokumentasi Timemark',
+          icon: <Camera size={18} className="text-purple-600" />,
+          path: '/foto-timemark',
+          active: pathname === '/foto-timemark'
         }
       ]
     }
