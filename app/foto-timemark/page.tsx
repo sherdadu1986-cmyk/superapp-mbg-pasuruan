@@ -386,20 +386,143 @@ export default function FotoTimemarkPage() {
     ctx.rotate((-90 * Math.PI) / 180)
     ctx.font = `500 ${14 * scale}px sans-serif`
     ctx.fillStyle = '#FFFFFF'
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
-    ctx.shadowBlur = 4 * scale
-    ctx.shadowOffsetX = 1 * scale
-    ctx.shadowOffsetY = 1 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
+    ctx.shadowBlur = 6 * scale
+    ctx.shadowOffsetX = 1.5 * scale
+    ctx.shadowOffsetY = 1.5 * scale
     ctx.textAlign = 'center'
     ctx.fillText(`© ${timemarkCode} Timemark Verified`, 0, 0)
     ctx.restore()
 
     // -------------------------------------------------------------
-    // OVERLAY 3: Kotak Putih Jam & Logo (Sudut Kiri Bawah)
+    // OVERLAY 3: Blok Teks Informasi & Kotak Putih Jam (Bottom-Up Layout Stacking)
     // -------------------------------------------------------------
-    const whiteBoxX = 28 * scale
-    const whiteBoxY = targetHeight - (260 * scale)
+
+    // a. Tepi Bawah / Padding Dasar
+    const marginBottom = 32 * scale
+
+    // b. Baris Kode Foto (Paling Bawah)
+    const yCode = targetHeight - marginBottom
+    const codeX = 28 * scale
+
+    // c. Posisi Vertikal Baris Teks (GPS -> Alamat -> Tanggal)
+    const yGps = yCode - (30 * scale)
+
+    // Alamat Line-Height & Multi-line Handling
+    ctx.save()
+    ctx.font = `400 ${18 * scale}px sans-serif`
+    const fullAddr = address || 'Wonorejo, Wonorejo, Pasuruan, Jawa Timur, 67173'
+    const maxAddrLineWidth = targetWidth - (44 * scale) - (60 * scale)
+
+    let addrLine1 = fullAddr
+    let addrLine2 = ''
+    if (ctx.measureText(fullAddr).width > maxAddrLineWidth) {
+      const words = fullAddr.split(' ')
+      addrLine1 = ''
+      for (let i = 0; i < words.length; i++) {
+        const testLine = addrLine1 ? addrLine1 + ' ' + words[i] : words[i]
+        if (ctx.measureText(testLine).width <= maxAddrLineWidth) {
+          addrLine1 = testLine
+        } else {
+          addrLine2 = words.slice(i).join(' ')
+          break
+        }
+      }
+    }
+    ctx.restore()
+
+    const hasTwoAddrLines = Boolean(addrLine2 && addrLine2.trim())
+
+    const yAddr2 = hasTwoAddrLines ? yGps - (24 * scale) : yGps
+    const yAddr1 = hasTwoAddrLines ? yAddr2 - (24 * scale) : yGps - (24 * scale)
+    const yDate = yAddr1 - (28 * scale)
+
+    // d. Garis Vertikal Oranye Solid #FF8A00
+    const lineX = 28 * scale
+    const lineYTop = yDate - (18 * scale)
+    const lineYBottom = yGps + (4 * scale)
+    const lineH = lineYBottom - lineYTop
+
+    ctx.fillStyle = '#FF8A00'
+    ctx.beginPath()
+    ctx.roundRect(lineX, lineYTop, 4 * scale, lineH, 2 * scale)
+    ctx.fill()
+
+    // e. Render Teks Informasi (Tanggal, Alamat, GPS) dengan Drop Shadow Kuat
+    ctx.save()
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
+    ctx.shadowBlur = 6 * scale
+    ctx.shadowOffsetX = 1.5 * scale
+    ctx.shadowOffsetY = 1.5 * scale
+
+    const textX = 44 * scale
+
+    // Baris 1: Hari & Tanggal (22 * scale Bold #FFFFFF)
+    ctx.font = `700 ${22 * scale}px sans-serif`
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillText(dateStr || 'Kamis, 17 September 2026', textX, yDate)
+
+    // Baris 2 & 3: Alamat Lengkap (18 * scale Regular #FFFFFF)
+    ctx.font = `400 ${18 * scale}px sans-serif`
+    if (hasTwoAddrLines) {
+      ctx.fillText(addrLine1, textX, yAddr1)
+      ctx.fillText(addrLine2, textX, yAddr2)
+    } else {
+      ctx.fillText(fullAddr, textX, yAddr1)
+    }
+
+    // Baris 4: Koordinat GPS (18 * scale Regular #FFFFFF)
+    ctx.fillText(gpsCoords || '7.721269°S, 112.798141°E', textX, yGps)
+    ctx.restore()
+
+    // f. Render Baris Kode Foto (Di Bawah Rentang Garis Oranye)
+    ctx.save()
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
+    ctx.shadowBlur = 6 * scale
+    ctx.shadowOffsetX = 1.5 * scale
+    ctx.shadowOffsetY = 1.5 * scale
+
+    // Ikon Perisai Centang Outline #FFFFFF (18 * scale)
+    const shieldW = 16 * scale
+    const shieldH = 18 * scale
+    const shieldX = codeX
+    const shieldY = yCode - (14 * scale)
+
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 1.8 * scale
+    ctx.beginPath()
+    ctx.moveTo(shieldX, shieldY)
+    ctx.lineTo(shieldX + shieldW, shieldY)
+    ctx.lineTo(shieldX + shieldW, shieldY + shieldH * 0.6)
+    ctx.quadraticCurveTo(shieldX + shieldW / 2, shieldY + shieldH, shieldX, shieldY + shieldH * 0.6)
+    ctx.closePath()
+    ctx.stroke()
+
+    // Centang dalam perisai
+    ctx.beginPath()
+    ctx.moveTo(shieldX + 4 * scale, shieldY + 8 * scale)
+    ctx.lineTo(shieldX + 7 * scale, shieldY + 11 * scale)
+    ctx.lineTo(shieldX + 12 * scale, shieldY + 5 * scale)
+    ctx.stroke()
+
+    // Teks: "Kode Foto: " + Kode Unik
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = `400 ${16 * scale}px sans-serif`
+    ctx.fillText('Kode Foto: ', codeX + shieldW + (10 * scale), yCode)
+
+    const labelWidth = ctx.measureText('Kode Foto: ').width
+    ctx.font = `700 ${16 * scale}px sans-serif`
+    ctx.fillStyle = '#E2E8F0'
+    ctx.fillText(timemarkCode, codeX + shieldW + (10 * scale) + labelWidth, yCode)
+    ctx.restore()
+
+    // -------------------------------------------------------------
+    // OVERLAY 4: Kotak Putih Jam & Logo (Di Atas Baris Tanggal dengan GAP 24 * scale)
+    // -------------------------------------------------------------
+    const bottomWhiteBox = yDate - (24 * scale)
     const whiteBoxHeight = 64 * scale
+    const whiteBoxY = bottomWhiteBox - whiteBoxHeight
+    const whiteBoxX = 28 * scale
     const paddingX = 12 * scale
 
     const timeFontSize = 44 * scale
@@ -414,9 +537,9 @@ export default function FotoTimemarkPage() {
       activityBadgeWidth = ctx.measureText(activity.toUpperCase()).width + (28 * scale)
     }
 
+    // ONLY LOGO BGN (and custom logo if uploaded) - NO REGIONAL PASURUAN LOGO
     let logoCount = 0
     if (showBgnLogo && bgnLogoRef.current) logoCount++
-    if (showRegionalLogo && regionalLogoRef.current) logoCount++
     if (customLogoUrl && customLogoRef.current) logoCount++
 
     const logoSize = 40 * scale
@@ -457,7 +580,7 @@ export default function FotoTimemarkPage() {
       ctx.roundRect(currX, badgeY, activityBadgeWidth, badgeH, 6 * scale)
       ctx.fill()
 
-      ctx.fillStyle = '#111827' // Hitam
+      ctx.fillStyle = '#111827'
       ctx.font = `800 ${22 * scale}px sans-serif`
       ctx.textAlign = 'center'
       ctx.fillText(activity.toUpperCase(), currX + (activityBadgeWidth / 2), badgeY + (badgeH / 2) + (7 * scale))
@@ -484,7 +607,7 @@ export default function FotoTimemarkPage() {
 
     currX += timeWidth + gapAfterTime
 
-    // 3c. Garis Pemisah Vertikal & Logo Berdampingan
+    // 3c. Garis Pemisah Vertikal & HANYA LOGO BGN (dan Custom Logo)
     if (logosTotalWidth > 0) {
       const divY = whiteBoxY + (whiteBoxHeight - (36 * scale)) / 2
       ctx.fillStyle = '#E2E8F0'
@@ -498,12 +621,6 @@ export default function FotoTimemarkPage() {
         currX += logoSize + logoSpacing
       }
 
-      if (showRegionalLogo && regionalLogoRef.current) {
-        const logoY = whiteBoxY + (whiteBoxHeight - logoSize) / 2
-        ctx.drawImage(regionalLogoRef.current, currX, logoY, logoSize, logoSize)
-        currX += logoSize + logoSpacing
-      }
-
       if (customLogoUrl && customLogoRef.current) {
         const logoY = whiteBoxY + (whiteBoxHeight - logoSize) / 2
         ctx.drawImage(customLogoRef.current, currX, logoY, logoSize, logoSize)
@@ -512,120 +629,13 @@ export default function FotoTimemarkPage() {
     }
 
     // -------------------------------------------------------------
-    // OVERLAY 4: Blok Teks Informasi (Tepat di Bawah Kotak Putih)
-    // -------------------------------------------------------------
-    const lineX = 28 * scale
-    const lineY = targetHeight - (195 * scale)
-    const lineH = 85 * scale
-
-    // 4a. Garis Vertikal Oranye Solid #FF8A00
-    ctx.fillStyle = '#FF8A00'
-    ctx.beginPath()
-    ctx.roundRect(lineX, lineY - (16 * scale), 4 * scale, lineH, 2 * scale)
-    ctx.fill()
-
-    // Setup Text Shadow Wajib
-    ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
-    ctx.shadowBlur = 4 * scale
-    ctx.shadowOffsetX = 1 * scale
-    ctx.shadowOffsetY = 1 * scale
-
-    const textX = 44 * scale
-    let currentTextY = lineY
-
-    // Baris 1: Hari & Tanggal (21 * scale, Bold, #FFFFFF)
-    ctx.font = `700 ${21 * scale}px sans-serif`
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillText(dateStr || 'Kamis, 17 September 2026', textX, currentTextY)
-
-    // Baris 2 & 3: Alamat Lengkap (18 * scale, Regular, line-height 24 * scale)
-    currentTextY += 26 * scale
-    ctx.font = `400 ${18 * scale}px sans-serif`
-
-    const fullAddr = address || 'Wonorejo, Wonorejo, Pasuruan, Jawa Timur, 67173'
-    const maxAddrLineWidth = targetWidth - textX - (60 * scale)
-
-    if (ctx.measureText(fullAddr).width > maxAddrLineWidth) {
-      const words = fullAddr.split(' ')
-      let line1 = ''
-      let line2 = ''
-      for (let i = 0; i < words.length; i++) {
-        const testLine = line1 ? line1 + ' ' + words[i] : words[i]
-        if (ctx.measureText(testLine).width <= maxAddrLineWidth) {
-          line1 = testLine
-        } else {
-          line2 = words.slice(i).join(' ')
-          break
-        }
-      }
-      ctx.fillText(line1, textX, currentTextY)
-      currentTextY += 24 * scale
-      ctx.fillText(line2, textX, currentTextY)
-    } else {
-      ctx.fillText(fullAddr, textX, currentTextY)
-    }
-
-    // Baris 4: Koordinat GPS (18 * scale, Regular, #FFFFFF)
-    currentTextY += 24 * scale
-    ctx.font = `400 ${18 * scale}px sans-serif`
-    ctx.fillText(gpsCoords || '7.721269°S, 112.798141°E', textX, currentTextY)
-
-    ctx.restore()
-
-    // 4c. Baris Kode Foto (Di Bawah Rentang Garis Oranye)
-    const codeY = targetHeight - (36 * scale)
-    const codeX = 28 * scale
-
-    ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
-    ctx.shadowBlur = 4 * scale
-    ctx.shadowOffsetX = 1 * scale
-    ctx.shadowOffsetY = 1 * scale
-
-    // Ikon Perisai Centang Outline #FFFFFF (18 * scale)
-    const shieldW = 16 * scale
-    const shieldH = 18 * scale
-    const shieldX = codeX
-    const shieldY = codeY - (14 * scale)
-
-    ctx.strokeStyle = '#FFFFFF'
-    ctx.lineWidth = 1.8 * scale
-    ctx.beginPath()
-    ctx.moveTo(shieldX, shieldY)
-    ctx.lineTo(shieldX + shieldW, shieldY)
-    ctx.lineTo(shieldX + shieldW, shieldY + shieldH * 0.6)
-    ctx.quadraticCurveTo(shieldX + shieldW / 2, shieldY + shieldH, shieldX, shieldY + shieldH * 0.6)
-    ctx.closePath()
-    ctx.stroke()
-
-    // Centang dalam perisai
-    ctx.beginPath()
-    ctx.moveTo(shieldX + 4 * scale, shieldY + 8 * scale)
-    ctx.lineTo(shieldX + 7 * scale, shieldY + 11 * scale)
-    ctx.lineTo(shieldX + 12 * scale, shieldY + 5 * scale)
-    ctx.stroke()
-
-    // Teks: "Kode Foto: " + Kode Unik
-    ctx.fillStyle = '#FFFFFF'
-    ctx.font = `400 ${16 * scale}px sans-serif`
-    ctx.fillText('Kode Foto: ', codeX + shieldW + (10 * scale), codeY)
-
-    const labelWidth = ctx.measureText('Kode Foto: ').width
-    ctx.font = `700 ${16 * scale}px sans-serif`
-    ctx.fillStyle = '#E2E8F0'
-    ctx.fillText(timemarkCode, codeX + shieldW + (10 * scale) + labelWidth, codeY)
-
-    ctx.restore()
-
-    // -------------------------------------------------------------
     // OVERLAY 5: Watermark Timemark Kanan Bawah
     // -------------------------------------------------------------
     ctx.save()
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
     ctx.shadowBlur = 6 * scale
-    ctx.shadowOffsetX = 1 * scale
-    ctx.shadowOffsetY = 1 * scale
+    ctx.shadowOffsetX = 1.5 * scale
+    ctx.shadowOffsetY = 1.5 * scale
     ctx.textAlign = 'right'
 
     const stampRightX = targetWidth - (32 * scale)
