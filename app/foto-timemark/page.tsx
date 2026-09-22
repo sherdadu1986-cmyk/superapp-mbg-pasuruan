@@ -24,11 +24,11 @@ import { showToast } from '@/components/toast'
 export default function FotoTimemarkPage() {
   // Form State
   const [activity, setActivity] = useState('Apel Ka SPPG')
-  const [timeStr, setTimeStr] = useState('04:03')
-  const [dateStr, setDateStr] = useState('Kamis, 10 September 2026')
+  const [timeStr, setTimeStr] = useState('05:09')
+  const [dateStr, setDateStr] = useState('Kamis, 17 September 2026')
   const [address, setAddress] = useState('Wonorejo, Wonorejo, Pasuruan, Jawa Timur, 67173')
-  const [gpsCoords, setGpsCoords] = useState('7.721035°S, 112.797907°E')
-  const [timemarkCode, setTimemarkCode] = useState('PERYM941XXPHMD')
+  const [gpsCoords, setGpsCoords] = useState('7.721269°S, 112.798141°E')
+  const [timemarkCode, setTimemarkCode] = useState('3MR1PA66P1TC46')
 
   // Logo Toggles & Custom Logos
   const [showBgnLogo, setShowBgnLogo] = useState(true)
@@ -230,248 +230,278 @@ export default function FotoTimemarkPage() {
     const margin = 36 * scale
 
     // -------------------------------------------------------------
-    // OVERLAY 1: Mini Map & Location Pin Badge (Top-Left)
+    // OVERLAY 1: Peta Mini (Sudut Kiri Atas)
     // -------------------------------------------------------------
-    const mapBoxWidth = 260 * scale
-    const mapBoxHeight = 150 * scale
+    const mapBoxWidth = 230 * scale
+    const mapBoxHeight = 135 * scale
     const mapBoxX = margin
     const mapBoxY = margin
 
-    // Glass backdrop container for Map
+    // White rounded card background for map
     ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
-    ctx.shadowBlur = 16 * scale
-    ctx.shadowOffsetY = 6 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)'
+    ctx.shadowBlur = 12 * scale
+    ctx.shadowOffsetY = 4 * scale
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'
+    ctx.fillStyle = '#FFFFFF'
     ctx.beginPath()
-    ctx.roundRect(mapBoxX, mapBoxY, mapBoxWidth, mapBoxHeight, 16 * scale)
+    ctx.roundRect(mapBoxX, mapBoxY, mapBoxWidth, mapBoxHeight, 14 * scale)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)'
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.9)'
     ctx.lineWidth = 1.5 * scale
     ctx.stroke()
     ctx.restore()
 
-    // Draw Mini Map Texture or Radar Vector
+    // Map texture / vector roads clipped inside white box
     ctx.save()
     ctx.beginPath()
-    ctx.roundRect(mapBoxX + 8 * scale, mapBoxY + 8 * scale, mapBoxWidth - 16 * scale, mapBoxHeight - 40 * scale, 10 * scale)
+    ctx.roundRect(mapBoxX + 5 * scale, mapBoxY + 5 * scale, mapBoxWidth - 10 * scale, mapBoxHeight - 10 * scale, 10 * scale)
     ctx.clip()
 
     if (mapImgRef.current) {
-      ctx.drawImage(mapImgRef.current, mapBoxX + 8 * scale, mapBoxY + 8 * scale, mapBoxWidth - 16 * scale, mapBoxHeight - 40 * scale)
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.35)'
-      ctx.fillRect(mapBoxX + 8 * scale, mapBoxY + 8 * scale, mapBoxWidth - 16 * scale, mapBoxHeight - 40 * scale)
+      ctx.drawImage(mapImgRef.current, mapBoxX + 5 * scale, mapBoxY + 5 * scale, mapBoxWidth - 10 * scale, mapBoxHeight - 10 * scale)
     } else {
-      ctx.fillStyle = '#0f172a'
-      ctx.fillRect(mapBoxX + 8 * scale, mapBoxY + 8 * scale, mapBoxWidth - 16 * scale, mapBoxHeight - 40 * scale)
+      ctx.fillStyle = '#f1f5f9'
+      ctx.fillRect(mapBoxX + 5 * scale, mapBoxY + 5 * scale, mapBoxWidth - 10 * scale, mapBoxHeight - 10 * scale)
+      
+      // Vector road illustration
+      ctx.strokeStyle = '#cbd5e1'
+      ctx.lineWidth = 6 * scale
+      ctx.beginPath()
+      ctx.moveTo(mapBoxX, mapBoxY + 40 * scale)
+      ctx.lineTo(mapBoxX + mapBoxWidth, mapBoxY + 90 * scale)
+      ctx.moveTo(mapBoxX + 70 * scale, mapBoxY)
+      ctx.lineTo(mapBoxX + 110 * scale, mapBoxY + mapBoxHeight)
+      ctx.stroke()
     }
 
-    // Mini Map Radar Crosshairs
-    const centerX = mapBoxX + mapBoxWidth / 2
-    const centerY = mapBoxY + (mapBoxHeight - 32 * scale) / 2
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)'
-    ctx.lineWidth = 1 * scale
-    ctx.beginPath()
-    ctx.arc(centerX, centerY, 24 * scale, 0, Math.PI * 2)
-    ctx.arc(centerX, centerY, 44 * scale, 0, Math.PI * 2)
-    ctx.stroke()
+    // Blue Location Pin Dot with Light Green Radar Ripple Circles
+    const pinX = mapBoxX + mapBoxWidth / 2
+    const pinY = mapBoxY + (mapBoxHeight / 2) - 4 * scale
 
-    // GPS Pin Marker Icon (Red Pin with Pulsing Circle)
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)'
+    // Light Green Radar Ripple Circles (#22c55e / #4ade80)
+    ctx.fillStyle = 'rgba(74, 222, 128, 0.35)'
     ctx.beginPath()
-    ctx.arc(centerX, centerY, 14 * scale, 0, Math.PI * 2)
+    ctx.arc(pinX, pinY, 26 * scale, 0, Math.PI * 2)
     ctx.fill()
 
-    ctx.fillStyle = '#EF4444'
+    ctx.fillStyle = 'rgba(34, 197, 94, 0.55)'
     ctx.beginPath()
-    ctx.arc(centerX, centerY, 7 * scale, 0, Math.PI * 2)
+    ctx.arc(pinX, pinY, 15 * scale, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Blue Location Pin Dot
+    ctx.fillStyle = '#2563EB' // Bright Blue Pin
+    ctx.beginPath()
+    ctx.arc(pinX, pinY, 7.5 * scale, 0, Math.PI * 2)
     ctx.fill()
     ctx.strokeStyle = '#FFFFFF'
-    ctx.lineWidth = 2 * scale
+    ctx.lineWidth = 2.5 * scale
     ctx.stroke()
+
+    // Angled "Peta" label on edge
+    ctx.font = `italic 700 ${11 * scale}px sans-serif`
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.7)'
+    ctx.textAlign = 'right'
+    ctx.fillText('Peta', mapBoxX + mapBoxWidth - 12 * scale, mapBoxY + mapBoxHeight - 12 * scale)
     ctx.restore()
 
-    // Map Label Badge
-    ctx.fillStyle = '#FFFFFF'
-    ctx.font = `900 ${11 * scale}px sans-serif`
-    ctx.textAlign = 'left'
-    ctx.fillText('MAP GPS LIVE', mapBoxX + 16 * scale, mapBoxY + mapBoxHeight - 12 * scale)
-
-    // Live Indicator Green Dot
-    ctx.fillStyle = '#22C55E'
-    ctx.beginPath()
-    ctx.arc(mapBoxX + mapBoxWidth - 20 * scale, mapBoxY + mapBoxHeight - 16 * scale, 4 * scale, 0, Math.PI * 2)
-    ctx.fill()
-
     // -------------------------------------------------------------
-    // OVERLAY 2: Vertical White Text (Right Side)
+    // OVERLAY 2: Teks Vertikal Sisi Kanan (Watermark Timemark Verified)
     // -------------------------------------------------------------
     ctx.save()
-    ctx.translate(targetWidth - (18 * scale), targetHeight / 2)
+    ctx.translate(targetWidth - (24 * scale), targetHeight / 2)
     ctx.rotate(-Math.PI / 2)
-    ctx.font = `700 ${15 * scale}px sans-serif`
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+    ctx.font = `700 ${16 * scale}px sans-serif`
+    ctx.fillStyle = '#FFFFFF'
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
+    ctx.shadowBlur = 4 * scale
+    ctx.shadowOffsetX = 1 * scale
+    ctx.shadowOffsetY = 1 * scale
     ctx.textAlign = 'center'
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
-    ctx.shadowBlur = 6 * scale
     ctx.fillText(`© ${timemarkCode} Timemark Verified`, 0, 0)
     ctx.restore()
 
     // -------------------------------------------------------------
-    // OVERLAY 3: White Card & Info Overlay (Bottom-Left)
+    // OVERLAY 3: Kotak Putih Kiri Bawah (HANYA UNTUK JAM & LOGO)
     // -------------------------------------------------------------
-    const cardWidth = Math.min(680 * scale, targetWidth * 0.55)
-    const cardX = margin
-    const cardY = targetHeight - (280 * scale)
+    const timeFontSize = 46 * scale
+    ctx.font = `900 ${timeFontSize}px sans-serif`
+    const timeText = timeStr || '05:09'
+    const timeWidth = ctx.measureText(timeText).width
 
-    // Semi-transparent White Card Background
+    let logoCount = 0
+    if (showBgnLogo && bgnLogoRef.current) logoCount++
+    if (showRegionalLogo && regionalLogoRef.current) logoCount++
+    if (customLogoUrl && customLogoRef.current) logoCount++
+
+    const logoSize = 42 * scale
+    const logoSpacing = 10 * scale
+    const logosTotalWidth = logoCount > 0 ? (logoCount * logoSize) + ((logoCount - 1) * logoSpacing) : 0
+
+    const hasActivity = Boolean(activity && activity.trim())
+    let activityBadgeWidth = 0
+    if (hasActivity) {
+      ctx.font = `800 ${12 * scale}px sans-serif`
+      activityBadgeWidth = Math.max(90 * scale, ctx.measureText(activity.toUpperCase()).width + (20 * scale))
+    }
+
+    const cardPaddingX = 18 * scale
+    const whiteBoxWidth = cardPaddingX + (hasActivity ? activityBadgeWidth + (14 * scale) : 0) + timeWidth + (logosTotalWidth > 0 ? (24 * scale) + logosTotalWidth : 0) + cardPaddingX
+    const whiteBoxHeight = 74 * scale
+
+    // Position of white box: bottom left, leaving room for detail text underneath
+    const whiteBoxX = margin
+    const whiteBoxY = targetHeight - (240 * scale)
+
+    // Draw CLEAN WHITE (#FFFFFF) Rounded Box
     ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)'
-    ctx.shadowBlur = 24 * scale
-    ctx.shadowOffsetY = 10 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)'
+    ctx.shadowBlur = 16 * scale
+    ctx.shadowOffsetY = 6 * scale
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)'
+    ctx.fillStyle = '#FFFFFF'
     ctx.beginPath()
-    ctx.roundRect(cardX, cardY, cardWidth, 230 * scale, 20 * scale)
+    ctx.roundRect(whiteBoxX, whiteBoxY, whiteBoxWidth, whiteBoxHeight, 14 * scale)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
-    ctx.lineWidth = 2 * scale
-    ctx.stroke()
     ctx.restore()
 
-    // 3a. Activity Pill Badge (Yellow/Orange)
-    const badgeX = cardX + (20 * scale)
-    const badgeY = cardY + (18 * scale)
-    ctx.fillStyle = '#EAB308' // Vivid Yellow/Orange
-    ctx.beginPath()
-    ctx.roundRect(badgeX, badgeY, 180 * scale, 30 * scale, 8 * scale)
-    ctx.fill()
+    // Draw elements INSIDE the white box
+    let currX = whiteBoxX + cardPaddingX
 
-    ctx.fillStyle = '#0F172A'
-    ctx.font = `900 ${13 * scale}px sans-serif`
-    ctx.textAlign = 'center'
-    ctx.fillText((activity || 'Apel Ka SPPG').toUpperCase(), badgeX + (90 * scale), badgeY + (20 * scale))
+    // 3a. Activity Badge (Yellow/Orange #f59e0b) if present
+    if (hasActivity) {
+      const badgeY = whiteBoxY + (16 * scale)
+      const badgeH = whiteBoxHeight - (32 * scale)
 
-    // 3b. Large Blue Time Display
-    ctx.fillStyle = '#1D4ED8' // Royal Blue
-    ctx.font = `900 ${62 * scale}px sans-serif`
+      ctx.fillStyle = '#f59e0b'
+      ctx.beginPath()
+      ctx.roundRect(currX, badgeY, activityBadgeWidth, badgeH, 6 * scale)
+      ctx.fill()
+
+      ctx.fillStyle = '#0f172a'
+      ctx.font = `900 ${11 * scale}px sans-serif`
+      ctx.textAlign = 'center'
+      ctx.fillText(activity.toUpperCase(), currX + (activityBadgeWidth / 2), badgeY + (badgeH / 2) + (4 * scale))
+
+      currX += activityBadgeWidth + (14 * scale)
+    }
+
+    // 3b. Angka Jam (Biru Tua Navy #0b2246)
+    ctx.fillStyle = '#0b2246'
+    ctx.font = `900 ${timeFontSize}px sans-serif`
     ctx.textAlign = 'left'
-    ctx.shadowColor = 'rgba(29, 78, 216, 0.15)'
-    ctx.shadowBlur = 8 * scale
-    ctx.fillText(timeStr || '04:03', cardX + (20 * scale), cardY + (100 * scale))
+    ctx.fillText(timeText, currX, whiteBoxY + (52 * scale))
 
-    // 3c. Official Logos Side-by-Side inside card
-    let logoOffset = cardX + cardWidth - (24 * scale)
-    const logoSize = 46 * scale
+    currX += timeWidth + (24 * scale)
 
+    // 3c. Side-by-side Logos inside white box
     if (showBgnLogo && bgnLogoRef.current) {
-      logoOffset -= logoSize
-      ctx.drawImage(bgnLogoRef.current, logoOffset, cardY + (18 * scale), logoSize, logoSize)
-      logoOffset -= (12 * scale)
+      const logoY = whiteBoxY + (whiteBoxHeight - logoSize) / 2
+      ctx.drawImage(bgnLogoRef.current, currX, logoY, logoSize, logoSize)
+      currX += logoSize + logoSpacing
     }
 
     if (showRegionalLogo && regionalLogoRef.current) {
-      logoOffset -= logoSize
-      ctx.drawImage(regionalLogoRef.current, logoOffset, cardY + (18 * scale), logoSize, logoSize)
-      logoOffset -= (12 * scale)
+      const logoY = whiteBoxY + (whiteBoxHeight - logoSize) / 2
+      ctx.drawImage(regionalLogoRef.current, currX, logoY, logoSize, logoSize)
+      currX += logoSize + logoSpacing
     }
 
     if (customLogoUrl && customLogoRef.current) {
-      logoOffset -= logoSize
-      ctx.drawImage(customLogoRef.current, logoOffset, cardY + (18 * scale), logoSize, logoSize)
+      const logoY = whiteBoxY + (whiteBoxHeight - logoSize) / 2
+      ctx.drawImage(customLogoRef.current, currX, logoY, logoSize, logoSize)
+      currX += logoSize + logoSpacing
     }
 
     // -------------------------------------------------------------
-    // OVERLAY 4: High Contrast White Detail Text below card
+    // OVERLAY 4: Teks Informasi di Bawah Jam (TRANSPARAN DI ATAS FOTO)
     // -------------------------------------------------------------
-    const textStartX = cardX + (20 * scale)
-    let textY = cardY + (130 * scale)
+    const textStartY = whiteBoxY + whiteBoxHeight + (18 * scale)
+    const textLineHeight = 24 * scale
+    const totalLines = 4
+    const lineBarHeight = (totalLines * textLineHeight) - (6 * scale)
 
+    // 4a. Garis Vertikal Oranye tebal (#f59e0b) di sebelah kiri blok teks
+    const lineX = margin + (2 * scale)
+    ctx.fillStyle = '#f59e0b'
+    ctx.beginPath()
+    ctx.roundRect(lineX, textStartY - (12 * scale), 4.5 * scale, lineBarHeight, 2 * scale)
+    ctx.fill()
+
+    // Setup high contrast drop shadow for all text over photo
     ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)'
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
     ctx.shadowBlur = 4 * scale
+    ctx.shadowOffsetX = 1 * scale
+    ctx.shadowOffsetY = 1 * scale
+    ctx.fillStyle = '#FFFFFF'
 
-    // Date Text (Bold)
-    ctx.fillStyle = '#0F172A'
-    ctx.font = `800 ${16 * scale}px sans-serif`
-    ctx.textAlign = 'left'
-    ctx.fillText(dateStr || 'Kamis, 10 September 2026', textStartX, textY)
+    const textX = lineX + (16 * scale)
+    let currentTextY = textStartY
 
-    // Address Text (Truncated gracefully if too long)
-    textY += (24 * scale)
-    ctx.fillStyle = '#334155'
-    ctx.font = `600 ${13 * scale}px sans-serif`
-    const maxAddrWidth = cardWidth - (40 * scale)
-    let displayAddr = address || 'Wonorejo, Wonorejo, Pasuruan, Jawa Timur, 67173'
-    if (ctx.measureText(displayAddr).width > maxAddrWidth) {
-      while (displayAddr.length > 5 && ctx.measureText(displayAddr + '...').width > maxAddrWidth) {
-        displayAddr = displayAddr.slice(0, -1)
-      }
-      displayAddr += '...'
-    }
-    ctx.fillText(displayAddr, textStartX, textY)
+    // Baris 1: Tarikh / Hari (Font Bold)
+    ctx.font = `700 ${17 * scale}px sans-serif`
+    ctx.fillText(dateStr || 'Kamis, 17 September 2026', textX, currentTextY)
 
-    // GPS Coordinates Text
-    textY += (22 * scale)
-    ctx.fillStyle = '#475569'
-    ctx.font = `700 ${13 * scale}px sans-serif`
-    ctx.fillText(gpsCoords || '7.721035°S, 112.797907°E', textStartX, textY)
+    // Baris 2: Alamat Lengkap (Font Reguler)
+    currentTextY += textLineHeight
+    ctx.font = `400 ${14 * scale}px sans-serif`
+    ctx.fillText(address || 'Wonorejo, Wonorejo, Pasuruan, Jawa Timur, 67173', textX, currentTextY)
 
-    // Timemark Photo Code Stamp Line
-    textY += (24 * scale)
-    ctx.fillStyle = '#1E293B'
-    ctx.font = `800 ${13 * scale}px sans-serif`
-    ctx.fillText(`Kode Foto: ${timemarkCode}`, textStartX, textY)
+    // Baris 3: Koordinat GPS (Font Reguler)
+    currentTextY += textLineHeight
+    ctx.font = `400 ${14 * scale}px sans-serif`
+    ctx.fillText(gpsCoords || '7.721269°S, 112.798141°E', textX, currentTextY)
+
+    // Baris 4: Kode Foto (Dengan ikon pelindung/check badge)
+    currentTextY += textLineHeight
+
+    const badgeIconRadius = 8 * scale
+    const badgeIconX = textX + badgeIconRadius
+    const badgeIconY = currentTextY - (5 * scale)
+
+    ctx.fillStyle = '#22C55E'
+    ctx.beginPath()
+    ctx.arc(badgeIconX, badgeIconY, badgeIconRadius, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.strokeStyle = '#FFFFFF'
+    ctx.lineWidth = 1.8 * scale
+    ctx.beginPath()
+    ctx.moveTo(badgeIconX - (3 * scale), badgeIconY)
+    ctx.lineTo(badgeIconX - (0.5 * scale), badgeIconY + (2.5 * scale))
+    ctx.lineTo(badgeIconX + (4 * scale), badgeIconY - (2.5 * scale))
+    ctx.stroke()
+
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = `700 ${14 * scale}px sans-serif`
+    ctx.fillText(`Kode Foto: ${timemarkCode}`, textX + (badgeIconRadius * 2) + (8 * scale), currentTextY)
+
     ctx.restore()
 
     // -------------------------------------------------------------
-    // OVERLAY 5: Brand Stamp (Bottom-Right Corner)
+    // OVERLAY 5: Logo Timemark Kanan Bawah (TANPA KOTAK BACKGROUND HITAM!)
     // -------------------------------------------------------------
-    const stampWidth = 270 * scale
-    const stampHeight = 44 * scale
-    const stampX = targetWidth - stampWidth - margin
-    const stampY = targetHeight - stampHeight - margin
+    const stampX = targetWidth - margin - (200 * scale)
+    const stampY = targetHeight - margin - (35 * scale)
 
     ctx.save()
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
-    ctx.shadowBlur = 12 * scale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'
+    ctx.shadowBlur = 6 * scale
+    ctx.shadowOffsetX = 1 * scale
+    ctx.shadowOffsetY = 1 * scale
 
-    // Pill background
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)'
-    ctx.beginPath()
-    ctx.roundRect(stampX, stampY, stampWidth, stampHeight, 22 * scale)
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)'
-    ctx.lineWidth = 1.5 * scale
-    ctx.stroke()
-
-    // Green Checkmark Icon Badge
-    const checkRadius = 13 * scale
-    const checkX = stampX + (22 * scale)
-    const checkY = stampY + (stampHeight / 2)
-
-    ctx.fillStyle = '#22C55E' // Emerald Green
-    ctx.beginPath()
-    ctx.arc(checkX, checkY, checkRadius, 0, Math.PI * 2)
-    ctx.fill()
-
-    // White Checkmark path
-    ctx.strokeStyle = '#FFFFFF'
-    ctx.lineWidth = 2.5 * scale
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.beginPath()
-    ctx.moveTo(checkX - (5 * scale), checkY)
-    ctx.lineTo(checkX - (1 * scale), checkY + (4 * scale))
-    ctx.lineTo(checkX + (6 * scale), checkY - (4 * scale))
-    ctx.stroke()
-
-    // Brand Text
-    ctx.fillStyle = '#FFFFFF'
-    ctx.font = `800 ${12 * scale}px sans-serif`
+    // Tulisan Atas: "Timemark" warna KUNING TERANG (#facc15), font tebal
+    ctx.fillStyle = '#facc15'
+    ctx.font = `900 ${28 * scale}px sans-serif`
     ctx.textAlign = 'left'
-    ctx.fillText('Timemark - Foto 100% akurat', stampX + (44 * scale), stampY + (26 * scale))
+    ctx.fillText('Timemark', stampX, stampY)
+
+    // Tulisan Bawah: "Foto 100% akurat" warna PUTIH (#ffffff), font reguler
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = `500 ${14 * scale}px sans-serif`
+    ctx.fillText('Foto 100% akurat', stampX, stampY + (20 * scale))
     ctx.restore()
 
   }, [activity, timeStr, dateStr, address, gpsCoords, timemarkCode, showBgnLogo, showRegionalLogo, customLogoUrl, bgImageUrl])
