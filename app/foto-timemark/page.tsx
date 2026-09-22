@@ -21,6 +21,55 @@ import {
 } from 'lucide-react'
 import { showToast } from '@/components/toast'
 
+// Helper to parse GPS coordinate string into numeric lat and lng
+function parseGpsCoords(coordsStr: string): { lat: number; lng: number } {
+  let lat = -7.721269
+  let lng = 112.798141
+
+  if (!coordsStr || !coordsStr.trim()) return { lat, lng }
+
+  try {
+    const parts = coordsStr.split(',')
+    if (parts.length >= 2) {
+      const latPart = parts[0].trim()
+      const lngPart = parts[1].trim()
+
+      const latMatch = latPart.match(/(-?\d+(?:\.\d+)?)/)
+      if (latMatch) {
+        let val = parseFloat(latMatch[1])
+        if (latPart.toUpperCase().includes('S') && val > 0) val = -val
+        lat = val
+      }
+
+      const lngMatch = lngPart.match(/(-?\d+(?:\.\d+)?)/)
+      if (lngMatch) {
+        let val = parseFloat(lngMatch[1])
+        if (lngPart.toUpperCase().includes('W') && val > 0) val = -val
+        lng = val
+      }
+    }
+  } catch (e) {
+    console.warn('GPS coordinate parse notice:', e)
+  }
+
+  return { lat, lng }
+}
+
+// Helper to convert lat/lng to OpenStreetMap tile X, Y at specified zoom level
+function getTileXY(lat: number, lon: number, zoom: number = 16) {
+  const x = Math.floor(((lon + 180) / 360) * Math.pow(2, zoom))
+  const y = Math.floor(
+    ((1 -
+      Math.log(
+        Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)
+      ) /
+        Math.PI) /
+      2) *
+      Math.pow(2, zoom)
+  )
+  return { x, y }
+}
+
 export default function FotoTimemarkPage() {
   // Form State
   const [activity, setActivity] = useState('Apel Ka SPPG')
@@ -208,6 +257,14 @@ export default function FotoTimemarkPage() {
       }
     }
 
+    // Parse GPS Coordinates dynamically to fetch static map tile
+    const { lat: currentLat, lng: currentLng } = parseGpsCoords(gpsCoords)
+    const tileZoom = 16
+    const { x: tileX, y: tileY } = getTileXY(currentLat, currentLng, tileZoom)
+    const mapTileUrl = `https://tile.openstreetmap.org/${tileZoom}/${tileX}/${tileY}.png`
+
+    let dynamicMapTileImg: HTMLImageElement | null = null
+
     // Load Logos & Map Images asynchronously
     try {
       if (showBgnLogo && !bgnLogoRef.current) {
@@ -222,15 +279,17 @@ export default function FotoTimemarkPage() {
       if (!mapImgRef.current) {
         mapImgRef.current = await loadImage('/peta.png').catch(() => null)
       }
+      // Dynamic OSM tile with CORS
+      dynamicMapTileImg = await loadImage(mapTileUrl).catch(() => null)
     } catch (e) {
-      console.warn('Logo preloading notice:', e)
+      console.warn('Image preloading notice:', e)
     }
 
     const scale = targetWidth / 1440
     const margin = 36 * scale
 
     // -------------------------------------------------------------
-    // OVERLAY 1: Peta Mini (Sudut Kiri Atas)
+    // OVERLAY 1: Peta Mini (Sudut Kiri Atas) - Dinamis GPS
     // -------------------------------------------------------------
     const mapBoxWidth = 230 * scale
     const mapBoxHeight = 135 * scale
@@ -258,7 +317,9 @@ export default function FotoTimemarkPage() {
     ctx.roundRect(mapBoxX + 5 * scale, mapBoxY + 5 * scale, mapBoxWidth - 10 * scale, mapBoxHeight - 10 * scale, 10 * scale)
     ctx.clip()
 
-    if (mapImgRef.current) {
+    if (dynamicMapTileImg) {
+      ctx.drawImage(dynamicMapTileImg, mapBoxX + 5 * scale, mapBoxY + 5 * scale, mapBoxWidth - 10 * scale, mapBoxHeight - 10 * scale)
+    } else if (mapImgRef.current) {
       ctx.drawImage(mapImgRef.current, mapBoxX + 5 * scale, mapBoxY + 5 * scale, mapBoxWidth - 10 * scale, mapBoxHeight - 10 * scale)
     } else {
       ctx.fillStyle = '#f1f5f9'
@@ -275,7 +336,7 @@ export default function FotoTimemarkPage() {
       ctx.stroke()
     }
 
-    // Blue Location Pin Dot with Light Green Radar Ripple Circles
+    // Blue Location Pin Dot (#0284c7) with Light Green Radar Halo
     const pinX = mapBoxX + mapBoxWidth / 2
     const pinY = mapBoxY + (mapBoxHeight / 2) - 4 * scale
 
@@ -290,8 +351,8 @@ export default function FotoTimemarkPage() {
     ctx.arc(pinX, pinY, 15 * scale, 0, Math.PI * 2)
     ctx.fill()
 
-    // Blue Location Pin Dot
-    ctx.fillStyle = '#2563EB' // Bright Blue Pin
+    // Bright Blue Location Pin Dot (#0284c7)
+    ctx.fillStyle = '#0284c7'
     ctx.beginPath()
     ctx.arc(pinX, pinY, 7.5 * scale, 0, Math.PI * 2)
     ctx.fill()
@@ -301,7 +362,7 @@ export default function FotoTimemarkPage() {
 
     // Angled "Peta" label on edge
     ctx.font = `italic 700 ${11 * scale}px sans-serif`
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.7)'
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)'
     ctx.textAlign = 'right'
     ctx.fillText('Peta', mapBoxX + mapBoxWidth - 12 * scale, mapBoxY + mapBoxHeight - 12 * scale)
     ctx.restore()
