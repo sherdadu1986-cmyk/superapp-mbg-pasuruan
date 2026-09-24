@@ -100,7 +100,7 @@ export default function CetakLembarDistribusiPage() {
     return `${hh}:${mm} WIB`
   }, [])
 
-  const { sekolahRows, posyanduRows, sekolahTotals, posyanduTotals, grandTotal, holidayKpmNames, aktifCount } = useMemo(() => {
+  const { sekolahRuteKiri, sekolahRuteKanan, subtotalKiri, subtotalKanan, sekolahRows, posyanduRows, sekolahTotals, posyanduTotals, grandTotal, holidayKpmNames, aktifCount } = useMemo(() => {
     const sortedData = sortKpmList(kpmData)
 
     const sekolahList: KelompokPenerimaManfaat[] = []
@@ -125,12 +125,26 @@ export default function CetakLembarDistribusiPage() {
     let sekolahTendik = 0
     let sekolahActive = 0
 
-    const processedSekolah: Array<{
+    const sekolahRuteKiri: Array<{
       no: number
       id: string
       nama: string
       kode: string
-      rute: 'Kiri' | 'Kanan'
+      rute: 'Kiri'
+      noHpPic: string
+      total: number
+      porsiKecil: number
+      porsiSiswaBesar: number
+      guruTendik: number
+      isLibur: boolean
+    }> = []
+
+    const sekolahRuteKanan: Array<{
+      no: number
+      id: string
+      nama: string
+      kode: string
+      rute: 'Kanan'
       noHpPic: string
       total: number
       porsiKecil: number
@@ -172,50 +186,69 @@ export default function CetakLembarDistribusiPage() {
 
       if (ruteFilter !== 'ALL' && rute !== ruteFilter) return
 
+      const breakdown = calculateKpmPortion(item)
+      const t = isLibur ? 0 : breakdown.total
+      const k = isLibur ? 0 : breakdown.porsiKecil
+      const tend = isLibur ? 0 : breakdown.tendik
+      const sb = isLibur ? 0 : breakdown.siswaBesar
+
       if (isLibur) {
         if (!holidayNames.includes(item.nama)) holidayNames.push(item.nama)
-        processedSekolah.push({
-          no: processedSekolah.length + 1,
-          id: itemKey,
-          nama: item.nama,
-          kode: item.identitas_npsn_tmp || item.kode || item.id || '',
-          rute,
-          noHpPic,
-          total: 0,
-          porsiKecil: 0,
-          porsiSiswaBesar: 0,
-          guruTendik: 0,
-          isLibur: true
-        })
-        return
+      } else {
+        sekolahActive += 1
       }
-
-      sekolahActive += 1
-      const breakdown = calculateKpmPortion(item)
-      const t = breakdown.total
-      const k = breakdown.porsiKecil
-      const tend = breakdown.tendik
-      const sb = breakdown.siswaBesar
 
       sekolahTotal += t
       sekolahKecil += k
       sekolahSiswaBesar += sb
       sekolahTendik += tend
 
-      processedSekolah.push({
-        no: processedSekolah.length + 1,
-        id: itemKey,
-        nama: item.nama,
-        kode: item.identitas_npsn_tmp || item.kode || item.id || '',
-        rute,
-        noHpPic,
-        total: t,
-        porsiKecil: k,
-        porsiSiswaBesar: sb,
-        guruTendik: tend,
-        isLibur: false
-      })
+      if (rute === 'Kiri') {
+        sekolahRuteKiri.push({
+          no: sekolahRuteKiri.length + 1,
+          id: itemKey,
+          nama: item.nama,
+          kode: item.identitas_npsn_tmp || item.kode || item.id || '',
+          rute: 'Kiri',
+          noHpPic,
+          total: t,
+          porsiKecil: k,
+          porsiSiswaBesar: sb,
+          guruTendik: tend,
+          isLibur
+        })
+      } else {
+        sekolahRuteKanan.push({
+          no: sekolahRuteKanan.length + 1,
+          id: itemKey,
+          nama: item.nama,
+          kode: item.identitas_npsn_tmp || item.kode || item.id || '',
+          rute: 'Kanan',
+          noHpPic,
+          total: t,
+          porsiKecil: k,
+          porsiSiswaBesar: sb,
+          guruTendik: tend,
+          isLibur
+        })
+      }
     })
+
+    const subtotalKiri = {
+      total: sekolahRuteKiri.reduce((acc, s) => acc + s.total, 0),
+      kecil: sekolahRuteKiri.reduce((acc, s) => acc + s.porsiKecil, 0),
+      siswa: sekolahRuteKiri.reduce((acc, s) => acc + s.porsiSiswaBesar, 0),
+      tendik: sekolahRuteKiri.reduce((acc, s) => acc + s.guruTendik, 0),
+      activeCount: sekolahRuteKiri.filter(s => !s.isLibur).length
+    }
+
+    const subtotalKanan = {
+      total: sekolahRuteKanan.reduce((acc, s) => acc + s.total, 0),
+      kecil: sekolahRuteKanan.reduce((acc, s) => acc + s.porsiKecil, 0),
+      siswa: sekolahRuteKanan.reduce((acc, s) => acc + s.porsiSiswaBesar, 0),
+      tendik: sekolahRuteKanan.reduce((acc, s) => acc + s.guruTendik, 0),
+      activeCount: sekolahRuteKanan.filter(s => !s.isLibur).length
+    }
 
     // Process Posyandu List
     let posyanduTotal = 0
@@ -290,7 +323,11 @@ export default function CetakLembarDistribusiPage() {
     })
 
     return {
-      sekolahRows: processedSekolah,
+      sekolahRuteKiri,
+      sekolahRuteKanan,
+      subtotalKiri,
+      subtotalKanan,
+      sekolahRows: [...sekolahRuteKiri, ...sekolahRuteKanan],
       posyanduRows: processedPosyandu,
       sekolahTotals: { total: sekolahTotal, kecil: sekolahKecil, siswaBesar: sekolahSiswaBesar, tendik: sekolahTendik, active: sekolahActive },
       posyanduTotals: { total: posyanduTotal, balita: posyanduBalita, bumil: posyanduBumil, busui: posyanduBusui, active: posyanduActive },
@@ -444,100 +481,222 @@ export default function CetakLembarDistribusiPage() {
             </div>
           </div>
 
-          {/* 3. TABEL 1: LEMBAGA SEKOLAH */}
-          <div className="space-y-1">
-            <div className="text-[10px] font-bold text-[#0e2a5c] uppercase tracking-wider flex justify-between items-center">
-              <span>TABEL 1: LEMBAGA SEKOLAH ({sekolahRows.length} Titik)</span>
-              <span className="font-mono text-slate-700">Subtotal: {sekolahTotals.total.toLocaleString('id-ID')} Porsi</span>
-            </div>
-            <div className="border border-slate-400 rounded overflow-hidden">
-              <table className="w-full border-collapse text-[9.5px]">
-                <thead className="bg-[#0e2a5c] text-white font-bold text-[9px] uppercase tracking-wider">
-                  <tr>
-                    <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-7">NO</th>
-                    <th rowSpan={2} className="border border-slate-600 py-1.5 px-2 text-left">NAMA LEMBAGA SEKOLAH</th>
-                    <th rowSpan={2} className="border border-slate-600 py-1.5 px-1 text-center w-12">STATUS</th>
-                    <th rowSpan={2} className="border border-slate-600 py-1.5 px-1 text-center w-12">RUTE</th>
-                    <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-20">NO HP PIC</th>
-                    <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-right w-14">TOTAL</th>
-                    <th colSpan={3} className="border border-slate-600 py-1 px-1 text-center uppercase tracking-wide">PORSI</th>
-                  </tr>
-                  <tr className="bg-[#0e2a5c] text-white text-[8.5px]">
-                    <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-amber-300">KECIL</th>
-                    <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-blue-300">SISWA</th>
-                    <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-white">TENDIK</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
-                  {sekolahRows.length > 0 ? (
-                    sekolahRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={row.isLibur ? 'bg-rose-50 text-slate-400' : 'bg-white hover:bg-slate-50'}
-                      >
-                        <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] border border-slate-300">{row.no}</td>
-                        <td className="py-0.5 px-2 font-semibold border border-slate-300">
-                          {row.isLibur ? (
-                            <>
-                              <span className="line-through">{row.nama}</span>
-                              <span className="ml-1.5 text-[7.5px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
-                                [LIBUR - 0 PORSI]
-                              </span>
-                            </>
-                          ) : (
-                            row.nama
-                          )}
+          {/* 3. TABEL 1: LEMBAGA SEKOLAH (TERPISAH PER RUTE) */}
+          <div className="space-y-4">
+            {/* 3A. SUB-TABEL 1A: DISTRIBUSI SEKOLAH - RUTE KIRI (ARMADA 1) */}
+            {(ruteFilter === 'ALL' || ruteFilter === 'Kiri') && (
+              <div className="space-y-1 print-table-container" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                <div className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex justify-between items-center bg-blue-50 px-2.5 py-1 border border-blue-200 rounded-t">
+                  <span className="flex items-center gap-1.5 font-extrabold text-blue-950">
+                    🚚 TABEL 1A: LEMBAGA SEKOLAH - RUTE KIRI ({sekolahRuteKiri.length} TITIK)
+                  </span>
+                  <span className="font-mono text-[9.5px] bg-blue-100 text-blue-950 px-2 py-0.5 rounded border border-blue-300 font-bold">
+                    Subtotal: {subtotalKiri.total.toLocaleString('id-ID')} Porsi
+                  </span>
+                </div>
+                <div className="border border-slate-400 rounded-b overflow-hidden">
+                  <table className="w-full border-collapse text-[9.5px]">
+                    <thead className="bg-[#0e2a5c] text-white font-bold text-[9px] uppercase tracking-wider">
+                      <tr>
+                        <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-7">NO</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1.5 px-2 text-left">NAMA LEMBAGA SEKOLAH</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1.5 px-1 text-center w-12">STATUS</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-center w-20">NO HP PIC</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1.5 px-1.5 text-right w-14">TOTAL</th>
+                        <th colSpan={3} className="border border-slate-600 py-1 px-1 text-center uppercase tracking-wide">PORSI</th>
+                      </tr>
+                      <tr className="bg-[#0e2a5c] text-white text-[8.5px]">
+                        <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-amber-300">KECIL</th>
+                        <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-blue-300">SISWA</th>
+                        <th className="border border-slate-600 py-1 px-1.5 text-right w-14 text-white">TENDIK</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
+                      {sekolahRuteKiri.length > 0 ? (
+                        sekolahRuteKiri.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={row.isLibur ? 'bg-rose-50 text-slate-400' : 'bg-white hover:bg-blue-50/30'}
+                          >
+                            <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] border border-slate-300">{row.no}</td>
+                            <td className="py-0.5 px-2 font-semibold border border-slate-300">
+                              {row.isLibur ? (
+                                <>
+                                  <span className="line-through">{row.nama}</span>
+                                  <span className="ml-1.5 text-[7.5px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
+                                    [LIBUR - 0 PORSI]
+                                  </span>
+                                </>
+                              ) : (
+                                row.nama
+                              )}
+                            </td>
+                            <td className="py-0.5 px-1 text-center border border-slate-300 text-[8.5px]">
+                              {row.isLibur ? <span className="text-rose-700 font-bold">Libur</span> : <span className="text-emerald-700 font-bold">Aktif</span>}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] text-slate-700 border border-slate-300">
+                              {row.noHpPic || '-'}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right font-bold border border-slate-300">
+                              {row.isLibur ? 0 : row.total.toLocaleString('id-ID')}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right text-amber-700 font-bold border border-slate-300">
+                              {row.isLibur ? '-' : row.porsiKecil > 0 ? row.porsiKecil.toLocaleString('id-ID') : '-'}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right text-blue-700 font-bold border border-slate-300">
+                              {row.isLibur ? '-' : row.porsiSiswaBesar > 0 ? row.porsiSiswaBesar.toLocaleString('id-ID') : '-'}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right font-medium border border-slate-300">
+                              {row.isLibur ? '-' : row.guruTendik > 0 ? row.guruTendik.toLocaleString('id-ID') : '-'}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={8} className="py-2 text-center text-slate-400 italic border border-slate-300">
+                            Tidak ada data sekolah di Rute Kiri.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-[#0e2a5c] text-white font-bold text-[9.5px]">
+                        <td colSpan={4} className="border border-slate-600 py-1 px-2 text-left tracking-wider">
+                          SUBTOTAL RUTE KIRI ({subtotalKiri.activeCount} LEMBAGA AKTIF)
                         </td>
-                        <td className="py-0.5 px-1 text-center border border-slate-300 text-[8.5px]">
-                          {row.isLibur ? <span className="text-rose-700 font-bold">Libur</span> : <span className="text-emerald-700 font-bold">Aktif</span>}
+                        <td className="border border-slate-600 py-1 px-1.5 text-right font-black">
+                          {subtotalKiri.total.toLocaleString('id-ID')}
                         </td>
-                        <td className="py-0.5 px-1 text-center font-bold border border-slate-300 text-[8.5px]">{row.rute}</td>
-                        <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] text-slate-700 border border-slate-300">
-                          {row.noHpPic || '-'}
+                        <td className="border border-slate-600 py-1 px-1.5 text-right text-amber-300 font-black">
+                          {subtotalKiri.kecil.toLocaleString('id-ID')}
                         </td>
-                        <td className="py-0.5 px-1.5 text-right font-bold border border-slate-300">
-                          {row.isLibur ? 0 : row.total.toLocaleString('id-ID')}
+                        <td className="border border-slate-600 py-1 px-1.5 text-right text-blue-200 font-black">
+                          {subtotalKiri.siswa.toLocaleString('id-ID')}
                         </td>
-                        <td className="py-0.5 px-1.5 text-right text-amber-700 font-bold border border-slate-300">
-                          {row.isLibur ? '-' : row.porsiKecil > 0 ? row.porsiKecil.toLocaleString('id-ID') : '-'}
-                        </td>
-                        <td className="py-0.5 px-1.5 text-right text-blue-700 font-bold border border-slate-300">
-                          {row.isLibur ? '-' : row.porsiSiswaBesar > 0 ? row.porsiSiswaBesar.toLocaleString('id-ID') : '-'}
-                        </td>
-                        <td className="py-0.5 px-1.5 text-right font-medium border border-slate-300">
-                          {row.isLibur ? '-' : row.guruTendik > 0 ? row.guruTendik.toLocaleString('id-ID') : '-'}
+                        <td className="border border-slate-600 py-1 px-1.5 text-right text-white font-bold">
+                          {subtotalKiri.tendik.toLocaleString('id-ID')}
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={9} className="py-2 text-center text-slate-400 italic border border-slate-300">
-                        Belum ada data Lembaga Sekolah terdaftar.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-[#0e2a5c] text-white font-bold text-[9.5px]">
-                    <td colSpan={5} className="border border-slate-600 py-1 px-2 text-left tracking-wider">
-                      SUBTOTAL SEKOLAH ({sekolahTotals.active} AKTIF)
-                    </td>
-                    <td className="border border-slate-600 py-1 px-1.5 text-right font-black">
-                      {sekolahTotals.total.toLocaleString('id-ID')}
-                    </td>
-                    <td className="border border-slate-600 py-1 px-1.5 text-right text-amber-300 font-black">
-                      {sekolahTotals.kecil.toLocaleString('id-ID')}
-                    </td>
-                    <td className="border border-slate-600 py-1 px-1.5 text-right text-blue-200 font-black">
-                      {sekolahTotals.siswaBesar.toLocaleString('id-ID')}
-                    </td>
-                    <td className="border border-slate-600 py-1 px-1.5 text-right text-white font-bold">
-                      {sekolahTotals.tendik.toLocaleString('id-ID')}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 3B. SUB-TABEL 1B: DISTRIBUSI SEKOLAH - RUTE KANAN (ARMADA 2) */}
+            {(ruteFilter === 'ALL' || ruteFilter === 'Kanan') && (
+              <div className={`space-y-1 print-table-container ${ruteFilter === 'ALL' ? 'mt-4' : ''}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                <div className="text-[10px] font-bold text-amber-900 uppercase tracking-wider flex justify-between items-center bg-amber-50 px-2.5 py-1 border border-amber-200 rounded-t">
+                  <span className="flex items-center gap-1.5 font-extrabold text-amber-950">
+                    🚚 TABEL 1B: LEMBAGA SEKOLAH - RUTE KANAN ({sekolahRuteKanan.length} TITIK)
+                  </span>
+                  <span className="font-mono text-[9.5px] bg-amber-100 text-amber-950 px-2 py-0.5 rounded border border-amber-300 font-bold">
+                    Subtotal: {subtotalKanan.total.toLocaleString('id-ID')} Porsi
+                  </span>
+                </div>
+                <div className="border border-slate-400 rounded-b overflow-hidden">
+                  <table className="w-full border-collapse text-[9.5px]">
+                    <thead className="bg-[#78350f] text-white font-bold text-[9px] uppercase tracking-wider">
+                      <tr>
+                        <th rowSpan={2} className="border border-amber-800 py-1.5 px-1.5 text-center w-7">NO</th>
+                        <th rowSpan={2} className="border border-amber-800 py-1.5 px-2 text-left">NAMA LEMBAGA SEKOLAH</th>
+                        <th rowSpan={2} className="border border-amber-800 py-1.5 px-1 text-center w-12">STATUS</th>
+                        <th rowSpan={2} className="border border-amber-800 py-1.5 px-1.5 text-center w-20">NO HP PIC</th>
+                        <th rowSpan={2} className="border border-amber-800 py-1.5 px-1.5 text-right w-14">TOTAL</th>
+                        <th colSpan={3} className="border border-amber-800 py-1 px-1 text-center uppercase tracking-wide">PORSI</th>
+                      </tr>
+                      <tr className="bg-[#78350f] text-white text-[8.5px]">
+                        <th className="border border-amber-800 py-1 px-1.5 text-right w-14 text-amber-300">KECIL</th>
+                        <th className="border border-amber-800 py-1 px-1.5 text-right w-14 text-blue-300">SISWA</th>
+                        <th className="border border-amber-800 py-1 px-1.5 text-right w-14 text-white">TENDIK</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
+                      {sekolahRuteKanan.length > 0 ? (
+                        sekolahRuteKanan.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={row.isLibur ? 'bg-rose-50 text-slate-400' : 'bg-white hover:bg-amber-50/30'}
+                          >
+                            <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] border border-slate-300">{row.no}</td>
+                            <td className="py-0.5 px-2 font-semibold border border-slate-300">
+                              {row.isLibur ? (
+                                <>
+                                  <span className="line-through">{row.nama}</span>
+                                  <span className="ml-1.5 text-[7.5px] bg-red-100 text-red-600 px-1 py-0.2 rounded font-bold">
+                                    [LIBUR - 0 PORSI]
+                                  </span>
+                                </>
+                              ) : (
+                                row.nama
+                              )}
+                            </td>
+                            <td className="py-0.5 px-1 text-center border border-slate-300 text-[8.5px]">
+                              {row.isLibur ? <span className="text-rose-700 font-bold">Libur</span> : <span className="text-emerald-700 font-bold">Aktif</span>}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-center font-mono text-[8.5px] text-slate-700 border border-slate-300">
+                              {row.noHpPic || '-'}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right font-bold border border-slate-300">
+                              {row.isLibur ? 0 : row.total.toLocaleString('id-ID')}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right text-amber-700 font-bold border border-slate-300">
+                              {row.isLibur ? '-' : row.porsiKecil > 0 ? row.porsiKecil.toLocaleString('id-ID') : '-'}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right text-blue-700 font-bold border border-slate-300">
+                              {row.isLibur ? '-' : row.porsiSiswaBesar > 0 ? row.porsiSiswaBesar.toLocaleString('id-ID') : '-'}
+                            </td>
+                            <td className="py-0.5 px-1.5 text-right font-medium border border-slate-300">
+                              {row.isLibur ? '-' : row.guruTendik > 0 ? row.guruTendik.toLocaleString('id-ID') : '-'}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={8} className="py-2 text-center text-slate-400 italic border border-slate-300">
+                            Tidak ada data sekolah di Rute Kanan.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-[#78350f] text-white font-bold text-[9.5px]">
+                        <td colSpan={4} className="border border-amber-800 py-1 px-2 text-left tracking-wider">
+                          SUBTOTAL RUTE KANAN ({subtotalKanan.activeCount} LEMBAGA AKTIF)
+                        </td>
+                        <td className="border border-amber-800 py-1 px-1.5 text-right font-black">
+                          {subtotalKanan.total.toLocaleString('id-ID')}
+                        </td>
+                        <td className="border border-amber-800 py-1 px-1.5 text-right text-amber-300 font-black">
+                          {subtotalKanan.kecil.toLocaleString('id-ID')}
+                        </td>
+                        <td className="border border-amber-800 py-1 px-1.5 text-right text-blue-200 font-black">
+                          {subtotalKanan.siswa.toLocaleString('id-ID')}
+                        </td>
+                        <td className="border border-amber-800 py-1 px-1.5 text-right text-white font-bold">
+                          {subtotalKanan.tendik.toLocaleString('id-ID')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 3C. BARIS TOTAL KESELURUHAN SEKOLAH */}
+            {ruteFilter === 'ALL' && (
+              <div className="bg-[#0f172a] text-white p-2 rounded border border-slate-800 flex justify-between items-center text-[9.5px] font-bold">
+                <span className="uppercase tracking-wider">
+                  TOTAL KESELURUHAN SEKOLAH ({sekolahTotals.active} LEMBAGA AKTIF)
+                </span>
+                <span className="font-mono text-[10.5px] text-amber-300 font-black">
+                  {sekolahTotals.total.toLocaleString('id-ID')} PORSI
+                  <span className="text-slate-300 text-[8.5px] font-normal ml-2">
+                    (Kecil: {sekolahTotals.kecil.toLocaleString('id-ID')} | Siswa: {sekolahTotals.siswaBesar.toLocaleString('id-ID')} | Tendik: {sekolahTotals.tendik.toLocaleString('id-ID')})
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 4. TABEL 2: POSYANDU / SASARAN 3B */}
