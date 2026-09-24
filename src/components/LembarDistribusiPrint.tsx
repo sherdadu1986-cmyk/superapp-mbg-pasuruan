@@ -359,6 +359,8 @@ export default function LembarDistribusiPrint({
     // Process Posyandu List
     let posyanduTotal = 0
     let posyanduBalita = 0
+    let posyanduBalitaLk = 0
+    let posyanduBalitaPr = 0
     let posyanduBumil = 0
     let posyanduBusui = 0
     let posyanduActive = 0
@@ -370,6 +372,8 @@ export default function LembarDistribusiPrint({
       kode: string
       rute: 'Kiri' | 'Kanan'
       noHpPic: string
+      balitaLk: number
+      balitaPr: number
       balita: number
       bumil: number
       busui: number
@@ -397,6 +401,8 @@ export default function LembarDistribusiPrint({
           kode: item.identitas_npsn_tmp || item.kode || item.id || '',
           rute,
           noHpPic,
+          balitaLk: 0,
+          balitaPr: 0,
           balita: 0,
           bumil: 0,
           busui: 0,
@@ -410,6 +416,8 @@ export default function LembarDistribusiPrint({
       const pos = getPosyanduBreakdown(item)
       posyanduTotal += pos.total
       posyanduBalita += pos.balita
+      posyanduBalitaLk += pos.balitaLk
+      posyanduBalitaPr += pos.balitaPr
       posyanduBumil += pos.bumil
       posyanduBusui += pos.busui
 
@@ -420,6 +428,8 @@ export default function LembarDistribusiPrint({
         kode: item.identitas_npsn_tmp || item.kode || item.id || '',
         rute,
         noHpPic,
+        balitaLk: pos.balitaLk,
+        balitaPr: pos.balitaPr,
         balita: pos.balita,
         bumil: pos.bumil,
         busui: pos.busui,
@@ -436,7 +446,7 @@ export default function LembarDistribusiPrint({
       sekolahRows: [...sekolahRuteKiri, ...sekolahRuteKanan],
       posyanduRows: processedPosyandu,
       sekolahTotals: { total: sekolahTotal, kecil: sekolahKecil, siswaBesar: sekolahSiswaBesar, tendik: sekolahTendik, active: sekolahActive },
-      posyanduTotals: { total: posyanduTotal, balita: posyanduBalita, bumil: posyanduBumil, busui: posyanduBusui, active: posyanduActive },
+      posyanduTotals: { total: posyanduTotal, balita: posyanduBalita, balitaLk: posyanduBalitaLk, balitaPr: posyanduBalitaPr, bumil: posyanduBumil, busui: posyanduBusui, active: posyanduActive },
       grandTotal: sekolahTotal + posyanduTotal,
       holidayKpmNames: holidayNames,
       aktifCount: sekolahActive + posyanduActive
@@ -881,15 +891,19 @@ export default function LembarDistribusiPrint({
                   <table className="w-full text-left border-collapse text-[10px] leading-tight font-medium">
                     <thead className="bg-[#0e2a5c] text-white text-center font-bold text-[9.5px] uppercase tracking-wider">
                       <tr>
-                        <th className="border border-slate-600 py-1 px-1.5 text-center w-7">NO</th>
-                        <th className="border border-slate-600 py-1 px-2 text-left">NAMA POSYANDU / DUSUN</th>
-                        <th className="border border-slate-600 py-1 px-1 text-center w-12">STATUS</th>
-                        <th className="border border-slate-600 py-1 px-1 text-center w-12">RUTE</th>
-                        <th className="border border-slate-600 py-1 px-1.5 text-center w-20">NO HP PIC</th>
-                        <th className="border border-slate-600 py-1 px-1 text-right w-12 text-amber-300">BALITA</th>
-                        <th className="border border-slate-600 py-1 px-1 text-right w-12 text-rose-300">BUMIL</th>
-                        <th className="border border-slate-600 py-1 px-1 text-right w-12 text-pink-300">BUSUI</th>
-                        <th className="border border-slate-600 py-1 px-1.5 text-right w-14 font-black">TOTAL</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-1.5 text-center w-7">NO</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-2 text-left">NAMA POSYANDU / DUSUN</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-1 text-center w-12">STATUS</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-1 text-center w-12">RUTE</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-1.5 text-center w-20">NO HP PIC</th>
+                        <th colSpan={2} className="border border-slate-600 py-0.5 px-1 text-center uppercase tracking-wide text-amber-300">BALITA</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-1 text-right w-12 text-rose-300">BUMIL</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-1 text-right w-12 text-pink-300">BUSUI</th>
+                        <th rowSpan={2} className="border border-slate-600 py-1 px-1.5 text-right w-14 font-black">TOTAL</th>
+                      </tr>
+                      <tr className="bg-[#0e2a5c] text-white text-[8.5px]">
+                        <th className="border border-slate-600 py-0.5 px-1 text-right w-10 text-sky-200">LK</th>
+                        <th className="border border-slate-600 py-0.5 px-1 text-right w-10 text-pink-200">PR</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 font-semibold text-[#0f172a]">
@@ -916,8 +930,11 @@ export default function LembarDistribusiPrint({
                             <td className="py-0.5 px-1.5 text-center font-mono text-[9px] text-slate-700 border border-slate-300">
                               {row.noHpPic || '-'}
                             </td>
-                            <td className="py-0.5 px-1 text-right font-mono text-amber-700 font-bold border border-slate-300">
-                              {row.isLibur ? '-' : row.balita > 0 ? row.balita.toLocaleString('id-ID') : '-'}
+                            <td className="py-0.5 px-1 text-right font-mono text-blue-700 font-bold border border-slate-300">
+                              {row.isLibur ? '-' : row.balitaLk > 0 ? row.balitaLk.toLocaleString('id-ID') : '-'}
+                            </td>
+                            <td className="py-0.5 px-1 text-right font-mono text-pink-600 font-bold border border-slate-300">
+                              {row.isLibur ? '-' : row.balitaPr > 0 ? row.balitaPr.toLocaleString('id-ID') : '-'}
                             </td>
                             <td className="py-0.5 px-1 text-right font-mono text-rose-700 font-bold border border-slate-300">
                               {row.isLibur ? '-' : row.bumil > 0 ? row.bumil.toLocaleString('id-ID') : '-'}
@@ -932,7 +949,7 @@ export default function LembarDistribusiPrint({
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={9} className="py-2 text-center text-slate-400 italic text-[10px] border border-slate-300">
+                          <td colSpan={10} className="py-2 text-center text-slate-400 italic text-[10px] border border-slate-300">
                             Belum ada data Posyandu / Sasaran 3B terdaftar.
                           </td>
                         </tr>
@@ -941,10 +958,16 @@ export default function LembarDistribusiPrint({
                     <tfoot className="bg-[#0e2a5c] text-white font-bold border-t border-[#0f172a] text-[10px]">
                       <tr>
                         <td colSpan={5} className="border border-slate-600 py-1 px-2 text-left font-black uppercase tracking-wider text-white">
-                          SUBTOTAL POSYANDU ({posyanduTotals.active} AKTIF)
+                          SUBTOTAL POSYANDU ({posyanduTotals.active} POSYANDU AKTIF)
+                          <span className="block text-[8.5px] font-normal text-slate-300 normal-case">
+                            (Total Balita: {posyanduTotals.balita.toLocaleString('id-ID')} | LK: {posyanduTotals.balitaLk.toLocaleString('id-ID')} · PR: {posyanduTotals.balitaPr.toLocaleString('id-ID')})
+                          </span>
                         </td>
-                        <td className="border border-slate-600 py-1 px-1 text-right font-mono text-amber-300 font-black">
-                          {posyanduTotals.balita.toLocaleString('id-ID')}
+                        <td className="border border-slate-600 py-1 px-1 text-right font-mono text-blue-200 font-black">
+                          {posyanduTotals.balitaLk.toLocaleString('id-ID')}
+                        </td>
+                        <td className="border border-slate-600 py-1 px-1 text-right font-mono text-pink-200 font-black">
+                          {posyanduTotals.balitaPr.toLocaleString('id-ID')}
                         </td>
                         <td className="border border-slate-600 py-1 px-1 text-right font-mono text-rose-200 font-black">
                           {posyanduTotals.bumil.toLocaleString('id-ID')}

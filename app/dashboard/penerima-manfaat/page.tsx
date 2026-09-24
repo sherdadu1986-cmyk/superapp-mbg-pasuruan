@@ -323,6 +323,8 @@ export default function BerandaOperasionalPage() {
 
     let posyanduTotal = 0
     let posyanduBalita = 0
+    let posyanduBalitaLk = 0
+    let posyanduBalitaPr = 0
     let posyanduBumil = 0
     let posyanduBusui = 0
     let posyanduAktifCount = 0
@@ -340,6 +342,8 @@ export default function BerandaOperasionalPage() {
       const pos = getPosyanduBreakdown(item)
       posyanduTotal += pos.total
       posyanduBalita += pos.balita
+      posyanduBalitaLk += pos.balitaLk
+      posyanduBalitaPr += pos.balitaPr
       posyanduBumil += pos.bumil
       posyanduBusui += pos.busui
       posyanduAktifCount += 1
@@ -351,7 +355,7 @@ export default function BerandaOperasionalPage() {
 
     return {
       sekolahTotal, sekolahKecil, sekolahSiswa, sekolahTendik, sekolahAktifCount, sekolahLiburCount,
-      posyanduTotal, posyanduBalita, posyanduBumil, posyanduBusui, posyanduAktifCount, posyanduLiburCount,
+      posyanduTotal, posyanduBalita, posyanduBalitaLk, posyanduBalitaPr, posyanduBumil, posyanduBusui, posyanduAktifCount, posyanduLiburCount,
       grandTotal, totalAktif, totalLibur
     }
   }, [sekolahList, posyanduList, liburKpmIds])
@@ -1465,15 +1469,19 @@ export default function BerandaOperasionalPage() {
                     <table className="w-full text-left border-collapse text-xs">
                       <thead className="bg-emerald-950/95 text-white backdrop-blur-md text-center font-bold text-[11px]">
                         <tr>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5 w-10">NO</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-3 text-left">NAMA POSYANDU / DUSUN</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5">STATUS</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5">RUTE</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5">NO HP PIC</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-amber-300">BALITA</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-rose-300">BUMIL</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-pink-300">BUSUI</th>
-                          <th className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-16 font-bold">TOTAL</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-2.5 w-10">NO</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-3 text-left">NAMA POSYANDU / DUSUN</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-2.5">STATUS</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-2.5">RUTE</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-2.5">NO HP PIC</th>
+                          <th colSpan={2} className="border border-emerald-800/80 py-1.5 px-2 text-center text-amber-300 uppercase tracking-wide">BALITA</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-rose-300">BUMIL</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-14 text-pink-300">BUSUI</th>
+                          <th rowSpan={2} className="border border-emerald-800/80 py-2.5 px-2.5 text-right w-16 font-bold">TOTAL</th>
+                        </tr>
+                        <tr className="bg-emerald-950/90 text-white text-center font-bold text-[10px]">
+                          <th className="border border-emerald-800/80 py-1.5 px-2 text-right w-12 text-sky-200">LK</th>
+                          <th className="border border-emerald-800/80 py-1.5 px-2 text-right w-12 text-pink-200">PR</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200/50 font-medium text-slate-700 bg-white/60">
@@ -1484,7 +1492,8 @@ export default function BerandaOperasionalPage() {
                             const pos = getPosyanduBreakdown(item)
                             const setting = getKpmSetting(itemKey, item, sekolahList.length + idx)
 
-                            const balita = pos.balita
+                            const balitaLk = pos.balitaLk
+                            const balitaPr = pos.balitaPr
                             const bumil = pos.bumil
                             const busui = pos.busui
                             const total = pos.total
@@ -1558,8 +1567,17 @@ export default function BerandaOperasionalPage() {
                                   {isLibur ? (
                                     <span className="font-bold text-slate-300">-</span>
                                   ) : (
-                                    <span className="font-bold text-amber-700">
-                                      {balita > 0 ? balita.toLocaleString('id-ID') : '-'}
+                                    <span className="font-semibold text-blue-700">
+                                      {balitaLk > 0 ? balitaLk.toLocaleString('id-ID') : '-'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
+                                  {isLibur ? (
+                                    <span className="font-bold text-slate-300">-</span>
+                                  ) : (
+                                    <span className="font-semibold text-pink-600">
+                                      {balitaPr > 0 ? balitaPr.toLocaleString('id-ID') : '-'}
                                     </span>
                                   )}
                                 </td>
@@ -1593,7 +1611,7 @@ export default function BerandaOperasionalPage() {
                           })
                         ) : (
                           <tr>
-                            <td colSpan={9} className="py-6 text-center text-slate-400 font-medium border-b border-slate-200">
+                            <td colSpan={10} className="py-6 text-center text-slate-400 font-medium border-b border-slate-200">
                               Belum ada data Posyandu / Sasaran 3B terdaftar.
                             </td>
                           </tr>
@@ -1602,10 +1620,16 @@ export default function BerandaOperasionalPage() {
                       <tfoot className="bg-emerald-100/80 font-bold text-slate-900 border-t-2 border-emerald-300 text-xs backdrop-blur-md">
                         <tr>
                           <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-slate-800 text-[11px]">
-                            SUBTOTAL POSYANDU ({ringkasanOperasional.posyanduAktifCount} POSYANDU AKTIF)
+                            <div>SUBTOTAL POSYANDU ({ringkasanOperasional.posyanduAktifCount} POSYANDU AKTIF)</div>
+                            <div className="text-[10px] font-normal text-emerald-800 normal-case">
+                              (Total Balita: {ringkasanOperasional.posyanduBalita.toLocaleString('id-ID')} | LK: {ringkasanOperasional.posyanduBalitaLk.toLocaleString('id-ID')} · PR: {ringkasanOperasional.posyanduBalitaPr.toLocaleString('id-ID')})
+                            </div>
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
-                            {ringkasanOperasional.posyanduBalita.toLocaleString('id-ID')}
+                          <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black">
+                            {ringkasanOperasional.posyanduBalitaLk.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-pink-700 font-black">
+                            {ringkasanOperasional.posyanduBalitaPr.toLocaleString('id-ID')}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-rose-800 font-black">
                             {ringkasanOperasional.posyanduBumil.toLocaleString('id-ID')}

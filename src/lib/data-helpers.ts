@@ -639,7 +639,7 @@ export function calculateKpmPortions(kpm: any) {
 }
 
 export function getPosyanduBreakdown(kpm: any) {
-  if (!kpm) return { balita: 0, bumil: 0, busui: 0, total: 0 }
+  if (!kpm) return { balitaLk: 0, balitaPr: 0, balita: 0, bumil: 0, busui: 0, total: 0 }
 
   let parsedSubKat: any = {}
   if (typeof kpm.sub_kategori === 'string' && kpm.sub_kategori.trim().startsWith('{')) {
@@ -650,9 +650,20 @@ export function getPosyanduBreakdown(kpm: any) {
 
   const subKat = String(kpm.sub_kategori || kpm.subKategori || kpm.jenis || kpm.kategori || '').toUpperCase()
 
-  const balitaL = Number(kpm.balitaLaki ?? parsedSubKat.balitaLaki ?? 0)
-  const balitaP = Number(kpm.balitaPerem ?? parsedSubKat.balitaPerem ?? 0)
-  let balita = (balitaL + balitaP) || Number(kpm.balita || kpm.balita_12_plus || 0)
+  let balitaLk = Number(kpm.balita_lk ?? kpm.balita_l ?? kpm.balitaLaki ?? parsedSubKat.balitaLaki ?? 0)
+  let balitaPr = Number(kpm.balita_pr ?? kpm.balita_p ?? kpm.balitaPerem ?? parsedSubKat.balitaPerem ?? 0)
+
+  // If balitaLk and balitaPr are zero, check target_pria / target_wanita on Posyandu KPM record
+  if (balitaLk === 0 && balitaPr === 0) {
+    if (kpm.target_pria !== undefined && kpm.target_pria !== null && Number(kpm.target_pria) > 0) {
+      balitaLk = Number(kpm.target_pria)
+    }
+    if (kpm.target_wanita !== undefined && kpm.target_wanita !== null && Number(kpm.target_wanita) > 0) {
+      balitaPr = Number(kpm.target_wanita)
+    }
+  }
+
+  let balita = (balitaLk + balitaPr) || Number(kpm.balita || kpm.balita_12_plus || 0)
 
   let bumil = Number(kpm.ibu_hamil || kpm.bumil || parsedSubKat.bumil || 0)
   let busui = Number(kpm.ibu_menyusui || kpm.busui || parsedSubKat.busui || 0)
@@ -679,9 +690,15 @@ export function getPosyanduBreakdown(kpm: any) {
     }
   }
 
+  // Fallback: if balita > 0 but balitaLk and balitaPr are 0, split balita proportionally
+  if (balita > 0 && balitaLk === 0 && balitaPr === 0) {
+    balitaLk = Math.ceil(balita / 2)
+    balitaPr = Math.floor(balita / 2)
+  }
+
   const total = totalRaw > 0 ? totalRaw : (balita + bumil + busui)
 
-  return { balita, bumil, busui, total }
+  return { balitaLk, balitaPr, balita, bumil, busui, total }
 }
 
 export const calculateKpmPortion = calculateKpmPortions
