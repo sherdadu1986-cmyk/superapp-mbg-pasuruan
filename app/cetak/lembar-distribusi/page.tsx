@@ -144,8 +144,30 @@ export default function CetakLembarDistribusiPage() {
       const isLibur = liburIds.includes(itemKey) || (Boolean(item.id) && liburIds.includes(item.id!))
 
       const saved = distribusiSettings[itemKey]
-      const defaultRute: 'Kiri' | 'Kanan' = idx < Math.ceil(sortedData.length / 2) ? 'Kiri' : 'Kanan'
-      const rute: 'Kiri' | 'Kanan' = saved?.rute || defaultRute
+      const nameUpper = String(item.nama || '').toUpperCase()
+      const isKiri = 
+        nameUpper.includes('KB PERTIWI') ||
+        nameUpper.includes('RA USWATUN') ||
+        nameUpper.includes('TK PGRI') ||
+        nameUpper.includes('AL ALAWIYAH') ||
+        nameUpper.includes('BUDI RAHAYU') ||
+        nameUpper.includes('PAKIJANGAN') ||
+        nameUpper.includes('WONOREJO 4') ||
+        nameUpper.includes('MTSN 4')
+      const isKanan = 
+        nameUpper.includes('HARAPAN') ||
+        nameUpper.includes('AL-FALAH') ||
+        nameUpper.includes('MELATI') ||
+        nameUpper.includes('DARUN') ||
+        nameUpper.includes('PKK IV') ||
+        nameUpper.includes('WONOREJO 5') ||
+        nameUpper.includes('WONOSARI') ||
+        nameUpper.includes('TAMANSARI') ||
+        nameUpper.includes('KARANGMENGGAH') ||
+        nameUpper.includes('SMPN 2')
+      const itemRute = (item as any).rute
+      const fallbackRute: 'Kiri' | 'Kanan' = isKiri ? 'Kiri' : isKanan ? 'Kanan' : (itemRute ? (String(itemRute).toLowerCase().includes('kanan') ? 'Kanan' : 'Kiri') : (idx < Math.ceil(sortedData.length / 2) ? 'Kiri' : 'Kanan'))
+      const rute: 'Kiri' | 'Kanan' = saved?.rute || fallbackRute
       const noHpPic = saved?.no_hp_pic !== undefined ? saved.no_hp_pic : (item.hp || item.pimpinan || '-')
 
       if (ruteFilter !== 'ALL' && rute !== ruteFilter) return

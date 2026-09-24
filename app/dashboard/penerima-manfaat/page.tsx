@@ -158,10 +158,48 @@ export default function BerandaOperasionalPage() {
 
   const getKpmSetting = (itemKey: string, item: KelompokPenerimaManfaat, idx: number) => {
     const saved = distribusiSettings[itemKey]
-    const defaultRute: 'Kiri' | 'Kanan' = idx < Math.ceil(kpmList.length / 2) ? 'Kiri' : 'Kanan'
+    const itemRute = (item as any).rute
+    let defaultRute: 'Kiri' | 'Kanan' = 'Kiri'
+
+    if (saved?.rute) {
+      defaultRute = saved.rute
+    } else if (itemRute) {
+      defaultRute = String(itemRute).toLowerCase().includes('kanan') ? 'Kanan' : 'Kiri'
+    } else {
+      const nameUpper = String(item.nama || '').toUpperCase()
+      const isKiri = 
+        nameUpper.includes('KB PERTIWI') ||
+        nameUpper.includes('RA USWATUN') ||
+        nameUpper.includes('TK PGRI') ||
+        nameUpper.includes('AL ALAWIYAH') ||
+        nameUpper.includes('BUDI RAHAYU') ||
+        nameUpper.includes('PAKIJANGAN') ||
+        nameUpper.includes('WONOREJO 4') ||
+        nameUpper.includes('MTSN 4')
+      if (isKiri) {
+        defaultRute = 'Kiri'
+      } else {
+        const isKanan = 
+          nameUpper.includes('HARAPAN') ||
+          nameUpper.includes('AL-FALAH') ||
+          nameUpper.includes('MELATI') ||
+          nameUpper.includes('DARUN') ||
+          nameUpper.includes('PKK IV') ||
+          nameUpper.includes('WONOREJO 5') ||
+          nameUpper.includes('WONOSARI') ||
+          nameUpper.includes('TAMANSARI') ||
+          nameUpper.includes('KARANGMENGGAH') ||
+          nameUpper.includes('SMPN 2')
+        if (isKanan) {
+          defaultRute = 'Kanan'
+        } else {
+          defaultRute = idx < Math.ceil(kpmList.length / 2) ? 'Kiri' : 'Kanan'
+        }
+      }
+    }
     const defaultHp = item.hp || item.pimpinan || ''
     return {
-      rute: saved?.rute || defaultRute,
+      rute: defaultRute,
       no_hp_pic: saved?.no_hp_pic !== undefined ? saved.no_hp_pic : defaultHp
     }
   }
@@ -193,6 +231,69 @@ export default function BerandaOperasionalPage() {
       return nama.includes('POSYANDU') || jenis.includes('POSYANDU') || nama.includes('DUSUN');
     });
   }, [kpmList]);
+
+  // Grouping Sekolah by Route (Rute Kiri vs Rute Kanan)
+  const ruteKiriSekolah = React.useMemo(() => {
+    return sekolahList.filter((item, idx) => {
+      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
+      const setting = getKpmSetting(itemKey, item, idx)
+      return setting.rute === 'Kiri'
+    })
+  }, [sekolahList, distribusiSettings])
+
+  const ruteKananSekolah = React.useMemo(() => {
+    return sekolahList.filter((item, idx) => {
+      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
+      const setting = getKpmSetting(itemKey, item, idx)
+      return setting.rute === 'Kanan'
+    })
+  }, [sekolahList, distribusiSettings])
+
+  const ruteKiriSubtotal = React.useMemo(() => {
+    let total = 0
+    let porsiKecil = 0
+    let siswaBesar = 0
+    let tendik = 0
+    let activeCount = 0
+
+    ruteKiriSekolah.forEach((item) => {
+      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || ''
+      const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
+      if (isLibur) return
+
+      const breakdown = calculateKpmPortion(item)
+      total += breakdown.total
+      porsiKecil += breakdown.porsiKecil
+      siswaBesar += breakdown.siswaBesar
+      tendik += breakdown.tendik
+      activeCount += 1
+    })
+
+    return { total, porsiKecil, siswaBesar, tendik, activeCount }
+  }, [ruteKiriSekolah, liburKpmIds])
+
+  const ruteKananSubtotal = React.useMemo(() => {
+    let total = 0
+    let porsiKecil = 0
+    let siswaBesar = 0
+    let tendik = 0
+    let activeCount = 0
+
+    ruteKananSekolah.forEach((item) => {
+      const itemKey = item.id || item.kode || item.identitas_npsn_tmp || ''
+      const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
+      if (isLibur) return
+
+      const breakdown = calculateKpmPortion(item)
+      total += breakdown.total
+      porsiKecil += breakdown.porsiKecil
+      siswaBesar += breakdown.siswaBesar
+      tendik += breakdown.tendik
+      activeCount += 1
+    })
+
+    return { total, porsiKecil, siswaBesar, tendik, activeCount }
+  }, [ruteKananSekolah, liburKpmIds])
 
   // Recalculation for active (non-holiday) KPMs per table
   const ringkasanOperasional = React.useMemo(() => {
@@ -1041,8 +1142,14 @@ export default function BerandaOperasionalPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200/50 font-medium text-slate-700 bg-white/60">
-                        {sekolahList.length > 0 ? (
-                          sekolahList.map((item, idx) => {
+                        {/* SECTION 1: HEADER & DAFTAR RUTE KIRI */}
+                        <tr className="bg-slate-900/90 text-blue-200 font-bold text-xs">
+                          <td colSpan={9} className="py-2.5 px-3 bg-gradient-to-r from-blue-950 via-slate-900 to-blue-950 text-blue-200 border-y border-blue-800/80 font-bold tracking-wide text-[11px]">
+                            🚚 ARMADA 1: RUTE KIRI ({ruteKiriSekolah.length} Lembaga)
+                          </td>
+                        </tr>
+                        {ruteKiriSekolah.length > 0 ? (
+                          ruteKiriSekolah.map((item, idx) => {
                             const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
                             const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
                             const breakdown = calculateKpmPortion(item)
@@ -1052,6 +1159,9 @@ export default function BerandaOperasionalPage() {
                             const kecil = breakdown.porsiKecil
                             const siswaBesar = breakdown.siswaBesar
                             const tendik = breakdown.tendik
+
+                            const cleanHp = setting.no_hp_pic ? setting.no_hp_pic.replace(/[^0-9]/g, '') : ''
+                            const waLink = cleanHp ? `https://wa.me/${cleanHp.startsWith('0') ? '62' + cleanHp.slice(1) : cleanHp}` : null
 
                             return (
                               <tr
@@ -1086,23 +1196,31 @@ export default function BerandaOperasionalPage() {
                                   </button>
                                 </td>
                                 <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
-                                  <select
-                                    value={setting.rute}
-                                    onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
-                                    className="bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-800 focus:ring-1 focus:ring-slate-800 outline-hidden cursor-pointer"
-                                  >
-                                    <option value="Kiri">Rute Kiri</option>
-                                    <option value="Kanan">Rute Kanan</option>
-                                  </select>
+                                  <span className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs">
+                                    Rute Kiri
+                                  </span>
                                 </td>
                                 <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
-                                  <input
-                                    type="text"
-                                    value={setting.no_hp_pic}
-                                    onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
-                                    placeholder="08xxx..."
-                                    className="w-28 text-center bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
-                                  />
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input
+                                      type="text"
+                                      value={setting.no_hp_pic}
+                                      onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
+                                      placeholder="08xxx..."
+                                      className="w-24 text-center bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
+                                    />
+                                    {waLink && (
+                                      <a
+                                        href={waLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Hubungi WA PIC"
+                                        className="text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-md font-bold transition inline-flex items-center shrink-0"
+                                      >
+                                        WA
+                                      </a>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
@@ -1143,11 +1261,172 @@ export default function BerandaOperasionalPage() {
                           })
                         ) : (
                           <tr>
-                            <td colSpan={9} className="py-6 text-center text-slate-400 font-medium border-b border-slate-200">
-                              Belum ada data Lembaga Sekolah terdaftar.
+                            <td colSpan={9} className="py-3 text-center text-slate-400 italic text-[11px] border-b border-slate-200">
+                              Tidak ada sekolah di Rute Kiri.
                             </td>
                           </tr>
                         )}
+                        {/* BARIS SUBTOTAL RUTE KIRI */}
+                        <tr className="bg-blue-50/90 font-bold text-slate-900 border-t-2 border-b-2 border-blue-200 text-xs backdrop-blur-md">
+                          <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-blue-900 text-[11px]">
+                            SUBTOTAL RUTE KIRI ({ruteKiriSubtotal.activeCount} LEMBAGA AKTIF)
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-blue-950 font-black">
+                            {ruteKiriSubtotal.total.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
+                            {ruteKiriSubtotal.porsiKecil.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black">
+                            {ruteKiriSubtotal.siswaBesar.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold">
+                            {ruteKiriSubtotal.tendik.toLocaleString('id-ID')}
+                          </td>
+                        </tr>
+
+                        {/* SECTION 2: HEADER & DAFTAR RUTE KANAN */}
+                        <tr className="bg-slate-900/90 text-amber-200 font-bold text-xs">
+                          <td colSpan={9} className="py-2.5 px-3 bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 text-amber-200 border-y border-amber-800/80 font-bold tracking-wide text-[11px]">
+                            🚚 ARMADA 2: RUTE KANAN ({ruteKananSekolah.length} Lembaga)
+                          </td>
+                        </tr>
+                        {ruteKananSekolah.length > 0 ? (
+                          ruteKananSekolah.map((item, idx) => {
+                            const itemKey = item.id || item.kode || item.identitas_npsn_tmp || String(idx)
+                            const isLibur = liburKpmIds.includes(itemKey) || (Boolean(item.id) && liburKpmIds.includes(item.id!))
+                            const breakdown = calculateKpmPortion(item)
+                            const setting = getKpmSetting(itemKey, item, idx)
+
+                            const total = breakdown.total
+                            const kecil = breakdown.porsiKecil
+                            const siswaBesar = breakdown.siswaBesar
+                            const tendik = breakdown.tendik
+
+                            const cleanHp = setting.no_hp_pic ? setting.no_hp_pic.replace(/[^0-9]/g, '') : ''
+                            const waLink = cleanHp ? `https://wa.me/${cleanHp.startsWith('0') ? '62' + cleanHp.slice(1) : cleanHp}` : null
+
+                            return (
+                              <tr
+                                key={itemKey}
+                                className={`transition-colors ${isLibur ? 'bg-rose-50/40' : 'hover:bg-amber-50/50'}`}
+                              >
+                                <td className="py-2.5 px-3 text-center font-mono text-slate-500 text-[11px] font-bold border-b border-slate-200/50">
+                                  {idx + 1}
+                                </td>
+                                <td className="py-2.5 px-3 border-b border-slate-200/50">
+                                  <span
+                                    className={`font-semibold block truncate max-w-[180px] ${
+                                      isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
+                                    }`}
+                                    title={item.nama}
+                                  >
+                                    {item.nama}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleLibur(itemKey)}
+                                    title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
+                                      isLibur
+                                        ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
+                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
+                                    }`}
+                                  >
+                                    {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
+                                  </button>
+                                </td>
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
+                                  <span className="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs">
+                                    Rute Kanan
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input
+                                      type="text"
+                                      value={setting.no_hp_pic}
+                                      onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
+                                      placeholder="08xxx..."
+                                      className="w-24 text-center bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
+                                    />
+                                    {waLink && (
+                                      <a
+                                        href={waLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Hubungi WA PIC"
+                                        className="text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-md font-bold transition inline-flex items-center shrink-0"
+                                      >
+                                        WA
+                                      </a>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
+                                  {isLibur ? (
+                                    <span className="font-bold text-slate-300">-</span>
+                                  ) : (
+                                    <span className="font-bold text-slate-900">{total.toLocaleString('id-ID')}</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
+                                  {isLibur ? (
+                                    <span className="font-bold text-slate-300">-</span>
+                                  ) : (
+                                    <span className="font-bold text-amber-700">
+                                      {kecil > 0 ? kecil.toLocaleString('id-ID') : '-'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
+                                  {isLibur ? (
+                                    <span className="font-bold text-slate-300">-</span>
+                                  ) : (
+                                    <span className="font-bold text-blue-700">
+                                      {siswaBesar > 0 ? siswaBesar.toLocaleString('id-ID') : '-'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
+                                  {isLibur ? (
+                                    <span className="font-semibold text-slate-300">-</span>
+                                  ) : (
+                                    <span className="font-semibold text-slate-700">
+                                      {tendik > 0 ? tendik.toLocaleString('id-ID') : '-'}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={9} className="py-3 text-center text-slate-400 italic text-[11px] border-b border-slate-200">
+                              Tidak ada sekolah di Rute Kanan.
+                            </td>
+                          </tr>
+                        )}
+                        {/* BARIS SUBTOTAL RUTE KANAN */}
+                        <tr className="bg-amber-50/90 font-bold text-slate-900 border-t-2 border-b-2 border-amber-200 text-xs backdrop-blur-md">
+                          <td colSpan={5} className="py-2.5 px-3 font-extrabold uppercase tracking-wider text-amber-900 text-[11px]">
+                            SUBTOTAL RUTE KANAN ({ruteKananSubtotal.activeCount} LEMBAGA AKTIF)
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-amber-950 font-black">
+                            {ruteKananSubtotal.total.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-amber-800 font-black">
+                            {ruteKananSubtotal.porsiKecil.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-blue-900 font-black">
+                            {ruteKananSubtotal.siswaBesar.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-bold">
+                            {ruteKananSubtotal.tendik.toLocaleString('id-ID')}
+                          </td>
+                        </tr>
                       </tbody>
                       <tfoot className="bg-slate-100/90 font-bold text-slate-900 border-t-2 border-slate-300 text-xs backdrop-blur-md">
                         <tr>
@@ -1243,23 +1522,37 @@ export default function BerandaOperasionalPage() {
                                   </button>
                                 </td>
                                 <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
-                                  <select
-                                    value={setting.rute}
-                                    onChange={(e) => handleUpdateRute(itemKey, e.target.value as 'Kiri' | 'Kanan', setting.no_hp_pic)}
-                                    className="bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-800 focus:ring-1 focus:ring-slate-800 outline-hidden cursor-pointer"
-                                  >
-                                    <option value="Kiri">Rute Kiri</option>
-                                    <option value="Kanan">Rute Kanan</option>
-                                  </select>
+                                  {setting.rute === 'Kiri' ? (
+                                    <span className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs">
+                                      Rute Kiri
+                                    </span>
+                                  ) : (
+                                    <span className="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs">
+                                      Rute Kanan
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="py-2.5 px-3 text-center border-b border-slate-200/50">
-                                  <input
-                                    type="text"
-                                    value={setting.no_hp_pic}
-                                    onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
-                                    placeholder="08xxx..."
-                                    className="w-28 text-center bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
-                                  />
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input
+                                      type="text"
+                                      value={setting.no_hp_pic}
+                                      onChange={(e) => handleUpdatePic(itemKey, e.target.value, setting.rute)}
+                                      placeholder="08xxx..."
+                                      className="w-24 text-center bg-white/80 border border-slate-300 rounded-md px-1.5 py-0.5 text-[10.5px] font-mono text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-slate-800 outline-hidden"
+                                    />
+                                    {setting.no_hp_pic && setting.no_hp_pic !== '-' && (
+                                      <a
+                                        href={`https://wa.me/${setting.no_hp_pic.replace(/[^0-9]/g, '').replace(/^0/, '62')}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Hubungi WA PIC"
+                                        className="text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-md font-bold transition inline-flex items-center shrink-0"
+                                      >
+                                        WA
+                                      </a>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-mono border-b border-slate-200/50">
                                   {isLibur ? (
