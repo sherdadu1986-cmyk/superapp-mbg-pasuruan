@@ -72,6 +72,11 @@ export default function KelompokPenerimaManfaatPage() {
   // Toast Notification
   const [toastMsg, setToastMsg] = useState<string | null>(null)
 
+  // Bulk Excel Export States
+  const [isExportingSekolah, setIsExportingSekolah] = useState(false)
+  const [isExportingPosyandu, setIsExportingPosyandu] = useState(false)
+  const [exportStatusText, setExportStatusText] = useState('')
+
   // Pure Dynamic Supabase State
   const [kpmItems, setKpmItems] = useState<DetailKpmItem[]>([])
   const [allBnbaRecords, setAllBnbaRecords] = useState<PenerimaManfaatBnba[]>([])
@@ -1639,6 +1644,275 @@ const getBnbaCountForGroup = (
     triggerToast(`Template Excel BNBA "${groupName}" berhasil diunduh.`)
   }
 
+  // Ekspor Massal BNBA Sekolah (.xlsx) - Seluruh data murid & guru sekolah
+  const handleExportAllSekolah = async () => {
+    if (isExportingSekolah || isExportingPosyandu) return
+    try {
+      setIsExportingSekolah(true)
+      setExportStatusText('Mengambil data sekolah...')
+
+      // 1. Ambil semua KPM yang bertipe Sekolah
+      const { data: rawKpmList, error: errKpm } = await supabase
+        .from('kelompok_penerima_manfaat')
+        .select('id, nama, rute, identitas_npsn_tmp, kategori')
+        .order('nama', { ascending: true })
+
+      if (errKpm) throw errKpm
+
+      const sekolahList = (rawKpmList || []).filter(k => {
+        const kat = (k.kategori || '').toUpperCase()
+        const nama = (k.nama || '').toUpperCase()
+        return !kat.includes('3B') && !kat.includes('POSYANDU') && !nama.includes('POSYANDU')
+      })
+
+      if (sekolahList.length === 0) {
+        showToast({
+          type: 'error',
+          title: 'Data Tidak Ditemukan',
+          message: 'Tidak ada kelompok penerima manfaat kategori Sekolah yang ditemukan.'
+        })
+        return
+      }
+
+      const sekolahIds = sekolahList.map(s => s.id)
+      setExportStatusText(`Mengambil data... (0/${sekolahList.length} Sekolah)`)
+
+      // 2. Ambil seluruh baris BNBA milik sekolah tersebut
+      let bnbaData: any[] = []
+      const pageSize = 1000
+      let page = 0
+      let hasMore = true
+
+      while (hasMore && page < 20) {
+        const from = page * pageSize
+        const to = from + pageSize - 1
+        const { data, error: errBnba } = await supabase
+          .from('penerima_manfaat_bnba')
+          .select('*')
+          .in('kelompok_id', sekolahIds)
+          .order('kelompok_id', { ascending: true })
+          .range(from, to)
+
+        if (errBnba) throw errBnba
+
+        if (!data || data.length === 0) {
+          hasMore = false
+        } else {
+          bnbaData.push(...data)
+          setExportStatusText(`Mengambil data... (${bnbaData.length} baris BNBA)`)
+          if (data.length < pageSize) {
+            hasMore = false
+          } else {
+            page++
+          }
+        }
+      }
+
+      setExportStatusText('Menyusun File Excel...')
+
+      const sekolahMap = new Map(sekolahList.map(s => [s.id, s]))
+
+      let distSettings: Record<string, { rute: 'Kiri' | 'Kanan' }> = {}
+      if (typeof window !== 'undefined') {
+        try {
+          const todayStr = new Date().toISOString().slice(0, 10)
+          const saved = localStorage.getItem(`sppg_distribusi_settings_${todayStr}`)
+          if (saved) distSettings = JSON.parse(saved)
+        } catch {}
+      }
+
+      // 3. Susun Baris Data Excel
+      const rows = bnbaData.map((row, index) => {
+        const kpm = sekolahMap.get(row.kelompok_id)
+        const itemKey = kpm?.id || kpm?.nama || ''
+        const ruteVal = kpm?.rute || distSettings[itemKey]?.rute || '-'
+
+        return {
+          'No': index + 1,
+          'Nama Lembaga': kpm?.nama || '-',
+          'Rute': ruteVal,
+          'NPSN': kpm?.identitas_npsn_tmp || '-',
+          'NIK / NISN': row.nik || row.nisn || row.nisn_nik || '-',
+          'Nama Penerima': row.nama_penerima || row.nama || row.nama_lengkap || '-',
+          'JK': row.jk || row.jenis_kelamin || '-',
+          'Kelas': row.kelas || '-',
+          'Posisi': row.posisi || 'Siswa',
+          'Nama Orang Tua / Wali': row.nama_ortu || '-'
+        }
+      })
+
+      // 4. Generate Workbook & Trigger Download
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'BNBA_Semua_Sekolah')
+
+      ws['!cols'] = [
+        { wch: 6 },  // No
+        { wch: 28 }, // Nama Lembaga
+        { wch: 12 }, // Rute
+        { wch: 14 }, // NPSN
+        { wch: 20 }, // NIK/NISN
+        { wch: 28 }, // Nama Penerima
+        { wch: 6 },  // JK
+        { wch: 10 }, // Kelas
+        { wch: 12 }, // Posisi
+        { wch: 25 }, // Ortu
+      ]
+
+      const fileName = `BNBA_Lembaga_Sekolah_SPPG_Pasuruan_${new Date().toISOString().slice(0, 10)}.xlsx`
+      XLSX.writeFile(wb, fileName)
+
+      showToast({
+        type: 'success',
+        title: 'Ekspor Berhasil',
+        message: `${rows.length} data BNBA dari ${sekolahList.length} sekolah berhasil diunduh.`
+      })
+    } catch (err: any) {
+      console.error('Error export bulk sekolah:', err)
+      showToast({
+        type: 'error',
+        title: 'Gagal Ekspor',
+        message: err.message || 'Terjadi kesalahan saat mengekspor data.'
+      })
+    } finally {
+      setIsExportingSekolah(false)
+      setExportStatusText('')
+    }
+  }
+
+  // Ekspor Massal BNBA Sasaran 3B (.xlsx) - Balita, Bumil, Busui dari 5 Posyandu
+  const handleExportAllPosyandu = async () => {
+    if (isExportingSekolah || isExportingPosyandu) return
+    try {
+      setIsExportingPosyandu(true)
+      setExportStatusText('Mengambil data posyandu...')
+
+      // 1. Ambil KPM Posyandu / Dusun (Sasaran 3B)
+      const { data: allKpmList, error: errKpm } = await supabase
+        .from('kelompok_penerima_manfaat')
+        .select('id, nama, rute, kategori')
+        .order('nama', { ascending: true })
+
+      if (errKpm) throw errKpm
+
+      const posyanduList = (allKpmList || []).filter(p => {
+        const kat = (p.kategori || '').toUpperCase()
+        const nama = (p.nama || '').toUpperCase()
+        return kat.includes('3B') || kat.includes('POSYANDU') || nama.includes('POSYANDU')
+      })
+
+      if (posyanduList.length === 0) {
+        showToast({
+          type: 'error',
+          title: 'Data Tidak Ditemukan',
+          message: 'Tidak ada kelompok penerima manfaat kategori Posyandu 3B yang ditemukan.'
+        })
+        return
+      }
+
+      const posyanduIds = posyanduList.map(p => p.id)
+      setExportStatusText(`Mengambil data... (0/${posyanduList.length} Posyandu)`)
+
+      // 2. Ambil data BNBA dengan pagination
+      let bnbaData: any[] = []
+      const pageSize = 1000
+      let page = 0
+      let hasMore = true
+
+      while (hasMore && page < 20) {
+        const from = page * pageSize
+        const to = from + pageSize - 1
+        const { data, error: errBnba } = await supabase
+          .from('penerima_manfaat_bnba')
+          .select('*')
+          .in('kelompok_id', posyanduIds)
+          .order('kelompok_id', { ascending: true })
+          .range(from, to)
+
+        if (errBnba) throw errBnba
+
+        if (!data || data.length === 0) {
+          hasMore = false
+        } else {
+          bnbaData.push(...data)
+          setExportStatusText(`Mengambil data... (${bnbaData.length} baris 3B)`)
+          if (data.length < pageSize) {
+            hasMore = false
+          } else {
+            page++
+          }
+        }
+      }
+
+      setExportStatusText('Menyusun File Excel...')
+
+      const posyanduMap = new Map(posyanduList.map(p => [p.id, p]))
+
+      let distSettings: Record<string, { rute: 'Kiri' | 'Kanan' }> = {}
+      if (typeof window !== 'undefined') {
+        try {
+          const todayStr = new Date().toISOString().slice(0, 10)
+          const saved = localStorage.getItem(`sppg_distribusi_settings_${todayStr}`)
+          if (saved) distSettings = JSON.parse(saved)
+        } catch {}
+      }
+
+      // 3. Susun Baris Excel Posyandu
+      const rows = bnbaData.map((row, index) => {
+        const kpm = posyanduMap.get(row.kelompok_id)
+        const itemKey = kpm?.id || kpm?.nama || ''
+        const ruteVal = kpm?.rute || distSettings[itemKey]?.rute || '-'
+
+        return {
+          'No': index + 1,
+          'Nama Posyandu / Dusun': kpm?.nama || '-',
+          'Rute': ruteVal,
+          'NIK': row.nik || row.nisn_nik || '-',
+          'Nama Penerima': row.nama_penerima || row.nama || row.nama_lengkap || '-',
+          'Tanggal Lahir': row.tanggal_lahir || '-',
+          'JK': row.jk || row.jenis_kelamin || '-',
+          'Kategori Sasaran': row.posisi || '-',
+          'Nama Orang Tua / Suami': row.nama_ortu || '-'
+        }
+      })
+
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'BNBA_Sasaran_3B')
+
+      ws['!cols'] = [
+        { wch: 6 },  // No
+        { wch: 25 }, // Nama Posyandu
+        { wch: 12 }, // Rute
+        { wch: 20 }, // NIK
+        { wch: 28 }, // Nama Penerima
+        { wch: 14 }, // Tgl Lahir
+        { wch: 6 },  // JK
+        { wch: 16 }, // Kategori
+        { wch: 25 }, // Ortu
+      ]
+
+      const fileName = `BNBA_Sasaran_3B_Posyandu_SPPG_${new Date().toISOString().slice(0, 10)}.xlsx`
+      XLSX.writeFile(wb, fileName)
+
+      showToast({
+        type: 'success',
+        title: 'Ekspor Berhasil',
+        message: `${rows.length} data sasaran 3B dari ${posyanduList.length} posyandu berhasil diunduh.`
+      })
+    } catch (err: any) {
+      console.error('Error export bulk posyandu:', err)
+      showToast({
+        type: 'error',
+        title: 'Gagal Ekspor',
+        message: err.message || 'Terjadi kesalahan saat mengekspor data posyandu.'
+      })
+    } finally {
+      setIsExportingPosyandu(false)
+      setExportStatusText('')
+    }
+  }
+
   // Ekspor Data BNBA Terurut (Siswa Kelas 1-6 dulu, Tendik di paling bawah) ke Excel
   const handleExportBnbaExcel = () => {
     if (!activeBnbaGroup) return
@@ -2102,6 +2376,45 @@ const getBnbaCountForGroup = (
             className="p-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition shadow-2xs cursor-pointer flex items-center justify-center"
           >
             <RotateCw size={14} className={isRefreshing || loading ? 'animate-spin' : ''} />
+          </button>
+
+          {/* Liquid Glass Bulk Excel Export Buttons */}
+          <button
+            onClick={handleExportAllSekolah}
+            disabled={isExportingSekolah || isExportingPosyandu}
+            title="Ekspor Seluruh Data BNBA Sekolah (Murid & Guru) Ke File Excel"
+            className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 active:bg-emerald-500/30 text-emerald-900 border border-emerald-300/80 rounded-lg text-xs font-semibold backdrop-blur-md shadow-2xs transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {isExportingSekolah ? (
+              <>
+                <RotateCw size={14} className="animate-spin text-emerald-600" />
+                <span>{exportStatusText || 'Mengambil data...'}</span>
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet size={14} className="text-emerald-600 shrink-0" />
+                <span>📗 Ekspor Semua BNBA Sekolah (.xlsx)</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleExportAllPosyandu}
+            disabled={isExportingSekolah || isExportingPosyandu}
+            title="Ekspor Seluruh Data BNBA Sasaran 3B (Balita, Bumil, Busui) Ke File Excel"
+            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 active:bg-rose-500/30 text-rose-900 border border-rose-300/80 rounded-lg text-xs font-semibold backdrop-blur-md shadow-2xs transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {isExportingPosyandu ? (
+              <>
+                <RotateCw size={14} className="animate-spin text-rose-600" />
+                <span>{exportStatusText || 'Mengambil data...'}</span>
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet size={14} className="text-rose-600 shrink-0" />
+                <span>🌸 Ekspor Semua BNBA Sasaran 3B (.xlsx)</span>
+              </>
+            )}
           </button>
 
           <button
