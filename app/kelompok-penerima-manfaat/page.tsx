@@ -1644,6 +1644,23 @@ const getBnbaCountForGroup = (
     triggerToast(`Template Excel BNBA "${groupName}" berhasil diunduh.`)
   }
 
+  // Helper fallback rute sekolah & posyandu
+  const getRuteSekolah = (nama: string) => {
+    const n = (nama || '').toUpperCase()
+    const ruteKiriList = [
+      'KB PERTIWI',
+      'RA USWATUN HASANAH',
+      'TK PGRI WONOREJO',
+      'TK AL ALAWIYAH',
+      'TK BUDI RAHAYU',
+      'SDN PAKIJANGAN 1',
+      'SDN PAKIJANGAN 2',
+      'SDN WONOREJO 4',
+      'MTSN 4 PASURUAN'
+    ]
+    return ruteKiriList.some(k => n.includes(k)) ? 'Rute Kiri' : 'Rute Kanan'
+  }
+
   // Ekspor Massal BNBA Sekolah (.xlsx) - Seluruh data murid & guru sekolah
   const handleExportAllSekolah = async () => {
     if (isExportingSekolah || isExportingPosyandu) return
@@ -1651,10 +1668,10 @@ const getBnbaCountForGroup = (
       setIsExportingSekolah(true)
       setExportStatusText('Mengambil data sekolah...')
 
-      // 1. Ambil semua KPM yang bertipe Sekolah
+      // 1. Ambil semua KPM yang bertipe Sekolah (Hanya kolom yang pasti ada di schema)
       const { data: rawKpmList, error: errKpm } = await supabase
         .from('kelompok_penerima_manfaat')
-        .select('id, nama, rute, identitas_npsn_tmp, kategori')
+        .select('id, nama, kategori, identitas_npsn_tmp')
         .order('nama', { ascending: true })
 
       if (errKpm) throw errKpm
@@ -1725,7 +1742,7 @@ const getBnbaCountForGroup = (
       const rows = bnbaData.map((row, index) => {
         const kpm = sekolahMap.get(row.kelompok_id)
         const itemKey = kpm?.id || kpm?.nama || ''
-        const ruteVal = kpm?.rute || distSettings[itemKey]?.rute || '-'
+        const ruteVal = (kpm as any)?.rute || distSettings[itemKey]?.rute || getRuteSekolah(kpm?.nama || '')
 
         return {
           'No': index + 1,
@@ -1787,10 +1804,10 @@ const getBnbaCountForGroup = (
       setIsExportingPosyandu(true)
       setExportStatusText('Mengambil data posyandu...')
 
-      // 1. Ambil KPM Posyandu / Dusun (Sasaran 3B)
+      // 1. Ambil KPM Posyandu / Dusun (Sasaran 3B) - Hanya kolom yang pasti ada di schema
       const { data: allKpmList, error: errKpm } = await supabase
         .from('kelompok_penerima_manfaat')
-        .select('id, nama, rute, kategori')
+        .select('id, nama, kategori, identitas_npsn_tmp')
         .order('nama', { ascending: true })
 
       if (errKpm) throw errKpm
@@ -1861,7 +1878,7 @@ const getBnbaCountForGroup = (
       const rows = bnbaData.map((row, index) => {
         const kpm = posyanduMap.get(row.kelompok_id)
         const itemKey = kpm?.id || kpm?.nama || ''
-        const ruteVal = kpm?.rute || distSettings[itemKey]?.rute || '-'
+        const ruteVal = (kpm as any)?.rute || distSettings[itemKey]?.rute || getRuteSekolah(kpm?.nama || '')
 
         return {
           'No': index + 1,

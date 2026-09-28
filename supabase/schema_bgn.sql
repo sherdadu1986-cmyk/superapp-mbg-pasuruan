@@ -28,10 +28,14 @@ CREATE TABLE IF NOT EXISTS public.kelompok_penerima_manfaat (
     pimpinan VARCHAR(255),
     hp VARCHAR(50),
     email VARCHAR(150),
+    rute VARCHAR(50) DEFAULT 'Rute Kanan',
     status VARCHAR(50) NOT NULL DEFAULT 'Aktif',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration for adding rute column to existing kelompok_penerima_manfaat table
+ALTER TABLE public.kelompok_penerima_manfaat ADD COLUMN IF NOT EXISTS rute VARCHAR(50) DEFAULT 'Rute Kanan';
 
 -- 2. Table: penerima_manfaat_bnba (By Name By Address)
 CREATE TABLE IF NOT EXISTS public.penerima_manfaat_bnba (

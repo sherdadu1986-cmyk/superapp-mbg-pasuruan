@@ -94,6 +94,23 @@ export default function BerandaOperasionalPage() {
   const [isExportingPosyandu, setIsExportingPosyandu] = useState(false)
   const [exportStatusText, setExportStatusText] = useState('')
 
+  // Helper fallback rute sekolah & posyandu
+  const getRuteSekolah = (nama: string) => {
+    const n = (nama || '').toUpperCase()
+    const ruteKiriList = [
+      'KB PERTIWI',
+      'RA USWATUN HASANAH',
+      'TK PGRI WONOREJO',
+      'TK AL ALAWIYAH',
+      'TK BUDI RAHAYU',
+      'SDN PAKIJANGAN 1',
+      'SDN PAKIJANGAN 2',
+      'SDN WONOREJO 4',
+      'MTSN 4 PASURUAN'
+    ]
+    return ruteKiriList.some(k => n.includes(k)) ? 'Rute Kiri' : 'Rute Kanan'
+  }
+
   // Ekspor Massal BNBA Sekolah (.xlsx)
   const handleExportAllSekolah = async () => {
     if (isExportingSekolah || isExportingPosyandu) return
@@ -103,7 +120,7 @@ export default function BerandaOperasionalPage() {
 
       const { data: rawKpmList, error: errKpm } = await supabase
         .from('kelompok_penerima_manfaat')
-        .select('id, nama, rute, identitas_npsn_tmp, kategori')
+        .select('id, nama, kategori, identitas_npsn_tmp')
         .order('nama', { ascending: true })
 
       if (errKpm) throw errKpm
@@ -163,7 +180,7 @@ export default function BerandaOperasionalPage() {
       const rows = bnbaData.map((row, index) => {
         const kpm = sekolahMap.get(row.kelompok_id)
         const itemKey = kpm?.id || kpm?.nama || ''
-        const ruteVal = kpm?.rute || distribusiSettings[itemKey]?.rute || '-'
+        const ruteVal = (kpm as any)?.rute || distribusiSettings[itemKey]?.rute || getRuteSekolah(kpm?.nama || '')
 
         return {
           'No': index + 1,
@@ -226,7 +243,7 @@ export default function BerandaOperasionalPage() {
 
       const { data: allKpmList, error: errKpm } = await supabase
         .from('kelompok_penerima_manfaat')
-        .select('id, nama, rute, kategori')
+        .select('id, nama, kategori, identitas_npsn_tmp')
         .order('nama', { ascending: true })
 
       if (errKpm) throw errKpm
@@ -286,7 +303,7 @@ export default function BerandaOperasionalPage() {
       const rows = bnbaData.map((row, index) => {
         const kpm = posyanduMap.get(row.kelompok_id)
         const itemKey = kpm?.id || kpm?.nama || ''
-        const ruteVal = kpm?.rute || distribusiSettings[itemKey]?.rute || '-'
+        const ruteVal = (kpm as any)?.rute || distribusiSettings[itemKey]?.rute || getRuteSekolah(kpm?.nama || '')
 
         return {
           'No': index + 1,
