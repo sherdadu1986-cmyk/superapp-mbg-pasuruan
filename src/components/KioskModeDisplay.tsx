@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Tv, X, Play, Pause, Clock, Utensils, Truck, Building2, Users,
-  Heart, ShieldCheck, CheckCircle2, ChevronRight, ChevronLeft, Sparkles, Box, Calendar, Award
+  Heart, ShieldCheck, CheckCircle2, ChevronRight, ChevronLeft, Sparkles, Box, Calendar, Award,
+  Radio, RefreshCw
 } from 'lucide-react'
 import {
   calculateKpmPortion, getPosyanduBreakdown, sortKpmList,
@@ -34,6 +35,9 @@ export function KioskModeDisplay({
   const [kpmList, setKpmList] = useState<KelompokPenerimaManfaat[]>(initialKpmList)
   const [bnbaList, setBnbaList] = useState<PenerimaManfaatBnba[]>(initialBnbaList)
   const [menuDb, setMenuDb] = useState<MenuHarianDB | null>(initialMenuDb)
+  const [lastUpdatedTime, setLastUpdatedTime] = useState<number>(Date.now())
+  const [isLiveSynced, setIsLiveSynced] = useState<boolean>(true)
+  const [isSyncing, setIsSyncing] = useState<boolean>(false)
 
   const [currentSlide, setCurrentSlide] = useState<number>(0)
   const [isPlaying, setIsPlaying] = useState<boolean>(true)
@@ -44,14 +48,35 @@ export function KioskModeDisplay({
   useEffect(() => {
     if (initialKpmList.length > 0) setKpmList(initialKpmList)
     if (initialBnbaList.length > 0) setBnbaList(initialBnbaList)
-    if (initialMenuDb) setMenuDb(initialMenuDb)
+    if (initialMenuDb) {
+      setMenuDb(initialMenuDb)
+      setLastUpdatedTime(Date.now())
+    }
   }, [initialKpmList, initialBnbaList, initialMenuDb])
 
-  // Fetch Supabase data if needed or for live updates
+  // Cache buster URL generator to prevent TV browser image caching issues
+  const menuImageUrl = useMemo(() => {
+    if (!menuDb?.foto_url) return '/opengraph-image.png'
+    const foto = menuDb.foto_url
+    if (!foto) return '/opengraph-image.png'
+
+    // Extract update timestamp if available, or use lastUpdatedTime
+    let ts = lastUpdatedTime
+    if (menuDb.created_at) {
+      const createdTs = new Date(menuDb.created_at).getTime()
+      if (!isNaN(createdTs)) ts = Math.max(createdTs, lastUpdatedTime)
+    }
+
+    const separator = foto.includes('?') ? '&' : '?'
+    return `${foto}${separator}t=${ts}`
+  }, [menuDb?.foto_url, menuDb?.created_at, lastUpdatedTime])
+
+  // Fetch Supabase data & Auto-Sync Realtime Listener
   useEffect(() => {
     if (!isOpen) return
 
-    const loadData = async () => {
+    const loadData = async (isSilent = false) => {
+      if (isSilent) setIsSyncing(true)
       try {
         const { data: kpmData } = await supabase.from('kelompok_penerima_manfaat').select('*').order('urutan', { ascending: true })
         if (kpmData && kpmData.length > 0) setKpmList(sortKpmList(kpmData))
@@ -60,23 +85,52 @@ export function KioskModeDisplay({
         if (bnbaData) setBnbaList(bnbaData)
 
         const menuRes = await fetchMenuHariIniDB()
-        if (menuRes) setMenuDb(menuRes)
+        if (menuRes) {
+          setMenuDb(menuRes)
+          setLastUpdatedTime(Date.now())
+        }
       } catch (err) {
         console.error('Kiosk data fetch error:', err)
+      } finally {
+        if (isSilent) {
+          setTimeout(() => setIsSyncing(false), 600)
+        }
       }
     }
 
+    // 1. Initial Fetch
     loadData()
 
-    // Realtime listener for background updates without reload
+    // 2. Langganan Supabase Realtime (Instant Update saat Data Berubah)
     const channel = supabase
       .channel('kiosk-realtime-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kelompok_penerima_manfaat' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'penerima_manfaat_bnba' }, () => loadData())
-      .subscribe()
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kelompok_penerima_manfaat' }, () => loadData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'penerima_manfaat_bnba' }, () => loadData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_harian' }, (payload) => {
+        console.log('Perubahan menu harian terdeteksi:', payload)
+        loadData(true)
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsLiveSynced(true)
+        }
+      })
+
+    // 3. Background Polling (Interval Auto-Fetch 30s sebagai Fallback Aman)
+    const pollingInterval = setInterval(() => {
+      loadData(true)
+    }, 30000)
+
+    // 4. LocalStorage event listener (sync jika ada update dari tab browser yang sama)
+    const handleStorageChange = () => {
+      loadData(true)
+    }
+    window.addEventListener('storage', handleStorageChange)
 
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(pollingInterval)
+      window.removeEventListener('storage', handleStorageChange)
     }
   }, [isOpen])
 
@@ -306,7 +360,24 @@ export function KioskModeDisplay({
         </div>
 
         {/* Right Digital Clock & Controls */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 md:gap-4">
+          {/* Live Sync Indicator Badge */}
+          <div className="bg-emerald-500/15 backdrop-blur-xl border border-emerald-500/30 px-3.5 py-2 rounded-2xl flex items-center gap-2.5 shadow-lg">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Radio size={14} className="text-emerald-400 animate-pulse" />
+              <span className="text-xs font-extrabold text-emerald-300 tracking-wide uppercase">
+                Live Sync Aktif
+              </span>
+            </div>
+            {isSyncing && (
+              <RefreshCw size={12} className="text-emerald-300 animate-spin ml-0.5" />
+            )}
+          </div>
+
           {/* Digital Clock Large */}
           <div className="bg-white/10 backdrop-blur-xl border border-white/20 px-5 py-2 rounded-2xl flex items-center gap-3 shadow-lg">
             <Clock size={20} className="text-cyan-400 animate-pulse" />
@@ -449,8 +520,9 @@ export function KioskModeDisplay({
                     {/* Thumbnail Landscape Photo */}
                     <div className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden border border-white/20 bg-slate-900 shadow-xl group">
                       <img
-                        src={menuDb?.foto_url || '/opengraph-image.png'}
-                        alt="Menu Hari Ini"
+                        key={menuImageUrl}
+                        src={menuImageUrl}
+                        alt={menuDb?.nama_menu || 'Menu Hari Ini'}
                         className="w-full h-full object-cover rounded-2xl group-hover:scale-105 transition duration-500"
                         onError={(e) => { e.currentTarget.src = '/opengraph-image.png' }}
                       />
