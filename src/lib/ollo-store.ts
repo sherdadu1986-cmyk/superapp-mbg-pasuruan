@@ -9,6 +9,7 @@ export interface OlloWallet {
   type: 'cash' | 'bank' | 'wallet' | 'credit'
   color: 'emerald' | 'blue' | 'cyan' | 'purple' | 'amber' | 'rose'
   icon?: string
+  initial_balance?: number
 }
 
 export interface OlloTransaction {
@@ -42,9 +43,9 @@ export interface OlloSavingsGoal {
 
 // Initial Ollo Minimalist Seed Data
 export const INITIAL_WALLETS: OlloWallet[] = [
-  { id: 'w-cash', name: 'Cash', balance: 500000, type: 'cash', color: 'emerald', icon: '💵' },
-  { id: 'w-bca', name: 'BCA Utama', balance: 15200000, type: 'bank', color: 'blue', icon: '🏦' },
-  { id: 'w-gopay', name: 'GoPay / QRIS', balance: 2100000, type: 'wallet', color: 'cyan', icon: '📱' }
+  { id: 'w-cash', name: 'Cash Tunai', balance: 500000, initial_balance: 500000, type: 'cash', color: 'emerald', icon: '💵' },
+  { id: 'w-bca', name: 'BCA Utama', balance: 15200000, initial_balance: 15200000, type: 'bank', color: 'blue', icon: '🏦' },
+  { id: 'w-gopay', name: 'GoPay / QRIS', balance: 2100000, initial_balance: 2100000, type: 'wallet', color: 'cyan', icon: '📱' }
 ]
 
 export const INITIAL_TRANSACTIONS: OlloTransaction[] = [
@@ -98,19 +99,19 @@ export const INITIAL_BUDGETS: OlloBudget[] = [
   { id: 'ob-1', category: '🍜 Makanan & Minuman', limit_amount: 2000000, spent_amount: 1500000 },
   { id: 'ob-2', category: '🚗 Transportasi', limit_amount: 800000, spent_amount: 450000 },
   { id: 'ob-3', category: '🛒 Belanja Bulanan', limit_amount: 2500000, spent_amount: 1450000 },
-  { id: 'ob-4', category: '🎬 Hiburan & Hobi', limit_amount: 1000000, spent_amount: 1200000 } // Overbudget
+  { id: 'ob-4', category: '🎬 Hiburan & Hobi', limit_amount: 1000000, spent_amount: 1200000 }
 ]
 
 export const INITIAL_SAVINGS: OlloSavingsGoal[] = [
-  { id: 'os-1', title: 'Upgrade Laptop M4', target_amount: 20000000, current_amount: 7500000, target_date: '2027-01-15', color: 'blue' },
-  { id: 'os-2', title: 'Liburan Akhir Tahun', target_amount: 10000000, current_amount: 4500000, target_date: '2026-12-20', color: 'emerald' }
+  { id: 'os-1', title: 'Target Dana Darurat', target_amount: 15000000, current_amount: 5000000, target_date: '2026-12-31', color: 'emerald' },
+  { id: 'os-2', title: 'Upgrade Laptop M4', target_amount: 20000000, current_amount: 7500000, target_date: '2027-01-15', color: 'blue' }
 ]
 
 const KEYS = {
-  WALLETS: 'ollo_wallets_v2',
-  TRANSACTIONS: 'ollo_transactions_v2',
-  BUDGETS: 'ollo_budgets_v2',
-  SAVINGS: 'ollo_savings_v2'
+  WALLETS: 'ollo_wallets_v3',
+  TRANSACTIONS: 'ollo_transactions_v3',
+  BUDGETS: 'ollo_budgets_v3',
+  SAVINGS: 'ollo_savings_v3'
 }
 
 export function formatRupiahShort(amount: number): string {
@@ -134,6 +135,12 @@ export function formatRupiahFull(amount: number): string {
 }
 
 export class OlloStore {
+  static notifyChange() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('ollo_data_updated'))
+    }
+  }
+
   static getWallets(): OlloWallet[] {
     if (typeof window === 'undefined') return INITIAL_WALLETS
     const data = localStorage.getItem(KEYS.WALLETS)
@@ -147,11 +154,16 @@ export class OlloStore {
   static saveWallets(wallets: OlloWallet[]) {
     if (typeof window === 'undefined') return
     localStorage.setItem(KEYS.WALLETS, JSON.stringify(wallets))
+    this.notifyChange()
   }
 
   static addWallet(wallet: Omit<OlloWallet, 'id'>): OlloWallet {
     const wallets = this.getWallets()
-    const newW: OlloWallet = { ...wallet, id: `w-${Date.now()}` }
+    const newW: OlloWallet = {
+      ...wallet,
+      id: `w-${Date.now()}`,
+      initial_balance: wallet.balance
+    }
     const updated = [...wallets, newW]
     this.saveWallets(updated)
 
@@ -169,6 +181,26 @@ export class OlloStore {
     return newW
   }
 
+  static updateWallet(id: string, updates: Partial<OlloWallet>): OlloWallet | null {
+    const wallets = this.getWallets()
+    const idx = wallets.findIndex(w => w.id === id)
+    if (idx === -1) return null
+
+    wallets[idx] = { ...wallets[idx], ...updates }
+    this.saveWallets(wallets)
+    this.recalculateBalances()
+    return wallets[idx]
+  }
+
+  static deleteWallet(id: string) {
+    const wallets = this.getWallets().filter(w => w.id !== id)
+    this.saveWallets(wallets)
+
+    // Remove associated transactions
+    const txs = this.getTransactions().filter(t => t.wallet_id !== id && t.to_wallet_id !== id)
+    this.saveTransactions(txs)
+  }
+
   static getTransactions(): OlloTransaction[] {
     if (typeof window === 'undefined') return INITIAL_TRANSACTIONS
     const data = localStorage.getItem(KEYS.TRANSACTIONS)
@@ -182,6 +214,7 @@ export class OlloStore {
   static saveTransactions(txs: OlloTransaction[]) {
     if (typeof window === 'undefined') return
     localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(txs))
+    this.notifyChange()
   }
 
   static addTransaction(tx: Omit<OlloTransaction, 'id'>): OlloTransaction {
@@ -194,32 +227,7 @@ export class OlloStore {
     }
     const updated = [newTx, ...txs]
     this.saveTransactions(updated)
-
-    // Update wallet balances
-    const wallets = this.getWallets()
-    if (tx.type === 'expense') {
-      const idx = wallets.findIndex(w => w.id === tx.wallet_id)
-      if (idx !== -1) wallets[idx].balance -= tx.amount
-    } else if (tx.type === 'income') {
-      const idx = wallets.findIndex(w => w.id === tx.wallet_id)
-      if (idx !== -1) wallets[idx].balance += tx.amount
-    } else if (tx.type === 'transfer' && tx.to_wallet_id) {
-      const fromIdx = wallets.findIndex(w => w.id === tx.wallet_id)
-      const toIdx = wallets.findIndex(w => w.id === tx.to_wallet_id)
-      if (fromIdx !== -1) wallets[fromIdx].balance -= tx.amount
-      if (toIdx !== -1) wallets[toIdx].balance += tx.amount
-    }
-    this.saveWallets(wallets)
-
-    // Recalculate Budgets spent amount if expense
-    if (tx.type === 'expense') {
-      const budgets = this.getBudgets()
-      const bIdx = budgets.findIndex(b => b.category === tx.category)
-      if (bIdx !== -1) {
-        budgets[bIdx].spent_amount += tx.amount
-        this.saveBudgets(budgets)
-      }
-    }
+    this.recalculateBalances()
 
     try {
       Promise.resolve(
@@ -239,29 +247,63 @@ export class OlloStore {
     return newTx
   }
 
-  static deleteTransaction(id: string) {
+  static updateTransaction(id: string, updates: Partial<OlloTransaction>): OlloTransaction | null {
     const txs = this.getTransactions()
-    const target = txs.find(t => t.id === id)
-    if (!target) return
+    const idx = txs.findIndex(t => t.id === id)
+    if (idx === -1) return null
 
-    const updated = txs.filter(t => t.id !== id)
-    this.saveTransactions(updated)
+    txs[idx] = { ...txs[idx], ...updates }
+    this.saveTransactions(txs)
+    this.recalculateBalances()
+    return txs[idx]
+  }
 
-    // Reverse balance
+  static deleteTransaction(id: string) {
+    const txs = this.getTransactions().filter(t => t.id !== id)
+    this.saveTransactions(txs)
+    this.recalculateBalances()
+  }
+
+  // Auto Recalculate Balance Rule:
+  // Current Balance = Initial Balance + Sum(Income) - Sum(Expense) - Sum(Transfers Out) + Sum(Transfers In)
+  static recalculateBalances() {
     const wallets = this.getWallets()
-    if (target.type === 'expense') {
-      const idx = wallets.findIndex(w => w.id === target.wallet_id)
-      if (idx !== -1) wallets[idx].balance += target.amount
-    } else if (target.type === 'income') {
-      const idx = wallets.findIndex(w => w.id === target.wallet_id)
-      if (idx !== -1) wallets[idx].balance -= target.amount
-    } else if (target.type === 'transfer' && target.to_wallet_id) {
-      const fromIdx = wallets.findIndex(w => w.id === target.wallet_id)
-      const toIdx = wallets.findIndex(w => w.id === target.to_wallet_id)
-      if (fromIdx !== -1) wallets[fromIdx].balance += target.amount
-      if (toIdx !== -1) wallets[toIdx].balance -= target.amount
-    }
+    const txs = this.getTransactions()
+    const budgets = this.getBudgets()
+
+    // Reset budget spent amounts
+    const budgetMap: Record<string, number> = {}
+
+    wallets.forEach(w => {
+      let balance = w.initial_balance ?? w.balance
+
+      txs.forEach(t => {
+        if (t.wallet_id === w.id) {
+          if (t.type === 'income') balance += t.amount
+          else if (t.type === 'expense') balance -= t.amount
+          else if (t.type === 'transfer') balance -= t.amount
+        }
+        if (t.type === 'transfer' && t.to_wallet_id === w.id) {
+          balance += t.amount
+        }
+      })
+
+      w.balance = balance
+    })
+
+    // Recalculate budgets spent
+    txs.forEach(t => {
+      if (t.type === 'expense') {
+        budgetMap[t.category] = (budgetMap[t.category] || 0) + t.amount
+      }
+    })
+
+    budgets.forEach(b => {
+      b.spent_amount = budgetMap[b.category] || 0
+    })
+
     this.saveWallets(wallets)
+    this.saveBudgets(budgets)
   }
 
   static getBudgets(): OlloBudget[] {
@@ -277,6 +319,7 @@ export class OlloStore {
   static saveBudgets(budgets: OlloBudget[]) {
     if (typeof window === 'undefined') return
     localStorage.setItem(KEYS.BUDGETS, JSON.stringify(budgets))
+    this.notifyChange()
   }
 
   static getSavingsGoals(): OlloSavingsGoal[] {
@@ -292,16 +335,37 @@ export class OlloStore {
   static saveSavingsGoals(goals: OlloSavingsGoal[]) {
     if (typeof window === 'undefined') return
     localStorage.setItem(KEYS.SAVINGS, JSON.stringify(goals))
+    this.notifyChange()
   }
 
-  static depositSavingsGoal(id: string, percentage: number) {
+  static addSavingsGoal(goal: Omit<OlloSavingsGoal, 'id'>): OlloSavingsGoal {
     const goals = this.getSavingsGoals()
-    const idx = goals.findIndex(g => g.id === id)
-    if (idx === -1) return
+    const newG: OlloSavingsGoal = { ...goal, id: `os-${Date.now()}` }
+    const updated = [...goals, newG]
+    this.saveSavingsGoals(updated)
+    return newG
+  }
 
-    const addAmount = Math.round((goals[idx].target_amount * percentage) / 100)
-    goals[idx].current_amount = Math.min(goals[idx].current_amount + addAmount, goals[idx].target_amount)
+  static depositSavingsGoal(goalId: string, depositAmount: number, fromWalletId: string) {
+    const goals = this.getSavingsGoals()
+    const gIdx = goals.findIndex(g => g.id === goalId)
+    if (gIdx === -1) return
+
+    // Update Goal current_amount
+    goals[gIdx].current_amount = Math.min(goals[gIdx].current_amount + depositAmount, goals[gIdx].target_amount)
     this.saveSavingsGoals(goals)
+
+    // Add Expense/Transfer transaction from wallet
+    const wallet = this.getWallets().find(w => w.id === fromWalletId)
+    this.addTransaction({
+      wallet_id: fromWalletId,
+      type: 'expense',
+      amount: depositAmount,
+      category: '🎯 Setoran Tabungan',
+      note: `Setoran Tabungan: ${goals[gIdx].title}`,
+      date: new Date().toISOString().split('T')[0],
+      merchant: goals[gIdx].title
+    })
   }
 
   static getTodaySummary() {
@@ -312,12 +376,35 @@ export class OlloStore {
       .filter(t => t.date === todayStr && t.type === 'expense')
       .reduce((acc, t) => acc + t.amount, 0)
 
-    const dailyAvgTarget = 150000 // Rata-rata acuan harian Rp 150.000
+    const dailyAvgTarget = 150000 // Rata-rata harian Rp 150.000
 
     return {
       todayExpense,
       dailyAvgTarget,
       percentageOfAvg: Math.min(Math.round((todayExpense / dailyAvgTarget) * 100), 100)
     }
+  }
+
+  // Supabase Realtime Listener Setup
+  static setupRealtimeListener() {
+    if (typeof window === 'undefined') return
+    try {
+      const channel = supabase
+        .channel('fin_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_wallets' }, () => {
+          OlloStore.notifyChange()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_transactions' }, () => {
+          OlloStore.notifyChange()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_savings' }, () => {
+          OlloStore.notifyChange()
+        })
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    } catch {}
   }
 }

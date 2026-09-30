@@ -24,7 +24,12 @@ export default function OlloBudgetPage() {
   }, [])
 
   const handleDeposit = (id: string, pct: number) => {
-    OlloStore.depositSavingsGoal(id, pct)
+    const goal = savings.find(g => g.id === id)
+    if (!goal) return
+    const amount = Math.round((goal.target_amount * pct) / 100)
+    const wallets = OlloStore.getWallets()
+    const walletId = wallets[0]?.id || 'w-bca'
+    OlloStore.depositSavingsGoal(id, amount, walletId)
     loadData()
   }
 
