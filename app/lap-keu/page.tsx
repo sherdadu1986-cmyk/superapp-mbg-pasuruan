@@ -32,6 +32,7 @@ import {
   formatRupiahFull
 } from '@/lib/ollo-store'
 import { showToast } from '@/components/toast'
+import ModalWallet from './components/ModalWallet'
 
 export default function OlloHomePage() {
   const [wallets, setWallets] = useState<OlloWallet[]>([])
@@ -317,7 +318,13 @@ export default function OlloHomePage() {
                     : style
                 }`}
               >
-                <span>{w.icon || '💳'}</span>
+                {w.logo_url && (w.logo_url.startsWith('http') || w.logo_url.startsWith('data:')) ? (
+                  <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                    <img src={w.logo_url} alt={w.name} className="w-full h-full object-contain p-0.5" />
+                  </div>
+                ) : (
+                  <span>{w.logo_url || w.icon || '💳'}</span>
+                )}
                 <span>{w.name}</span>
                 <span className="font-extrabold">{formatRupiahShort(w.balance)}</span>
               </button>
@@ -649,103 +656,35 @@ export default function OlloHomePage() {
       </AnimatePresence>
 
       {/* MODAL 2: Add / Edit Wallet Modal */}
-      <AnimatePresence>
-        {showWalletModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-4 border border-slate-100"
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h3 className="font-extrabold text-slate-900 text-base">
-                  {editingWallet ? 'Edit Dompet / Bank' : 'Tambah Dompet Baru'}
-                </h3>
-                <button onClick={() => setShowWalletModal(false)} className="p-1 text-slate-400 hover:text-slate-700">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveWalletSubmit} className="space-y-3 text-xs">
-                <div>
-                  <label className="block font-semibold text-slate-500 mb-1">Nama Dompet / Bank</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: BCA Utama, Mandiri, Cash, GoPay"
-                    value={walletFormName}
-                    onChange={(e) => setWalletFormName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-500 mb-1">Saldo Awal / Penyesuaian (Rp)</label>
-                  <input
-                    type="text"
-                    placeholder="Rp 0"
-                    value={walletFormBalance}
-                    onChange={(e) => {
-                      const num = parseInt(e.target.value.replace(/\D/g, '')) || 0
-                      setWalletFormBalance(formatRupiahFull(num))
-                    }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-bold text-sm"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block font-semibold text-slate-500 mb-1">Tipe</label>
-                    <select
-                      value={walletFormType}
-                      onChange={(e) => setWalletFormType(e.target.value as any)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium"
-                    >
-                      <option value="bank">Bank</option>
-                      <option value="wallet">E-Wallet</option>
-                      <option value="cash">Tunai</option>
-                      <option value="credit">Kartu Kredit</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-500 mb-1">Warna Kartu</label>
-                    <select
-                      value={walletFormColor}
-                      onChange={(e) => setWalletFormColor(e.target.value as any)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium"
-                    >
-                      <option value="blue">Biru (BCA)</option>
-                      <option value="emerald">Hijau (Cash)</option>
-                      <option value="cyan">Cyan (GoPay)</option>
-                      <option value="purple">Ungu (OVO)</option>
-                      <option value="amber">Kuning (Mandiri)</option>
-                      <option value="rose">Merah (ShopeePay)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowWalletModal(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 font-semibold text-slate-600"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-extrabold cursor-pointer hover:bg-emerald-700"
-                  >
-                    ✓ Simpan Dompet
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ModalWallet
+        isOpen={showWalletModal}
+        editingWallet={editingWallet}
+        onClose={() => setShowWalletModal(false)}
+        onSave={(data) => {
+          if (editingWallet) {
+            OlloStore.updateWallet(editingWallet.id, {
+              name: data.name,
+              balance: data.balance,
+              initial_balance: data.balance,
+              type: data.type,
+              color: data.color,
+              logo_url: data.logo_url
+            })
+            showToast({ type: 'success', title: 'Dompet Berhasil Diperbarui', message: `Saldo & preset dompet ${data.name} telah disimpan.` })
+          } else {
+            OlloStore.addWallet({
+              name: data.name,
+              balance: data.balance,
+              type: data.type,
+              color: data.color,
+              logo_url: data.logo_url
+            })
+            showToast({ type: 'success', title: 'Dompet Baru Dibuat', message: `Dompet ${data.name} berhasil ditambahkan.` })
+          }
+          loadAllData()
+          setShowWalletModal(false)
+        }}
+      />
 
       {/* MODAL 3: Edit Transaction Bottom Sheet */}
       <AnimatePresence>

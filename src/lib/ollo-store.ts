@@ -9,6 +9,7 @@ export interface OlloWallet {
   type: 'cash' | 'bank' | 'wallet' | 'credit'
   color: 'emerald' | 'blue' | 'cyan' | 'purple' | 'amber' | 'rose'
   icon?: string
+  logo_url?: string
   initial_balance?: number
 }
 
@@ -43,9 +44,9 @@ export interface OlloSavingsGoal {
 
 // Initial Ollo Minimalist Seed Data
 export const INITIAL_WALLETS: OlloWallet[] = [
-  { id: 'w-cash', name: 'Cash Tunai', balance: 500000, initial_balance: 500000, type: 'cash', color: 'emerald', icon: '💵' },
-  { id: 'w-bca', name: 'BCA Utama', balance: 15200000, initial_balance: 15200000, type: 'bank', color: 'blue', icon: '🏦' },
-  { id: 'w-gopay', name: 'GoPay / QRIS', balance: 2100000, initial_balance: 2100000, type: 'wallet', color: 'cyan', icon: '📱' }
+  { id: 'w-cash', name: 'Cash Tunai', balance: 500000, initial_balance: 500000, type: 'cash', color: 'emerald', icon: '💵', logo_url: '💵' },
+  { id: 'w-bca', name: 'BCA Utama', balance: 15200000, initial_balance: 15200000, type: 'bank', color: 'blue', icon: '🏦', logo_url: 'https://upload.wikimedia.org/wikipedia/commons/5/5c/Bank_Central_Asia.svg' },
+  { id: 'w-gopay', name: 'GoPay / QRIS', balance: 2100000, initial_balance: 2100000, type: 'wallet', color: 'cyan', icon: '📱', logo_url: 'https://upload.wikimedia.org/wikipedia/commons/8/86/Gopay_logo.svg' }
 ]
 
 export const INITIAL_TRANSACTIONS: OlloTransaction[] = [
@@ -173,7 +174,8 @@ export class OlloStore {
           name: newW.name,
           balance: newW.balance,
           type: newW.type,
-          color: newW.color
+          color: newW.color,
+          logo_url: newW.logo_url || ''
         }])
       ).catch(() => {})
     } catch {}
