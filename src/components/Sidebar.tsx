@@ -76,7 +76,7 @@ export function Sidebar({ className = '', onItemClick }: SidebarProps) {
       title: 'FINANSIAL',
       items: [
         {
-          name: 'Laporan Keuangan Pribadi',
+          name: 'Laporan Keuangan',
           icon: <WalletCards size={18} className="text-emerald-600" />,
           path: '/lap-keu',
           active: pathname.startsWith('/lap-keu')
