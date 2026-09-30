@@ -8,7 +8,8 @@ import {
   BookOpen, 
   Users, 
   UtensilsCrossed, 
-  Camera 
+  Camera,
+  WalletCards 
 } from 'lucide-react'
 
 export interface SidebarProps {
@@ -68,6 +69,17 @@ export function Sidebar({ className = '', onItemClick }: SidebarProps) {
           icon: <Camera size={18} className="text-purple-600" />,
           path: '/foto-timemark',
           active: pathname === '/foto-timemark'
+        }
+      ]
+    },
+    {
+      title: 'FINANSIAL',
+      items: [
+        {
+          name: 'Laporan Keuangan Pribadi',
+          icon: <WalletCards size={18} className="text-emerald-600" />,
+          path: '/lap-keu',
+          active: pathname.startsWith('/lap-keu')
         }
       ]
     }

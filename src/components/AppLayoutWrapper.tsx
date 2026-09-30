@@ -17,7 +17,8 @@ import {
   Tv,
   PanelLeftClose,
   PanelLeftOpen,
-  Camera
+  Camera,
+  WalletCards
 } from 'lucide-react'
 import KioskModeDisplay from '@/components/KioskModeDisplay'
 
@@ -101,6 +102,11 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
     }
   }, [])
 
+  // If inside isolated sub-app route /lap-keu, bypass BGN wrapper layout completely
+  if (pathname && pathname.startsWith('/lap-keu')) {
+    return <>{children}</>
+  }
+
   const toggleSidebarCollapse = () => {
     setIsCollapsed((prev) => {
       const next = !prev
@@ -160,6 +166,17 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
           icon: <Camera size={18} className="text-purple-600" />,
           path: '/foto-timemark',
           active: pathname === '/foto-timemark'
+        }
+      ]
+    },
+    {
+      title: 'FINANSIAL',
+      items: [
+        {
+          name: 'Laporan Keuangan Pribadi',
+          icon: <WalletCards size={18} className="text-emerald-600" />,
+          path: '/lap-keu',
+          active: pathname.startsWith('/lap-keu')
         }
       ]
     }
