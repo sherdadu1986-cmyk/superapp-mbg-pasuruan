@@ -146,35 +146,43 @@ export default function FinaciDashboard() {
     setShowQuickAdd(true)
   }
 
-  const handleSaveQuickTx = (e: React.FormEvent) => {
+  const handleSaveQuickTx = async (e: React.FormEvent) => {
     e.preventDefault()
     const num = parseInt(txAmount.replace(/\D/g, '')) || 0
     if (num <= 0) return
 
-    OlloStore.addTransaction({
-      wallet_id: txWalletId,
-      to_wallet_id: quickAddType === 'transfer' ? txToWalletId : undefined,
-      type: quickAddType,
-      amount: num,
-      category: quickAddType === 'transfer' ? '🏦 Transfer Antar Dompet' : txCategory,
-      note: txNote || undefined,
-      date: new Date().toISOString().split('T')[0]
-    })
+    try {
+      await OlloStore.addTransactionAsync({
+        wallet_id: txWalletId,
+        to_wallet_id: quickAddType === 'transfer' ? txToWalletId : undefined,
+        type: quickAddType,
+        amount: num,
+        category: quickAddType === 'transfer' ? '🏦 Transfer Antar Dompet' : txCategory,
+        note: txNote || undefined,
+        date: new Date().toISOString().split('T')[0]
+      })
 
-    setShowQuickAdd(false)
-    setTxAmount('')
-    setTxNote('')
-    loadAllData()
-    showToast({
-      type: 'success',
-      title: 'Transaksi Berhasil!',
-      message: `${quickAddType === 'income' ? 'Pemasukan' : quickAddType === 'transfer' ? 'Transfer' : 'Pengeluaran'} Rp ${formatRupiahShort(num)} dicatat.`
-    })
+      setShowQuickAdd(false)
+      setTxAmount('')
+      setTxNote('')
+      loadAllData()
+      showToast({
+        type: 'success',
+        title: 'Transaksi Berhasil!',
+        message: `${quickAddType === 'income' ? 'Pemasukan' : quickAddType === 'transfer' ? 'Transfer' : 'Pengeluaran'} ${formatRupiahFull(num)} telah dicatat.`
+      })
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Gagal Menyimpan',
+        message: 'Terjadi kendala saat menyimpan transaksi ke database.'
+      })
+    }
   }
 
-  const handleDeleteTx = (id: string) => {
+  const handleDeleteTx = async (id: string) => {
     if (confirm('Hapus transaksi ini? Saldo dompet akan disesuaikan otomatis.')) {
-      OlloStore.deleteTransaction(id)
+      await OlloStore.deleteTransactionAsync(id)
       setEditingTx(null)
       loadAllData()
       showToast({ type: 'warning', title: 'Transaksi Dihapus', message: 'Kalkulasi saldo diperbarui.' })

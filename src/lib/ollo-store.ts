@@ -157,7 +157,6 @@ export class OlloStore {
     const idx = wallets.findIndex(w => w.id === id)
     if (idx === -1) return null
 
-    // Calculate transaction delta for this wallet to keep balance correction exact
     const txs = this.getTransactions()
     let txDelta = 0
     txs.forEach(t => {
@@ -211,7 +210,6 @@ export class OlloStore {
     const filtered = wallets.filter(w => w.id !== id)
     this.saveWallets(filtered)
 
-    // Remove associated transactions
     const txs = this.getTransactions().filter(t => t.wallet_id !== id && t.to_wallet_id !== id)
     this.saveTransactions(txs)
     this.recalculateBalances()
@@ -232,13 +230,87 @@ export class OlloStore {
       localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(INITIAL_TRANSACTIONS))
       return INITIAL_TRANSACTIONS
     }
-    try { return JSON.parse(data) } catch { return INITIAL_TRANSACTIONS }
+    try {
+      const parsed = JSON.parse(data)
+      return Array.isArray(parsed) ? parsed : INITIAL_TRANSACTIONS
+    } catch {
+      return INITIAL_TRANSACTIONS
+    }
   }
 
   static saveTransactions(txs: OlloTransaction[]) {
     if (typeof window === 'undefined') return
     localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(txs))
     this.notifyChange()
+  }
+
+  static async addTransactionAsync(tx: Omit<OlloTransaction, 'id'>): Promise<{ success: boolean; tx: OlloTransaction; error?: any }> {
+    const txs = this.getTransactions()
+    const now = new Date()
+    const newTx: OlloTransaction = {
+      ...tx,
+      id: `ot-${Date.now()}`,
+      time: tx.time || now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    // 1. Optimistic Update locally
+    const updatedTxs = [newTx, ...txs]
+    this.saveTransactions(updatedTxs)
+    const updatedWallets = this.recalculateBalances()
+
+    // 2. Persist to Supabase Database
+    try {
+      const txPayload = {
+        id: newTx.id,
+        wallet_id: tx.wallet_id,
+        to_wallet_id: tx.to_wallet_id || null,
+        type: tx.type,
+        tipe: tx.type,
+        amount: Number(tx.amount),
+        nominal: Number(tx.amount),
+        category: tx.category,
+        kategori: tx.category,
+        note: tx.note || '',
+        catatan: tx.note || '',
+        date: tx.date || new Date().toISOString().split('T')[0],
+        tanggal: tx.date || new Date().toISOString().split('T')[0],
+        merchant: tx.merchant || ''
+      }
+
+      const { data: dbRes, error: txErr } = await supabase
+        .from('fin_transactions')
+        .insert([txPayload])
+        .select()
+
+      if (txErr) {
+        console.error('Supabase transaction insert error:', txErr)
+      }
+
+      // Update wallet balances in Supabase (Automatic Wallet Balance Update)
+      for (const w of updatedWallets) {
+        const walletPayload = {
+          id: w.id,
+          name: w.name,
+          nama_akun: w.name,
+          balance: Number(w.balance),
+          saldo_sekarang: Number(w.balance),
+          initial_balance: Number(w.initial_balance ?? w.balance),
+          card_number: w.card_number || '',
+          nomor_kartu: w.card_number || '',
+          type: w.type,
+          color: w.color,
+          warna: w.color,
+          logo_url: w.logo_url || ''
+        }
+        await supabase.from('fin_wallets').upsert(walletPayload)
+      }
+
+      this.notifyChange()
+      return { success: true, tx: newTx }
+    } catch (err) {
+      console.error('Add transaction error:', err)
+      return { success: true, tx: newTx, error: err }
+    }
   }
 
   static addTransaction(tx: Omit<OlloTransaction, 'id'>): OlloTransaction {
@@ -249,41 +321,12 @@ export class OlloStore {
       id: `ot-${Date.now()}`,
       time: tx.time || now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
+
     const updated = [newTx, ...txs]
     this.saveTransactions(updated)
-    const updatedWallets = this.recalculateBalances()
+    this.recalculateBalances()
 
-    try {
-      Promise.resolve().then(async () => {
-        await supabase.from('fin_transactions').insert([{
-          wallet_id: tx.wallet_id,
-          to_wallet_id: tx.to_wallet_id || null,
-          type: tx.type,
-          amount: tx.amount,
-          category: tx.category,
-          note: tx.note || '',
-          date: tx.date,
-          merchant: tx.merchant || ''
-        }])
-
-        for (const w of updatedWallets) {
-          await supabase.from('fin_wallets').upsert({
-            id: w.id,
-            name: w.name,
-            nama_akun: w.name,
-            balance: w.balance,
-            saldo_sekarang: w.balance,
-            initial_balance: w.initial_balance,
-            card_number: w.card_number || '',
-            nomor_kartu: w.card_number || '',
-            type: w.type,
-            color: w.color,
-            warna: w.color,
-            logo_url: w.logo_url || ''
-          })
-        }
-      }).catch(() => {})
-    } catch {}
+    OlloStore.addTransactionAsync(tx).catch(err => console.error(err))
 
     return newTx
   }
@@ -295,14 +338,83 @@ export class OlloStore {
 
     txs[idx] = { ...txs[idx], ...updates }
     this.saveTransactions(txs)
-    this.recalculateBalances()
+    const updatedWallets = this.recalculateBalances()
+
+    try {
+      Promise.resolve().then(async () => {
+        const t = txs[idx]
+        await supabase.from('fin_transactions').upsert({
+          id: t.id,
+          wallet_id: t.wallet_id,
+          to_wallet_id: t.to_wallet_id || null,
+          type: t.type,
+          tipe: t.type,
+          amount: Number(t.amount),
+          nominal: Number(t.amount),
+          category: t.category,
+          kategori: t.category,
+          note: t.note || '',
+          catatan: t.note || '',
+          date: t.date,
+          tanggal: t.date,
+          merchant: t.merchant || ''
+        })
+
+        for (const w of updatedWallets) {
+          await supabase.from('fin_wallets').upsert({
+            id: w.id,
+            name: w.name,
+            nama_akun: w.name,
+            balance: Number(w.balance),
+            saldo_sekarang: Number(w.balance),
+            initial_balance: Number(w.initial_balance ?? w.balance),
+            card_number: w.card_number || '',
+            nomor_kartu: w.card_number || '',
+            type: w.type,
+            color: w.color,
+            warna: w.color,
+            logo_url: w.logo_url || ''
+          })
+        }
+      }).catch(() => {})
+    } catch {}
+
     return txs[idx]
   }
 
-  static deleteTransaction(id: string) {
+  static async deleteTransactionAsync(id: string): Promise<boolean> {
     const txs = this.getTransactions().filter(t => t.id !== id)
     this.saveTransactions(txs)
-    this.recalculateBalances()
+    const updatedWallets = this.recalculateBalances()
+
+    try {
+      await supabase.from('fin_transactions').delete().eq('id', id)
+      for (const w of updatedWallets) {
+        await supabase.from('fin_wallets').upsert({
+          id: w.id,
+          name: w.name,
+          nama_akun: w.name,
+          balance: Number(w.balance),
+          saldo_sekarang: Number(w.balance),
+          initial_balance: Number(w.initial_balance ?? w.balance),
+          card_number: w.card_number || '',
+          nomor_kartu: w.card_number || '',
+          type: w.type,
+          color: w.color,
+          warna: w.color,
+          logo_url: w.logo_url || ''
+        })
+      }
+      this.notifyChange()
+    } catch (err) {
+      console.error('Delete transaction error:', err)
+    }
+
+    return true
+  }
+
+  static deleteTransaction(id: string) {
+    this.deleteTransactionAsync(id)
   }
 
   // Auto Recalculate Balance Rule:
@@ -428,8 +540,8 @@ export class OlloStore {
   static async syncFromSupabase() {
     if (typeof window === 'undefined') return
     try {
-      const { data: dbWallets } = await supabase.from('fin_wallets').select('*')
-      if (dbWallets && dbWallets.length > 0) {
+      const { data: dbWallets, error: walletErr } = await supabase.from('fin_wallets').select('*')
+      if (!walletErr && dbWallets && dbWallets.length > 0) {
         const mappedWallets: OlloWallet[] = dbWallets.map(w => ({
           id: w.id ? String(w.id) : `w-${Date.now()}`,
           name: w.name || w.nama_akun || 'BNI Utama',
@@ -441,7 +553,7 @@ export class OlloStore {
           logo_url: w.logo_url || 'https://upload.wikimedia.org/wikipedia/en/2/27/Bank_Negara_Indonesia_logo.svg'
         }))
         this.saveWallets(mappedWallets)
-      } else {
+      } else if (!dbWallets || dbWallets.length === 0) {
         await supabase.from('fin_wallets').upsert({
           id: 'w-bni',
           name: 'BNI Utama',
@@ -457,21 +569,30 @@ export class OlloStore {
         })
       }
 
-      const { data: dbTxs } = await supabase.from('fin_transactions').select('*').order('created_at', { ascending: false })
-      if (dbTxs) {
-        const mappedTxs: OlloTransaction[] = dbTxs.map(t => ({
+      const { data: dbTxs, error: txErr } = await supabase.from('fin_transactions').select('*').order('created_at', { ascending: false })
+      if (!txErr && dbTxs) {
+        const mappedDbTxs: OlloTransaction[] = dbTxs.map(t => ({
           id: t.id ? String(t.id) : `ot-${Date.now()}`,
           wallet_id: t.wallet_id,
           to_wallet_id: t.to_wallet_id,
-          type: t.type,
-          amount: Number(t.amount),
-          category: t.category,
-          note: t.note,
-          date: t.date || new Date().toISOString().split('T')[0],
-          merchant: t.merchant
+          type: t.type || t.tipe || 'expense',
+          amount: Number(t.amount ?? t.nominal ?? 0),
+          category: t.category || t.kategori || 'Lainnya',
+          note: t.note || t.catatan || '',
+          date: t.date || t.tanggal || new Date().toISOString().split('T')[0],
+          merchant: t.merchant || ''
         }))
-        this.saveTransactions(mappedTxs)
+
+        const localTxs = this.getTransactions()
+        const txMap = new Map<string, OlloTransaction>()
+
+        localTxs.forEach(t => txMap.set(t.id, t))
+        mappedDbTxs.forEach(t => txMap.set(t.id, t))
+
+        const mergedTxs = Array.from(txMap.values())
+        this.saveTransactions(mergedTxs)
       }
+
       this.recalculateBalances()
     } catch (err) {
       console.warn('Supabase sync warning:', err)

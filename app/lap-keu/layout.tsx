@@ -256,12 +256,12 @@ export default function OlloLayout({ children }: { children: React.ReactNode }) 
     setIsAuthenticated(false)
   }
 
-  const handleSaveQuickTx = (e: React.FormEvent) => {
+  const handleSaveQuickTx = async (e: React.FormEvent) => {
     e.preventDefault()
     const num = parseInt(txAmount.replace(/\D/g, '')) || 0
     if (num <= 0) return
 
-    OlloStore.addTransaction({
+    await OlloStore.addTransactionAsync({
       wallet_id: txWalletId,
       to_wallet_id: txType === 'transfer' ? txToWalletId : undefined,
       type: txType,
