@@ -30,7 +30,12 @@ import {
   LogOut,
   Check,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ScanLine,
+  Sparkles,
+  Loader2,
+  Receipt,
+  CheckCircle
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +55,21 @@ interface Transaction {
   nominal: number;
   keterangan: string;
   created_at: string;
+}
+
+interface ReceiptItem {
+  item_name: string;
+  qty: number;
+  price: number;
+}
+
+interface ReceiptScanResult {
+  imagePreview: string;
+  merchant: string;
+  date: string;
+  items: ReceiptItem[];
+  total: number;
+  walletId: string;
 }
 
 const COLOR_PALETTES = [
@@ -93,6 +113,12 @@ export default function MobileBankingFinance() {
   const [editWalletLogo, setEditWalletLogo] = useState('');
   const [submittingEditWallet, setSubmittingEditWallet] = useState(false);
 
+  // State AI Scan Nota
+  const [isScanningReceipt, setIsScanningReceipt] = useState(false);
+  const [receiptScanResult, setReceiptScanResult] = useState<ReceiptScanResult | null>(null);
+  const [showReceiptReviewModal, setShowReceiptReviewModal] = useState(false);
+  const [submittingAcc, setSubmittingAcc] = useState(false);
+
   const loadData = async () => {
     try {
       const { data: wData } = await supabase
@@ -127,7 +153,172 @@ export default function MobileBankingFinance() {
     return COLOR_PALETTES[idx % COLOR_PALETTES.length].class;
   };
 
-  // Simpan Transaksi Baru
+  // 1. Trigger File Upload & AI Vision Scan
+  const handleReceiptFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      if (typeof reader.result === 'string') {
+        const base64Data = reader.result;
+        setIsScanningReceipt(true);
+
+        try {
+          const res = await fetch('/api/fin-scan-receipt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: base64Data }),
+          });
+          const result = await res.json();
+
+          if (result.success && result.data) {
+            const d = result.data;
+            const parsedItems = (d.items || []).map((it: any) => ({
+              item_name: it.item_name || 'Item Belanja',
+              qty: it.qty || 1,
+              price: Number(it.price || it.subtotal || 0),
+            }));
+
+            const calculatedTotal = parsedItems.length > 0
+              ? parsedItems.reduce((sum: number, i: any) => sum + (i.price * i.qty), 0)
+              : Number(d.total || 0);
+
+            setReceiptScanResult({
+              imagePreview: base64Data,
+              merchant: d.merchant || 'Nota Belanja Toko',
+              date: d.date || new Date().toISOString().split('T')[0],
+              items: parsedItems,
+              total: calculatedTotal || Number(d.total || 0),
+              walletId: selectedWalletId || (wallets[0]?.id || ''),
+            });
+
+            setShowReceiptReviewModal(true);
+          } else {
+            alert('Gagal membaca nota. Silakan coba unggah foto nota yang lebih jelas.');
+          }
+        } catch (err: any) {
+          alert('Kendala saat memindai nota dengan AI: ' + err.message);
+        } finally {
+          setIsScanningReceipt(false);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 2. Confirmaton (ACC) Handler untuk Simpan Transaksi Nota & Potong Saldo
+  const handleConfirmAccReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!receiptScanResult) return;
+
+    const targetWalletId = receiptScanResult.walletId || selectedWalletId || (wallets[0]?.id || '');
+    if (!targetWalletId) {
+      alert('Pilih dompet pembayaran terlebih dahulu.');
+      return;
+    }
+
+    const currentWallet = wallets.find((w) => w.id === targetWalletId);
+    if (!currentWallet) {
+      alert('Dompet terpilih tidak ditemukan.');
+      return;
+    }
+
+    // Hitung total akhir dari items
+    const itemsTotal = receiptScanResult.items.length > 0
+      ? receiptScanResult.items.reduce((acc, it) => acc + (Number(it.price) * (it.qty || 1)), 0)
+      : Number(receiptScanResult.total);
+
+    const finalTotal = itemsTotal > 0 ? itemsTotal : Number(receiptScanResult.total);
+
+    if (!finalTotal || finalTotal <= 0) {
+      alert('Nominal total pengeluaran nota tidak valid.');
+      return;
+    }
+
+    setSubmittingAcc(true);
+    try {
+      const newBalance = Number(currentWallet.saldo_sekarang) - finalTotal;
+
+      // a. Insert ke fin_transactions
+      const { data: txIns, error: txErr } = await supabase.from('fin_transactions').insert([
+        {
+          wallet_id: targetWalletId,
+          tipe: 'pengeluaran',
+          nominal: finalTotal,
+          keterangan: `Belanja di ${receiptScanResult.merchant}`,
+        },
+      ]).select();
+
+      if (txErr) throw txErr;
+
+      // b. Insert rincian barang ke fin_receipt_items (jika tabel ada)
+      if (txIns && txIns[0] && receiptScanResult.items.length > 0) {
+        try {
+          const itemPayload = receiptScanResult.items.map((it) => ({
+            transaction_id: txIns[0].id,
+            item_name: it.item_name,
+            qty: it.qty || 1,
+            price: Number(it.price),
+            subtotal: (it.qty || 1) * Number(it.price),
+          }));
+          await supabase.from('fin_receipt_items').insert(itemPayload);
+        } catch (stErr) {
+          console.warn('Non-fatal: fin_receipt_items insert warning:', stErr);
+        }
+      }
+
+      // c. Update saldo dompet
+      const { error: updErr } = await supabase
+        .from('fin_wallets')
+        .update({ saldo_sekarang: newBalance })
+        .eq('id', targetWalletId);
+
+      if (updErr) throw updErr;
+
+      setShowReceiptReviewModal(false);
+      setReceiptScanResult(null);
+      await loadData();
+      alert('✓ Nota belanja berhasil dicatat & saldo terpotong!');
+    } catch (err: any) {
+      alert('Gagal mencatat pengeluaran nota: ' + err.message);
+    } finally {
+      setSubmittingAcc(false);
+    }
+  };
+
+  // Helper Edit Items pada Modal Review
+  const updateReceiptItemName = (idx: number, name: string) => {
+    if (!receiptScanResult) return;
+    const newItems = [...receiptScanResult.items];
+    newItems[idx].item_name = name;
+    setReceiptScanResult({ ...receiptScanResult, items: newItems });
+  };
+
+  const updateReceiptItemPrice = (idx: number, priceStr: string) => {
+    if (!receiptScanResult) return;
+    const newItems = [...receiptScanResult.items];
+    newItems[idx].price = Number(priceStr) || 0;
+    
+    const newTotal = newItems.reduce((acc, it) => acc + (it.price * (it.qty || 1)), 0);
+    setReceiptScanResult({ ...receiptScanResult, items: newItems, total: newTotal });
+  };
+
+  const removeReceiptItem = (idx: number) => {
+    if (!receiptScanResult) return;
+    const newItems = receiptScanResult.items.filter((_, i) => i !== idx);
+    const newTotal = newItems.reduce((acc, it) => acc + (it.price * (it.qty || 1)), 0);
+    setReceiptScanResult({ ...receiptScanResult, items: newItems, total: newTotal });
+  };
+
+  const addReceiptItem = () => {
+    if (!receiptScanResult) return;
+    const newItems = [...receiptScanResult.items, { item_name: 'Barang Baru', qty: 1, price: 10000 }];
+    const newTotal = newItems.reduce((acc, it) => acc + (it.price * (it.qty || 1)), 0);
+    setReceiptScanResult({ ...receiptScanResult, items: newItems, total: newTotal });
+  };
+
+  // Simpan Transaksi Manual Baru
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanNominal = Number(nominal);
@@ -312,6 +503,17 @@ export default function MobileBankingFinance() {
 
   return (
     <div className="min-h-screen bg-slate-900 flex justify-center py-0 sm:py-8 font-sans antialiased text-slate-800 w-full">
+      
+      {/* Hidden Receipt File Input */}
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        id="receipt-upload"
+        className="hidden"
+        onChange={handleReceiptFileSelect}
+      />
+
       {/* Container Layar HP Presisi */}
       <div className="w-full max-w-sm sm:max-w-md bg-white sm:rounded-[40px] shadow-2xl overflow-hidden flex flex-col min-h-screen sm:min-h-[844px] relative border border-slate-200/60">
         
@@ -725,7 +927,7 @@ export default function MobileBankingFinance() {
 
         </div>
 
-        {/* 3. BOTTOM FLOATING NAVIGATION BAR (SINGLE SOURCE OF TRUTH) */}
+        {/* 3. BOTTOM FLOATING NAVIGATION BAR (AI RECEIPT SCANNER ON CENTER PLUS BUTTON) */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-xl rounded-full py-2.5 px-6 flex justify-between items-center z-40">
           {/* Home */}
           <button 
@@ -745,11 +947,18 @@ export default function MobileBankingFinance() {
             <Clock className="w-5 h-5"/>
           </button>
 
-          {/* Tombol Plus Biru Menonjol di Tengah */}
+          {/* Tombol Tengah (+) : AI RECEIPT SCANNER */}
           <button 
-            onClick={() => { setTrxType('pengeluaran'); setShowTrxModal(true); }}
-            className="w-11 h-11 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full shadow-lg shadow-blue-500/40 flex items-center justify-center -mt-5 transition"
-            title="Catat Transaksi Cepat"
+            type="button"
+            onClick={() => {
+              const inputEl = document.getElementById('receipt-upload') as HTMLInputElement;
+              if (inputEl) {
+                inputEl.value = '';
+                inputEl.click();
+              }
+            }}
+            className="w-11 h-11 bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:scale-95 text-white rounded-full shadow-lg shadow-blue-500/40 flex items-center justify-center -mt-5 transition border-2 border-white"
+            title="Scan Nota Belanja dengan AI (+)"
           >
             <Plus className="w-6 h-6 stroke-[2.5]"/>
           </button>
@@ -773,12 +982,202 @@ export default function MobileBankingFinance() {
           </button>
         </div>
 
-        {/* MODAL 1: INPUT TRANSAKSI */}
+        {/* MODAL LOADING AI SCANNING */}
+        {isScanningReceipt && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in duration-200">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <ScanLine className="w-8 h-8 animate-pulse" />
+                </div>
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white animate-ping" />
+              </div>
+
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">Memindai Nota dengan AI</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Mengekstrak rincian barang, tanggal, dan nominal otomatis...
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-indigo-600 text-xs font-semibold bg-indigo-50 px-3 py-1.5 rounded-full">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Gemini 1.5 Vision Processing</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL REVIEW & KONFIRMASI (ACC) SCAN NOTA */}
+        {showReceiptReviewModal && receiptScanResult && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
+              
+              {/* Header Modal */}
+              <div className="flex justify-between items-center border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-extrabold text-slate-900 text-base">Hasil Scan Nota AI</h3>
+                </div>
+                <button 
+                  onClick={() => setShowReceiptReviewModal(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmAccReceipt} className="space-y-4">
+                
+                {/* Thumbnail Nota & Toko */}
+                <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                  {receiptScanResult.imagePreview && (
+                    <img 
+                      src={receiptScanResult.imagePreview} 
+                      alt="Thumbnail Struk" 
+                      className="w-14 h-14 object-cover rounded-xl border border-slate-200 shrink-0 shadow-sm"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      NAMA TOKO / MERCHANT
+                    </label>
+                    <input
+                      type="text"
+                      value={receiptScanResult.merchant}
+                      onChange={(e) => setReceiptScanResult({ ...receiptScanResult, merchant: e.target.value })}
+                      className="w-full mt-0.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Pilih Dompet Sumber Pembayaran */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 tracking-wider uppercase block mb-1">
+                    DOMPET PEMBAYARAN
+                  </label>
+                  <select
+                    value={receiptScanResult.walletId}
+                    onChange={(e) => setReceiptScanResult({ ...receiptScanResult, walletId: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+                    required
+                  >
+                    {wallets.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.nama_akun} (Saldo: Rp {Number(w.saldo_sekarang).toLocaleString('id-ID')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* List Item Barang Hasil OCR AI */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-400 tracking-wider uppercase">
+                      RINCIAN BARANG ({receiptScanResult.items.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addReceiptItem}
+                      className="text-[11px] text-blue-600 font-bold hover:underline flex items-center gap-0.5"
+                    >
+                      <Plus size={12} /> Tambah Item
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {receiptScanResult.items.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic text-center py-2">Belum ada item barang.</p>
+                    ) : (
+                      receiptScanResult.items.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200/60">
+                          <input
+                            type="text"
+                            value={item.item_name}
+                            onChange={(e) => updateReceiptItemName(idx, e.target.value)}
+                            className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-medium text-slate-800"
+                            placeholder="Nama item"
+                            required
+                          />
+                          <div className="w-24 flex items-center gap-1">
+                            <span className="text-[10px] text-slate-400">Rp</span>
+                            <input
+                              type="number"
+                              value={item.price}
+                              onChange={(e) => updateReceiptItemPrice(idx, e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-xs font-bold text-slate-900"
+                              placeholder="Harga"
+                              required
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeReceiptItem(idx)}
+                            className="text-slate-400 hover:text-red-500 p-1"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Total Ringkasan Pengeluaran */}
+                <div className="bg-indigo-50/90 border border-indigo-100 p-3.5 rounded-2xl flex justify-between items-center">
+                  <div>
+                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">TOTAL PENGELUARAN NOTA</p>
+                    <p className="text-xs text-indigo-700 font-medium">Berdasarkan rincian belanja</p>
+                  </div>
+                  <h2 className="text-xl font-black text-indigo-900">
+                    Rp {receiptScanResult.items.length > 0 
+                      ? receiptScanResult.items.reduce((sum, it) => sum + (it.price * (it.qty || 1)), 0).toLocaleString('id-ID')
+                      : Number(receiptScanResult.total).toLocaleString('id-ID')}
+                  </h2>
+                </div>
+
+                {/* Tombol Aksi Batal vs ACC */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowReceiptReviewModal(false);
+                      setReceiptScanResult(null);
+                    }}
+                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition"
+                  >
+                    Ulangi / Batalkan
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={submittingAcc}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5"
+                  >
+                    {submittingAcc ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>ACC & Catat Pengeluaran</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </form>
+
+            </div>
+          </div>
+        )}
+
+        {/* MODAL MANUAL TRANSAKSI */}
         {showTrxModal && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold text-slate-900 text-base">Catat Transaksi</h3>
+                <h3 className="font-bold text-slate-900 text-base">Catat Transaksi Manual</h3>
                 <button onClick={() => setShowTrxModal(false)} className="text-slate-400 hover:text-slate-600 text-sm">Tutup</button>
               </div>
 
@@ -847,7 +1246,7 @@ export default function MobileBankingFinance() {
           </div>
         )}
 
-        {/* MODAL 2: TAMBAH DOMPET BARU */}
+        {/* MODAL TAMBAH DOMPET BARU */}
         {showWalletModal && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4">
@@ -892,7 +1291,7 @@ export default function MobileBankingFinance() {
           </div>
         )}
 
-        {/* MODAL 3: EDIT KARTU / DOMPET (DENGAN UPLOAD LOGO PNG & PALETTE WARNA) */}
+        {/* MODAL EDIT KARTU / DOMPET */}
         {editingWallet && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -902,7 +1301,6 @@ export default function MobileBankingFinance() {
               </div>
 
               <form onSubmit={handleUpdateWallet} className="space-y-4">
-                {/* 1. Nama Dompet */}
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500">NAMA DOMPET / BANK</label>
                   <input 
@@ -914,13 +1312,11 @@ export default function MobileBankingFinance() {
                   />
                 </div>
 
-                {/* 2. Upload Logo Bank (Wajib PNG) */}
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500 block mb-1">
                     LOGO BANK / DOMPET (WAJIB PNG TRANSPARAN)
                   </label>
                   <div className="flex items-center gap-3">
-                    {/* Thumbnail Preview */}
                     <div className="w-12 h-12 rounded-xl border border-slate-200 flex items-center justify-center bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:8px_8px] bg-slate-100 shrink-0 overflow-hidden shadow-inner">
                       {editWalletLogo ? (
                         <img src={editWalletLogo} alt="Preview Logo" className="w-9 h-9 object-contain drop-shadow-sm" />
@@ -949,7 +1345,6 @@ export default function MobileBankingFinance() {
                   </div>
                 </div>
 
-                {/* 3. Pilihan Tone Warna Kartu */}
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500 block mb-1.5">
                     TONE WARNA GRADIEN KARTU
@@ -974,7 +1369,6 @@ export default function MobileBankingFinance() {
                   </div>
                 </div>
 
-                {/* 4. Saldo Sekarang */}
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500">SALDO SEKARANG (KOREKSI SALDO)</label>
                   <input 
@@ -986,7 +1380,6 @@ export default function MobileBankingFinance() {
                   />
                 </div>
 
-                {/* Buttons */}
                 <div className="flex gap-2 pt-2">
                   <button 
                     type="submit" 
