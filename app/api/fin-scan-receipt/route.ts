@@ -20,52 +20,75 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Bersihkan header data:image/...;base64,
+    // Bersihkan header Base64
     const cleanBase64 = imageBase64.includes(',') 
       ? imageBase64.split(',')[1] 
       : imageBase64;
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    // Daftar model prioritas untuk dicoba bertahap jika salah satu 404
+    const candidateModels = [
+      'gemini-1.5-flash-latest',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-8b',
+      'gemini-1.5-pro',
+      'gemini-2.5-flash',
+      'gemini-1.5-flash'
+    ];
 
     const prompt = `
-Kamu adalah sistem OCR dan ekstraktor nota belanja/kasir/restoran/warung profesional.
-Analisis gambar nota/struk ini dengan sangat teliti (bisa berupa struk printer thermal, faktur, ataupun nota bon tulisan tangan/warung).
+Kamu adalah sistem OCR pembaca nota/struk belanja, restoran, warung makan, atau struk kasir profesional.
+Tugasmu adalah menganalisis foto nota (baik struk cetak printer maupun nota bon tulisan tangan).
 
-Ekstrak informasi ke dalam format JSON murni TANPA markdown formatting, TANPA tanda kutip tiga (\`\`\`json):
+Kembalikan HANYA format JSON valid murni tanpa markdown formatting, tanpa tanda kutip tiga (\`\`\`json):
 {
-  "merchant": "Nama Toko / Restoran / Warung (misal: Sate Kambing, Warung Soto, Indomaret, dll. Jika tidak tertera, tulis 'Nota Transaksi')",
-  "tanggal": "YYYY-MM-DD (gunakan tanggal hari ini jika tidak terbaca)",
+  "merchant": "Nama Warung / Restoran / Toko (contoh: Sate & Soto, Rumah Makan, dsb. Jika tidak ada nama, tulis 'Warung Makan')",
+  "tanggal": "YYYY-MM-DD",
   "total": 0,
   "items": [
     {
-      "item_name": "Nama Makanan / Barang / Jasa",
+      "item_name": "Nama Item / Makanan / Minuman",
       "qty": 1,
       "subtotal": 0
     }
   ]
 }
 
-Aturan Penting:
-1. "total" dan "subtotal" harus bertipe angka bulat (integer/number) tanpa simbol Rp atau titik.
-2. Jika ada rincian porsi/makanan (misal: Sate 10 tusuk, Soto Ayam, Es Teh), masukkan ke daftar "items".
-3. Jika total akhir tertulis jelas di nota, pastikan field "total" sama dengan nominal tersebut.
-4. HANYA kembalikan valid JSON murni.
+Aturan:
+1. Pastikan "total" dan "subtotal" hanya berupa angka murni (integer/number) tanpa simbol Rp, koma, atau titik.
+2. Jika ada menu yang tertera (misal: Sate, Soto, Es Teh, Nasi), catat ke array items beserta harganya.
+3. Nilai total harus mencerminkan total bayar yang tertulis di nota.
 `;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: cleanBase64,
-          mimeType: 'image/jpeg',
-        },
-      },
-    ]);
+    let lastError: any = null;
+    let rawText = '';
 
-    const rawText = result.response.text().trim();
-    
-    // Bersihkan karakter markdown jika model tetap memberikan backtick
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: 'image/jpeg',
+            },
+          },
+        ]);
+        rawText = result.response.text().trim();
+        if (rawText) break; // Berhasil membaca!
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Model ${modelName} gagal: ${err?.message}, mencoba model berikutnya...`);
+      }
+    }
+
+    if (!rawText) {
+      throw new Error(lastError?.message || 'Gagal memproses nota belanja dengan model Gemini yang tersedia');
+    }
+
+    // Bersihkan karakter markdown jika model tetap memberikan backticks
     const cleanedJsonText = rawText
       .replace(/^```json/i, '')
       .replace(/^```/, '')
@@ -79,7 +102,7 @@ Aturan Penting:
       data: parsedData,
     });
   } catch (error: any) {
-    console.error('Error scanning receipt with Gemini:', error);
+    console.error('Error scanning receipt:', error);
     return NextResponse.json(
       { error: error?.message || 'Gagal memproses nota belanja dengan AI' },
       { status: 500 }
