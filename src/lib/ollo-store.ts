@@ -11,6 +11,7 @@ export interface OlloWallet {
   icon?: string
   logo_url?: string
   initial_balance?: number
+  card_number?: string
 }
 
 export interface OlloTransaction {
@@ -49,6 +50,7 @@ export const INITIAL_WALLETS: OlloWallet[] = [
     name: 'BNI Utama',
     balance: 5000000,
     initial_balance: 5000000,
+    card_number: '•••• •••• •••• 1922',
     type: 'bank',
     color: 'blue',
     icon: '🏦',
@@ -122,7 +124,8 @@ export class OlloStore {
     const newW: OlloWallet = {
       ...wallet,
       id: `w-${Date.now()}`,
-      initial_balance: wallet.balance
+      initial_balance: wallet.balance,
+      card_number: wallet.card_number || `•••• •••• •••• ${Math.floor(1000 + Math.random() * 9000)}`
     }
     const updated = [...wallets, newW]
     this.saveWallets(updated)
@@ -132,9 +135,15 @@ export class OlloStore {
         supabase.from('fin_wallets').upsert({
           id: newW.id,
           name: newW.name,
+          nama_akun: newW.name,
           balance: newW.balance,
+          saldo_sekarang: newW.balance,
+          initial_balance: newW.initial_balance,
+          card_number: newW.card_number,
+          nomor_kartu: newW.card_number,
           type: newW.type,
           color: newW.color,
+          warna: newW.color,
           logo_url: newW.logo_url || ''
         })
       ).catch(() => {})
@@ -148,19 +157,72 @@ export class OlloStore {
     const idx = wallets.findIndex(w => w.id === id)
     if (idx === -1) return null
 
+    // Calculate transaction delta for this wallet to keep balance correction exact
+    const txs = this.getTransactions()
+    let txDelta = 0
+    txs.forEach(t => {
+      if (t.wallet_id === id) {
+        if (t.type === 'income') txDelta += t.amount
+        else if (t.type === 'expense' || t.type === 'transfer') txDelta -= t.amount
+      }
+      if (t.type === 'transfer' && t.to_wallet_id === id) {
+        txDelta += t.amount
+      }
+    })
+
+    if (updates.balance !== undefined) {
+      updates.initial_balance = updates.balance - txDelta
+    }
+
     wallets[idx] = { ...wallets[idx], ...updates }
     this.saveWallets(wallets)
     this.recalculateBalances()
-    return wallets[idx]
+
+    const updatedW = wallets[idx]
+
+    try {
+      Promise.resolve(
+        supabase.from('fin_wallets').upsert({
+          id: updatedW.id,
+          name: updatedW.name,
+          nama_akun: updatedW.name,
+          balance: updatedW.balance,
+          saldo_sekarang: updatedW.balance,
+          initial_balance: updatedW.initial_balance,
+          card_number: updatedW.card_number || '',
+          nomor_kartu: updatedW.card_number || '',
+          type: updatedW.type,
+          color: updatedW.color,
+          warna: updatedW.color,
+          logo_url: updatedW.logo_url || ''
+        })
+      ).catch(() => {})
+    } catch {}
+
+    return updatedW
   }
 
-  static deleteWallet(id: string) {
-    const wallets = this.getWallets().filter(w => w.id !== id)
-    this.saveWallets(wallets)
+  static deleteWallet(id: string): boolean {
+    const wallets = this.getWallets()
+    if (wallets.length <= 1) {
+      return false
+    }
+
+    const filtered = wallets.filter(w => w.id !== id)
+    this.saveWallets(filtered)
 
     // Remove associated transactions
     const txs = this.getTransactions().filter(t => t.wallet_id !== id && t.to_wallet_id !== id)
     this.saveTransactions(txs)
+    this.recalculateBalances()
+
+    try {
+      Promise.resolve(
+        supabase.from('fin_wallets').delete().eq('id', id)
+      ).catch(() => {})
+    } catch {}
+
+    return true
   }
 
   static getTransactions(): OlloTransaction[] {
@@ -208,9 +270,15 @@ export class OlloStore {
           await supabase.from('fin_wallets').upsert({
             id: w.id,
             name: w.name,
+            nama_akun: w.name,
             balance: w.balance,
+            saldo_sekarang: w.balance,
+            initial_balance: w.initial_balance,
+            card_number: w.card_number || '',
+            nomor_kartu: w.card_number || '',
             type: w.type,
             color: w.color,
+            warna: w.color,
             logo_url: w.logo_url || ''
           })
         }
@@ -364,11 +432,12 @@ export class OlloStore {
       if (dbWallets && dbWallets.length > 0) {
         const mappedWallets: OlloWallet[] = dbWallets.map(w => ({
           id: w.id ? String(w.id) : `w-${Date.now()}`,
-          name: w.name || 'BNI Utama',
-          balance: Number(w.balance ?? 5000000),
-          initial_balance: Number(w.initial_balance ?? w.balance ?? 5000000),
+          name: w.name || w.nama_akun || 'BNI Utama',
+          balance: Number(w.balance ?? w.saldo_sekarang ?? 5000000),
+          initial_balance: Number(w.initial_balance ?? w.balance ?? w.saldo_sekarang ?? 5000000),
+          card_number: w.card_number || w.nomor_kartu || '•••• •••• •••• 1922',
           type: w.type || 'bank',
-          color: w.color || 'blue',
+          color: w.color || w.warna || 'blue',
           logo_url: w.logo_url || 'https://upload.wikimedia.org/wikipedia/en/2/27/Bank_Negara_Indonesia_logo.svg'
         }))
         this.saveWallets(mappedWallets)
@@ -376,9 +445,14 @@ export class OlloStore {
         await supabase.from('fin_wallets').upsert({
           id: 'w-bni',
           name: 'BNI Utama',
+          nama_akun: 'BNI Utama',
           balance: 5000000,
+          saldo_sekarang: 5000000,
+          card_number: '•••• •••• •••• 1922',
+          nomor_kartu: '•••• •••• •••• 1922',
           type: 'bank',
           color: 'blue',
+          warna: 'blue',
           logo_url: 'https://upload.wikimedia.org/wikipedia/en/2/27/Bank_Negara_Indonesia_logo.svg'
         })
       }

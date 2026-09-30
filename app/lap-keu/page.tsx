@@ -385,13 +385,27 @@ export default function FinaciDashboard() {
                 {/* Glossy Overlay Pattern */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
 
-                {/* Top Row: EMV Chip & Bank Logo */}
+                {/* Top Row: EMV Chip, Edit Button & Bank Logo */}
                 <div className="flex items-center justify-between relative z-10">
                   <div className="flex items-center gap-2">
                     {/* Golden EMV Chip Icon */}
                     <div className="w-8 h-6 rounded-md bg-amber-300/80 border border-amber-400 flex items-center justify-center text-[10px] text-amber-900 font-bold shadow-2xs">
                       <Cpu size={14} />
                     </div>
+
+                    {/* Edit Pencil Icon Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingWallet(w)
+                        setShowWalletModal(true)
+                      }}
+                      className="w-6 h-6 rounded-lg bg-white/20 hover:bg-white/40 backdrop-blur-md text-white flex items-center justify-center transition shadow-2xs cursor-pointer z-20"
+                      title="Sunting / Koreksi Saldo Rekening Ini"
+                    >
+                      <Edit2 size={12} />
+                    </button>
                   </div>
 
                   {/* Bank Logo / Preset */}
@@ -408,7 +422,7 @@ export default function FinaciDashboard() {
 
                 {/* Card Number Masked */}
                 <div className="font-mono text-xs tracking-widest text-white/90 relative z-10">
-                  •••• •••• •••• {w.id.slice(-4).toUpperCase()}
+                  {w.card_number || `•••• •••• •••• ${w.id.slice(-4).toUpperCase()}`}
                 </div>
 
                 {/* Bottom Row: Balance & Cardholder */}
@@ -614,22 +628,38 @@ export default function FinaciDashboard() {
       <ModalWallet
         isOpen={showWalletModal}
         editingWallet={editingWallet}
-        onClose={() => setShowWalletModal(false)}
+        totalWalletsCount={wallets.length}
+        onClose={() => {
+          setShowWalletModal(false)
+          setEditingWallet(null)
+        }}
+        onDelete={(id) => {
+          const ok = OlloStore.deleteWallet(id)
+          if (ok) {
+            showToast({ type: 'warning', title: 'Rekening Dihapus', message: 'Rekening berhasil dihapus dari sistem.' })
+            loadAllData()
+            setShowWalletModal(false)
+            setEditingWallet(null)
+          } else {
+            showToast({ type: 'error', title: 'Gagal Menghapus', message: 'Sistem memerlukan minimal 1 rekening aktif.' })
+          }
+        }}
         onSave={(data) => {
           if (editingWallet) {
             OlloStore.updateWallet(editingWallet.id, {
               name: data.name,
               balance: data.balance,
-              initial_balance: data.balance,
+              card_number: data.card_number,
               type: data.type,
               color: data.color,
               logo_url: data.logo_url
             })
-            showToast({ type: 'success', title: 'Kartu Berhasil Diperbarui', message: `Preset logo & saldo ${data.name} disimpan.` })
+            showToast({ type: 'success', title: 'Dompet Diperbarui', message: '✓ Data dompet berhasil diperbarui' })
           } else {
             OlloStore.addWallet({
               name: data.name,
               balance: data.balance,
+              card_number: data.card_number,
               type: data.type,
               color: data.color,
               logo_url: data.logo_url
@@ -638,6 +668,7 @@ export default function FinaciDashboard() {
           }
           loadAllData()
           setShowWalletModal(false)
+          setEditingWallet(null)
         }}
       />
 
