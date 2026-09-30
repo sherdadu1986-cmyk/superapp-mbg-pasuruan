@@ -15,7 +15,9 @@ import {
   X,
   ArrowRightLeft,
   Wallet,
-  Check
+  Check,
+  BarChart3,
+  Settings
 } from 'lucide-react'
 import { OlloStore, OlloWallet, formatRupiahFull } from '@/lib/ollo-store'
 
@@ -107,59 +109,59 @@ export default function OlloLayout({ children }: { children: React.ReactNode }) 
         {children}
       </main>
 
-      {/* Floating Bottom Navigation Bar (Ollo Style) */}
-      <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-xl border border-slate-200/80 px-4 py-2 rounded-full shadow-xl flex items-center gap-1 sm:gap-4 max-w-sm w-[92%] justify-around">
-        {/* 1. Home */}
+      {/* Floating Bottom Navigation Bar (Finaci UI Kit Style) */}
+      <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-xl border border-slate-200/80 px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-1 sm:gap-4 max-w-sm w-[92%] justify-around">
+        {/* 1. Beranda (Home) */}
         <Link
           href="/lap-keu"
           className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-[10px] font-bold transition ${
-            pathname === '/lap-keu' ? 'text-emerald-600 font-extrabold' : 'text-slate-400 hover:text-slate-600'
+            pathname === '/lap-keu' ? 'text-indigo-600 font-extrabold' : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <Home size={18} />
-          <span>Home</span>
+          <Home size={19} />
+          <span>Beranda</span>
         </Link>
 
-        {/* 2. Transaksi */}
+        {/* 2. Analitik (Analytics) */}
         <Link
-          href="/lap-keu/transaksi"
+          href="/lap-keu/analitik"
           className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-[10px] font-bold transition ${
-            pathname.startsWith('/lap-keu/transaksi') ? 'text-emerald-600 font-extrabold' : 'text-slate-400 hover:text-slate-600'
+            pathname.startsWith('/lap-keu/analitik') ? 'text-indigo-600 font-extrabold' : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <Receipt size={18} />
-          <span>Riwayat</span>
+          <BarChart3 size={19} />
+          <span>Analitik</span>
         </Link>
 
         {/* 3. CENTER CAMERA SCAN BUTTON (Prominent Floating Circle) */}
         <Link
           href="/lap-keu/scan-nota"
-          className="relative -top-5 w-12 h-12 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg shadow-slate-900/30 transition active:scale-95 cursor-pointer border-4 border-slate-50"
+          className="relative -top-5 w-13 h-13 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/40 transition active:scale-95 cursor-pointer border-4 border-slate-50"
           title="Scan Nota AI"
         >
-          <Camera size={20} className="text-emerald-400" />
+          <Camera size={22} className="text-white" />
         </Link>
 
-        {/* 4. Budget & Goals */}
+        {/* 4. Budget & Kartu (Cards) */}
         <Link
           href="/lap-keu/budget"
           className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-[10px] font-bold transition ${
-            pathname.startsWith('/lap-keu/budget') ? 'text-emerald-600 font-extrabold' : 'text-slate-400 hover:text-slate-600'
+            pathname.startsWith('/lap-keu/budget') ? 'text-indigo-600 font-extrabold' : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <PiggyBank size={18} />
+          <PiggyBank size={19} />
           <span>Budget</span>
         </Link>
 
-        {/* 5. AI Assistant */}
+        {/* 5. Pengaturan (Settings) */}
         <Link
-          href="/lap-keu/ai-assistant"
+          href="/lap-keu/pengaturan"
           className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-[10px] font-bold transition ${
-            pathname.startsWith('/lap-keu/ai-assistant') ? 'text-emerald-600 font-extrabold' : 'text-slate-400 hover:text-slate-600'
+            pathname.startsWith('/lap-keu/pengaturan') ? 'text-indigo-600 font-extrabold' : 'text-slate-400 hover:text-slate-700'
           }`}
         >
-          <Bot size={18} />
-          <span>AI Ollo</span>
+          <Settings size={19} />
+          <span>Setel</span>
         </Link>
       </nav>
 
