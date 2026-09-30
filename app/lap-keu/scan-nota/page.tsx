@@ -48,27 +48,14 @@ export default function OlloScanNotaPage() {
       })
 
       const data = await res.json()
-      if (data.data) {
+      if (res.ok && data.success && data.data) {
         setScanData(data.data)
         setShowConfirmation(true)
       } else {
-        throw new Error('Data empty')
+        alert(data.error || 'Gagal membaca nota dengan AI. Pastikan GEMINI_API_KEY sudah disetel.')
       }
-    } catch {
-      // Graceful fallback receipt data for smooth demo
-      setScanData({
-        merchant: 'Indomaret Pasuruan Kiduldalem',
-        date: new Date().toISOString().split('T')[0],
-        total: 98000,
-        payment_method: 'QRIS',
-        category: '🛒 Belanja Bulanan',
-        items: [
-          { item_name: 'Minyak Goreng Sania 2L', price: 34000, category: 'Kebutuhan Rumah' },
-          { item_name: 'Beras Premium SPHP 5kg', price: 64000, category: 'Kebutuhan Rumah' }
-        ],
-        confidence: 0.95
-      })
-      setShowConfirmation(true)
+    } catch (err: any) {
+      alert('Gagal memproses nota: ' + (err?.message || err))
     } finally {
       setIsScanning(false)
     }

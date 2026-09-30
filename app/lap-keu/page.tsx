@@ -208,22 +208,27 @@ export default function MobileBankingFinance() {
       });
       const result = await res.json();
 
+      if (!res.ok) {
+        alert(result?.error || 'Gagal memproses nota belanja dengan AI');
+        return;
+      }
+
       if (result.success && result.data) {
         const d = result.data;
         const parsedItems = (d.items || []).map((it: any) => ({
           item_name: it.item_name || 'Item Belanja',
-          qty: it.qty || 1,
-          price: Number(it.price || it.subtotal || 0),
+          qty: Number(it.qty || 1),
+          price: Number(it.subtotal || it.price || 0),
         }));
 
         const calculatedTotal = parsedItems.length > 0
-          ? parsedItems.reduce((sum: number, i: any) => sum + (i.price * i.qty), 0)
+          ? parsedItems.reduce((sum: number, i: any) => sum + (i.price * (i.qty || 1)), 0)
           : Number(d.total || 0);
 
         setReceiptScanResult({
           imagePreview: compressedBase64,
-          merchant: d.merchant || 'Nota Belanja Toko',
-          date: d.date || new Date().toISOString().split('T')[0],
+          merchant: d.merchant || 'Nota Transaksi',
+          date: d.tanggal || d.date || new Date().toISOString().split('T')[0],
           items: parsedItems,
           total: calculatedTotal || Number(d.total || 0),
           walletId: selectedWalletId || (wallets[0]?.id || ''),
@@ -231,7 +236,7 @@ export default function MobileBankingFinance() {
 
         setShowReceiptReviewModal(true);
       } else {
-        alert('Gagal membaca nota. Silakan coba unggah foto nota yang lebih jelas.');
+        alert(result?.error || 'Gagal membaca nota. Silakan coba unggah foto nota yang lebih jelas.');
       }
     } catch (err: any) {
       alert('Kendala saat memindai nota dengan AI: ' + (err?.message || err));
