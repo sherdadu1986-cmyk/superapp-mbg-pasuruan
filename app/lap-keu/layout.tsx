@@ -226,8 +226,8 @@ export default function OlloLayout({ children }: { children: React.ReactNode }) 
   // Quick transaction form state
   const [txType, setTxType] = useState<'expense' | 'income' | 'transfer'>('expense')
   const [txAmount, setTxAmount] = useState('')
-  const [txWalletId, setTxWalletId] = useState('w-bca')
-  const [txToWalletId, setTxToWalletId] = useState('w-cash')
+  const [txWalletId, setTxWalletId] = useState('w-bni')
+  const [txToWalletId, setTxToWalletId] = useState('w-bni')
   const [txCategory, setTxCategory] = useState('🍜 Makanan & Minuman')
   const [txNote, setTxNote] = useState('')
 

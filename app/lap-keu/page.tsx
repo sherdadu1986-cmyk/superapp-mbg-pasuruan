@@ -36,6 +36,7 @@ import {
   formatRupiahShort,
   formatRupiahFull
 } from '@/lib/ollo-store'
+import { supabase } from '@/lib/supabase'
 import { showToast } from '@/components/toast'
 import ModalWallet from './components/ModalWallet'
 
@@ -65,12 +66,12 @@ export default function FinaciDashboard() {
   // Savings Deposit State
   const [depositGoal, setDepositGoal] = useState<OlloSavingsGoal | null>(null)
   const [depositAmount, setDepositAmount] = useState<number>(100000)
-  const [depositWalletId, setDepositWalletId] = useState<string>('w-bca')
+  const [depositWalletId, setDepositWalletId] = useState<string>('w-bni')
 
   // Quick Transaction Form State
   const [txAmount, setTxAmount] = useState('')
-  const [txWalletId, setTxWalletId] = useState('w-bca')
-  const [txToWalletId, setTxToWalletId] = useState('w-cash')
+  const [txWalletId, setTxWalletId] = useState('w-bni')
+  const [txToWalletId, setTxToWalletId] = useState('w-bni')
   const [txCategory, setTxCategory] = useState('🍜 Makanan & Minuman')
   const [txNote, setTxNote] = useState('')
   const [txDate, setTxDate] = useState('')
@@ -90,6 +91,7 @@ export default function FinaciDashboard() {
 
   useEffect(() => {
     loadAllData()
+    OlloStore.syncFromSupabase().then(() => loadAllData())
 
     // Restore showBalance preference
     if (typeof window !== 'undefined') {
@@ -97,13 +99,30 @@ export default function FinaciDashboard() {
       if (savedPriv !== null) setShowBalance(savedPriv === 'true')
     }
 
-    const cleanup = OlloStore.setupRealtimeListener()
+    const channel = supabase
+      .channel('realtime_fin_dashboard')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_wallets' },
+        () => {
+          OlloStore.syncFromSupabase().then(() => loadAllData())
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_transactions' },
+        () => {
+          OlloStore.syncFromSupabase().then(() => loadAllData())
+        }
+      )
+      .subscribe()
+
     const handleUpdate = () => loadAllData()
     window.addEventListener('ollo_data_updated', handleUpdate)
 
     return () => {
       window.removeEventListener('ollo_data_updated', handleUpdate)
-      if (cleanup) cleanup()
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -492,10 +511,12 @@ export default function FinaciDashboard() {
             })}
           </div>
         ) : (
-          <div className="p-8 bg-white border border-slate-200/80 rounded-2xl text-center space-y-2">
-            <div className="text-2xl">🍃</div>
-            <div className="font-bold text-xs text-slate-800">Belum ada transaksi</div>
-            <p className="text-[11px] text-slate-400">Seluruh catatan transaksi Anda akan muncul rapi di sini.</p>
+          <div className="p-8 bg-white border border-slate-200/80 rounded-2xl text-center space-y-2 shadow-2xs">
+            <div className="text-3xl">🍃</div>
+            <div className="font-bold text-xs text-slate-800">Belum ada riwayat transaksi</div>
+            <p className="text-[11px] text-slate-500 font-medium">
+              Belum ada riwayat transaksi. Saldo Anda masih utuh {formatRupiahFull(totalBalance)}.
+            </p>
           </div>
         )}
       </div>

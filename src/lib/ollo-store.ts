@@ -42,77 +42,31 @@ export interface OlloSavingsGoal {
   color?: string
 }
 
-// Initial Ollo Minimalist Seed Data
+// Initial Ollo Seed Data (Cleaned: 1 Primary Account BNI Utama Rp 5.000.000, 0 Dummy Transactions)
 export const INITIAL_WALLETS: OlloWallet[] = [
-  { id: 'w-cash', name: 'Cash Tunai', balance: 500000, initial_balance: 500000, type: 'cash', color: 'emerald', icon: '💵', logo_url: '💵' },
-  { id: 'w-bca', name: 'BCA Utama', balance: 15200000, initial_balance: 15200000, type: 'bank', color: 'blue', icon: '🏦', logo_url: 'https://upload.wikimedia.org/wikipedia/commons/5/5c/Bank_Central_Asia.svg' },
-  { id: 'w-gopay', name: 'GoPay / QRIS', balance: 2100000, initial_balance: 2100000, type: 'wallet', color: 'cyan', icon: '📱', logo_url: 'https://upload.wikimedia.org/wikipedia/commons/8/86/Gopay_logo.svg' }
-]
-
-export const INITIAL_TRANSACTIONS: OlloTransaction[] = [
   {
-    id: 'ot-101',
-    wallet_id: 'w-bca',
-    type: 'income',
-    amount: 18500000,
-    category: '💼 Gaji',
-    note: 'Gaji Pokok SPPG BGN',
-    date: '2026-09-28',
-    time: '09:00',
-    merchant: 'BGN Kiduldalem'
-  },
-  {
-    id: 'ot-102',
-    wallet_id: 'w-gopay',
-    type: 'expense',
-    amount: 45000,
-    category: '🍜 Makanan & Minuman',
-    note: 'Kopi & Roti Siang',
-    date: '2026-09-30',
-    time: '12:30',
-    merchant: 'Kopi Janji Jiwa'
-  },
-  {
-    id: 'ot-103',
-    wallet_id: 'w-cash',
-    type: 'expense',
-    amount: 25000,
-    category: '🚗 Transportasi',
-    note: 'Parkir & E-Toll',
-    date: '2026-09-30',
-    time: '14:15',
-    merchant: 'Parkir Wonorejo'
-  },
-  {
-    id: 'ot-104',
-    wallet_id: 'w-gopay',
-    type: 'expense',
-    amount: 145000,
-    category: '🛒 Belanja Bulanan',
-    note: 'Minyak & Sembako',
-    date: '2026-09-29',
-    time: '18:20',
-    merchant: 'Indomaret'
+    id: 'w-bni',
+    name: 'BNI Utama',
+    balance: 5000000,
+    initial_balance: 5000000,
+    type: 'bank',
+    color: 'blue',
+    icon: '🏦',
+    logo_url: 'https://upload.wikimedia.org/wikipedia/en/2/27/Bank_Negara_Indonesia_logo.svg'
   }
 ]
 
-export const INITIAL_BUDGETS: OlloBudget[] = [
-  { id: 'ob-1', category: '🍜 Makanan & Minuman', limit_amount: 2000000, spent_amount: 1500000 },
-  { id: 'ob-2', category: '🚗 Transportasi', limit_amount: 800000, spent_amount: 450000 },
-  { id: 'ob-3', category: '🛒 Belanja Bulanan', limit_amount: 2500000, spent_amount: 1450000 },
-  { id: 'ob-4', category: '🎬 Hiburan & Hobi', limit_amount: 1000000, spent_amount: 1200000 }
-]
+export const INITIAL_TRANSACTIONS: OlloTransaction[] = []
 
-export const INITIAL_SAVINGS: OlloSavingsGoal[] = [
-  { id: 'os-1', title: 'Target Dana Darurat', target_amount: 15000000, current_amount: 5000000, target_date: '2026-12-31', color: 'emerald' },
-  { id: 'os-2', title: 'Upgrade Laptop M4', target_amount: 20000000, current_amount: 7500000, target_date: '2027-01-15', color: 'blue' }
-]
+export const INITIAL_BUDGETS: OlloBudget[] = []
+
+export const INITIAL_SAVINGS: OlloSavingsGoal[] = []
 
 const KEYS = {
-  WALLETS: 'ollo_wallets_v3',
-  TRANSACTIONS: 'ollo_transactions_v3',
-  BUDGETS: 'ollo_budgets_v3',
-  SAVINGS: 'ollo_savings_v3'
+  WALLETS: 'ollo_wallets_v4',
+  TRANSACTIONS: 'ollo_transactions_v4',
+  BUDGETS: 'ollo_budgets_v4',
+  SAVINGS: 'ollo_savings_v4'
 }
 
 export function formatRupiahShort(amount: number): string {
@@ -149,7 +103,12 @@ export class OlloStore {
       localStorage.setItem(KEYS.WALLETS, JSON.stringify(INITIAL_WALLETS))
       return INITIAL_WALLETS
     }
-    try { return JSON.parse(data) } catch { return INITIAL_WALLETS }
+    try {
+      const parsed = JSON.parse(data)
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_WALLETS
+    } catch {
+      return INITIAL_WALLETS
+    }
   }
 
   static saveWallets(wallets: OlloWallet[]) {
@@ -170,13 +129,14 @@ export class OlloStore {
 
     try {
       Promise.resolve(
-        supabase.from('fin_wallets').insert([{
+        supabase.from('fin_wallets').upsert({
+          id: newW.id,
           name: newW.name,
           balance: newW.balance,
           type: newW.type,
           color: newW.color,
           logo_url: newW.logo_url || ''
-        }])
+        })
       ).catch(() => {})
     } catch {}
 
@@ -229,13 +189,13 @@ export class OlloStore {
     }
     const updated = [newTx, ...txs]
     this.saveTransactions(updated)
-    this.recalculateBalances()
+    const updatedWallets = this.recalculateBalances()
 
     try {
-      Promise.resolve(
-        supabase.from('fin_transactions').insert([{
+      Promise.resolve().then(async () => {
+        await supabase.from('fin_transactions').insert([{
           wallet_id: tx.wallet_id,
-          to_wallet_id: tx.to_wallet_id,
+          to_wallet_id: tx.to_wallet_id || null,
           type: tx.type,
           amount: tx.amount,
           category: tx.category,
@@ -243,7 +203,18 @@ export class OlloStore {
           date: tx.date,
           merchant: tx.merchant || ''
         }])
-      ).catch(() => {})
+
+        for (const w of updatedWallets) {
+          await supabase.from('fin_wallets').upsert({
+            id: w.id,
+            name: w.name,
+            balance: w.balance,
+            type: w.type,
+            color: w.color,
+            logo_url: w.logo_url || ''
+          })
+        }
+      }).catch(() => {})
     } catch {}
 
     return newTx
@@ -268,12 +239,11 @@ export class OlloStore {
 
   // Auto Recalculate Balance Rule:
   // Current Balance = Initial Balance + Sum(Income) - Sum(Expense) - Sum(Transfers Out) + Sum(Transfers In)
-  static recalculateBalances() {
+  static recalculateBalances(): OlloWallet[] {
     const wallets = this.getWallets()
     const txs = this.getTransactions()
     const budgets = this.getBudgets()
 
-    // Reset budget spent amounts
     const budgetMap: Record<string, number> = {}
 
     wallets.forEach(w => {
@@ -306,6 +276,8 @@ export class OlloStore {
 
     this.saveWallets(wallets)
     this.saveBudgets(budgets)
+
+    return wallets
   }
 
   static getBudgets(): OlloBudget[] {
@@ -353,12 +325,9 @@ export class OlloStore {
     const gIdx = goals.findIndex(g => g.id === goalId)
     if (gIdx === -1) return
 
-    // Update Goal current_amount
     goals[gIdx].current_amount = Math.min(goals[gIdx].current_amount + depositAmount, goals[gIdx].target_amount)
     this.saveSavingsGoals(goals)
 
-    // Add Expense/Transfer transaction from wallet
-    const wallet = this.getWallets().find(w => w.id === fromWalletId)
     this.addTransaction({
       wallet_id: fromWalletId,
       type: 'expense',
@@ -378,7 +347,7 @@ export class OlloStore {
       .filter(t => t.date === todayStr && t.type === 'expense')
       .reduce((acc, t) => acc + t.amount, 0)
 
-    const dailyAvgTarget = 150000 // Rata-rata harian Rp 150.000
+    const dailyAvgTarget = 150000
 
     return {
       todayExpense,
@@ -387,20 +356,69 @@ export class OlloStore {
     }
   }
 
+  // Supabase Fetch & Sync
+  static async syncFromSupabase() {
+    if (typeof window === 'undefined') return
+    try {
+      const { data: dbWallets } = await supabase.from('fin_wallets').select('*')
+      if (dbWallets && dbWallets.length > 0) {
+        const mappedWallets: OlloWallet[] = dbWallets.map(w => ({
+          id: w.id ? String(w.id) : `w-${Date.now()}`,
+          name: w.name || 'BNI Utama',
+          balance: Number(w.balance ?? 5000000),
+          initial_balance: Number(w.initial_balance ?? w.balance ?? 5000000),
+          type: w.type || 'bank',
+          color: w.color || 'blue',
+          logo_url: w.logo_url || 'https://upload.wikimedia.org/wikipedia/en/2/27/Bank_Negara_Indonesia_logo.svg'
+        }))
+        this.saveWallets(mappedWallets)
+      } else {
+        await supabase.from('fin_wallets').upsert({
+          id: 'w-bni',
+          name: 'BNI Utama',
+          balance: 5000000,
+          type: 'bank',
+          color: 'blue',
+          logo_url: 'https://upload.wikimedia.org/wikipedia/en/2/27/Bank_Negara_Indonesia_logo.svg'
+        })
+      }
+
+      const { data: dbTxs } = await supabase.from('fin_transactions').select('*').order('created_at', { ascending: false })
+      if (dbTxs) {
+        const mappedTxs: OlloTransaction[] = dbTxs.map(t => ({
+          id: t.id ? String(t.id) : `ot-${Date.now()}`,
+          wallet_id: t.wallet_id,
+          to_wallet_id: t.to_wallet_id,
+          type: t.type,
+          amount: Number(t.amount),
+          category: t.category,
+          note: t.note,
+          date: t.date || new Date().toISOString().split('T')[0],
+          merchant: t.merchant
+        }))
+        this.saveTransactions(mappedTxs)
+      }
+      this.recalculateBalances()
+    } catch (err) {
+      console.warn('Supabase sync warning:', err)
+    }
+  }
+
   // Supabase Realtime Listener Setup
-  static setupRealtimeListener() {
+  static setupRealtimeListener(onUpdate?: () => void) {
     if (typeof window === 'undefined') return
     try {
       const channel = supabase
-        .channel('fin_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_wallets' }, () => {
+        .channel('realtime_fin_dashboard')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_wallets' }, async () => {
+          await OlloStore.syncFromSupabase()
           OlloStore.notifyChange()
+          if (onUpdate) onUpdate()
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_transactions' }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_transactions' }, async () => {
+          await OlloStore.syncFromSupabase()
           OlloStore.notifyChange()
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_savings' }, () => {
-          OlloStore.notifyChange()
+          if (onUpdate) onUpdate()
         })
         .subscribe()
 
