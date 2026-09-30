@@ -25,7 +25,8 @@ import {
   Check,
   X,
   Trash2,
-  Edit2
+  Edit2,
+  Loader2
 } from 'lucide-react'
 import {
   OlloStore,
@@ -47,6 +48,7 @@ export default function FinaciDashboard() {
   const [savings, setSavings] = useState<OlloSavingsGoal[]>([])
   const [selectedWalletId, setSelectedWalletId] = useState<string>('all')
   const [todaySummary, setTodaySummary] = useState({ todayExpense: 0, dailyAvgTarget: 150000, percentageOfAvg: 0 })
+  const [isLoading, setIsLoading] = useState<boolean>(true)
 
   // Privacy State: Show / Hide Balance
   const [showBalance, setShowBalance] = useState<boolean>(true)
@@ -76,22 +78,24 @@ export default function FinaciDashboard() {
   const [txNote, setTxNote] = useState('')
   const [txDate, setTxDate] = useState('')
 
-  const loadAllData = () => {
-    const wList = OlloStore.getWallets()
-    setWallets(wList)
-    setTransactions(OlloStore.getTransactions())
-    setBudgets(OlloStore.getBudgets())
-    setSavings(OlloStore.getSavingsGoals())
-    setTodaySummary(OlloStore.getTodaySummary())
-
-    if (wList.length > 0 && !txWalletId) {
-      setTxWalletId(wList[0].id)
+  const fetchOnlineData = async () => {
+    try {
+      setIsLoading(true)
+      const { wallets: onlineWallets, transactions: onlineTxs } = await OlloStore.syncFromSupabase()
+      setWallets(onlineWallets)
+      setTransactions(onlineTxs)
+      if (onlineWallets.length > 0 && !txWalletId) {
+        setTxWalletId(onlineWallets[0].id)
+      }
+    } catch (err) {
+      console.error('Fetch error:', err)
+    } finally {
+      setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadAllData()
-    OlloStore.syncFromSupabase().then(() => loadAllData())
+    fetchOnlineData()
 
     // Restore showBalance preference
     if (typeof window !== 'undefined') {
@@ -99,28 +103,34 @@ export default function FinaciDashboard() {
       if (savedPriv !== null) setShowBalance(savedPriv === 'true')
     }
 
+    // Handle window focus & tab visibility change for instant multi-device sync
+    const handleFocus = () => {
+      fetchOnlineData()
+    }
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('visibilitychange', handleFocus)
+
+    // Supabase Realtime Channel
     const channel = supabase
-      .channel('realtime_fin_dashboard')
+      .channel('online_sync_lap_keu')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'fin_wallets' },
-        () => {
-          OlloStore.syncFromSupabase().then(() => loadAllData())
-        }
+        () => fetchOnlineData()
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'fin_transactions' },
-        () => {
-          OlloStore.syncFromSupabase().then(() => loadAllData())
-        }
+        () => fetchOnlineData()
       )
       .subscribe()
 
-    const handleUpdate = () => loadAllData()
+    const handleUpdate = () => fetchOnlineData()
     window.addEventListener('ollo_data_updated', handleUpdate)
 
     return () => {
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('visibilitychange', handleFocus)
       window.removeEventListener('ollo_data_updated', handleUpdate)
       supabase.removeChannel(channel)
     }
@@ -167,7 +177,7 @@ export default function FinaciDashboard() {
       setTxNote('')
 
       // Trigger immediate fetch & sync
-      await Promise.all([OlloStore.syncFromSupabase(), Promise.resolve(loadAllData())])
+      await fetchOnlineData()
 
       showToast({
         type: 'success',
@@ -187,18 +197,18 @@ export default function FinaciDashboard() {
     if (confirm('Hapus transaksi ini? Saldo dompet akan disesuaikan otomatis.')) {
       await OlloStore.deleteTransactionAsync(id)
       setEditingTx(null)
-      await Promise.all([OlloStore.syncFromSupabase(), Promise.resolve(loadAllData())])
+      await fetchOnlineData()
       showToast({ type: 'warning', title: 'Transaksi Dihapus', message: 'Kalkulasi saldo diperbarui.' })
     }
   }
 
-  const handleDepositSubmit = (e: React.FormEvent) => {
+  const handleDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!depositGoal || depositAmount <= 0) return
 
     OlloStore.depositSavingsGoal(depositGoal.id, depositAmount, depositWalletId)
     setDepositGoal(null)
-    loadAllData()
+    await fetchOnlineData()
     showToast({
       type: 'success',
       title: 'Setoran Tabungan Berhasil!',
@@ -659,20 +669,20 @@ export default function FinaciDashboard() {
           setShowWalletModal(false)
           setEditingWallet(null)
         }}
-        onDelete={(id) => {
-          const ok = OlloStore.deleteWallet(id)
+        onDelete={async (id) => {
+          const ok = await OlloStore.deleteWalletAsync(id)
           if (ok) {
             showToast({ type: 'warning', title: 'Rekening Dihapus', message: 'Rekening berhasil dihapus dari sistem.' })
-            loadAllData()
+            await fetchOnlineData()
             setShowWalletModal(false)
             setEditingWallet(null)
           } else {
             showToast({ type: 'error', title: 'Gagal Menghapus', message: 'Sistem memerlukan minimal 1 rekening aktif.' })
           }
         }}
-        onSave={(data) => {
+        onSave={async (data) => {
           if (editingWallet) {
-            OlloStore.updateWallet(editingWallet.id, {
+            await OlloStore.updateWalletAsync(editingWallet.id, {
               name: data.name,
               balance: data.balance,
               card_number: data.card_number,
@@ -682,7 +692,7 @@ export default function FinaciDashboard() {
             })
             showToast({ type: 'success', title: 'Dompet Diperbarui', message: '✓ Data dompet berhasil diperbarui' })
           } else {
-            OlloStore.addWallet({
+            await OlloStore.addWalletAsync({
               name: data.name,
               balance: data.balance,
               card_number: data.card_number,
@@ -692,7 +702,7 @@ export default function FinaciDashboard() {
             })
             showToast({ type: 'success', title: 'Kartu Baru Ditambahkan', message: `Kartu ${data.name} berhasil terdaftar.` })
           }
-          loadAllData()
+          await fetchOnlineData()
           setShowWalletModal(false)
           setEditingWallet(null)
         }}
