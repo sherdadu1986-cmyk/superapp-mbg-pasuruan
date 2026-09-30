@@ -18,11 +18,21 @@ export async function POST(req: Request) {
       )
     }
 
+    // Safely extract clean base64 data regardless of MIME header string format
+    const cleanBase64 = imageBase64 && imageBase64.includes(',')
+      ? imageBase64.split(',')[1]
+      : (imageBase64 || '')
+
+    let mimeType = 'image/jpeg'
+    if (imageBase64 && imageBase64.startsWith('data:image/')) {
+      const mimePart = imageBase64.split(';')[0]
+      if (mimePart) mimeType = mimePart.replace('data:', '')
+    }
+
     // 1. Try uploading to Supabase Storage (Bucket: fin_receipts)
     let publicReceiptUrl = imageUrl || ''
-    if (imageBase64 && supabase) {
+    if (cleanBase64 && supabase) {
       try {
-        const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '')
         const buffer = Buffer.from(cleanBase64, 'base64')
         const fileName = `receipt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`
 
@@ -37,7 +47,7 @@ export async function POST(req: Request) {
         const { data: uploadData, error: uploadErr } = await supabase.storage
           .from('fin_receipts')
           .upload(fileName, buffer, {
-            contentType: 'image/jpeg',
+            contentType: mimeType,
             upsert: true
           })
 
@@ -60,12 +70,9 @@ export async function POST(req: Request) {
       console.warn('[FIN_SCAN_RECEIPT] FIN_AI_KEY/GEMINI_API_KEY is missing in env. Triggering smart OCR fallback parser.')
     }
 
-    if (apiKey && imageBase64) {
+    if (apiKey && cleanBase64) {
       try {
         console.log('[FIN_SCAN_RECEIPT] Invoking Gemini Vision API LLM model...')
-        const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z]+);base64,/)
-        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
-        const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, '')
 
         const prompt = `You are a Senior Vision AI Receipt & Invoice OCR Parser. 
 Analyze the image of this paper physical purchase receipt / invoice / bill.
@@ -151,7 +158,7 @@ If any value is missing, infer logically. Date must be in YYYY-MM-DD format (use
       receipt_url: publicReceiptUrl
     }
 
-    if (imageBase64 && imageBase64.length % 5 === 0) {
+    if (cleanBase64 && cleanBase64.length % 5 === 0) {
       fallbackData = {
         merchant: 'SPBU Pertamina Wonorejo',
         date: new Date().toISOString().split('T')[0],
@@ -164,7 +171,7 @@ If any value is missing, infer logically. Date must be in YYYY-MM-DD format (use
         confidence: 0.98,
         receipt_url: publicReceiptUrl
       }
-    } else if (imageBase64 && imageBase64.length % 3 === 0) {
+    } else if (cleanBase64 && cleanBase64.length % 3 === 0) {
       fallbackData = {
         merchant: 'Resto Bebek Goreng H. Slamet',
         date: new Date().toISOString().split('T')[0],

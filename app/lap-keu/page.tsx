@@ -80,6 +80,43 @@ const COLOR_PALETTES = [
   { id: 'black', label: 'Obsidian Black', class: 'bg-gradient-to-tr from-zinc-900 via-neutral-900 to-black' },
 ];
 
+// Client-Side Canvas Image Compressor & Normalizer for Mobile Safari / iOS
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > maxDim) {
+          height = (height * maxDim) / width;
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = (width * maxDim) / height;
+          height = maxDim;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Ekspor selalu menjadi JPEG murni tanpa pattern aneh & ukuran ringkas (< 500 KB)
+        const base64Data = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(base64Data);
+      };
+      img.onerror = (err) => reject(err);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function MobileBankingFinance() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -153,58 +190,54 @@ export default function MobileBankingFinance() {
     return COLOR_PALETTES[idx % COLOR_PALETTES.length].class;
   };
 
-  // 1. Trigger File Upload & AI Vision Scan
-  const handleReceiptFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 1. Trigger File Upload, Compress Image on Client Side & AI Vision Scan
+  const handleReceiptFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      if (typeof reader.result === 'string') {
-        const base64Data = reader.result;
-        setIsScanningReceipt(true);
+    setIsScanningReceipt(true);
 
-        try {
-          const res = await fetch('/api/fin-scan-receipt', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64: base64Data }),
-          });
-          const result = await res.json();
+    try {
+      // Kompresi & normalisasi gambar di client-side untuk kompatibilitas iOS / Safari
+      const compressedBase64 = await compressImage(file);
 
-          if (result.success && result.data) {
-            const d = result.data;
-            const parsedItems = (d.items || []).map((it: any) => ({
-              item_name: it.item_name || 'Item Belanja',
-              qty: it.qty || 1,
-              price: Number(it.price || it.subtotal || 0),
-            }));
+      const res = await fetch('/api/fin-scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: compressedBase64 }),
+      });
+      const result = await res.json();
 
-            const calculatedTotal = parsedItems.length > 0
-              ? parsedItems.reduce((sum: number, i: any) => sum + (i.price * i.qty), 0)
-              : Number(d.total || 0);
+      if (result.success && result.data) {
+        const d = result.data;
+        const parsedItems = (d.items || []).map((it: any) => ({
+          item_name: it.item_name || 'Item Belanja',
+          qty: it.qty || 1,
+          price: Number(it.price || it.subtotal || 0),
+        }));
 
-            setReceiptScanResult({
-              imagePreview: base64Data,
-              merchant: d.merchant || 'Nota Belanja Toko',
-              date: d.date || new Date().toISOString().split('T')[0],
-              items: parsedItems,
-              total: calculatedTotal || Number(d.total || 0),
-              walletId: selectedWalletId || (wallets[0]?.id || ''),
-            });
+        const calculatedTotal = parsedItems.length > 0
+          ? parsedItems.reduce((sum: number, i: any) => sum + (i.price * i.qty), 0)
+          : Number(d.total || 0);
 
-            setShowReceiptReviewModal(true);
-          } else {
-            alert('Gagal membaca nota. Silakan coba unggah foto nota yang lebih jelas.');
-          }
-        } catch (err: any) {
-          alert('Kendala saat memindai nota dengan AI: ' + err.message);
-        } finally {
-          setIsScanningReceipt(false);
-        }
+        setReceiptScanResult({
+          imagePreview: compressedBase64,
+          merchant: d.merchant || 'Nota Belanja Toko',
+          date: d.date || new Date().toISOString().split('T')[0],
+          items: parsedItems,
+          total: calculatedTotal || Number(d.total || 0),
+          walletId: selectedWalletId || (wallets[0]?.id || ''),
+        });
+
+        setShowReceiptReviewModal(true);
+      } else {
+        alert('Gagal membaca nota. Silakan coba unggah foto nota yang lebih jelas.');
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      alert('Kendala saat memindai nota dengan AI: ' + (err?.message || err));
+    } finally {
+      setIsScanningReceipt(false);
+    }
   };
 
   // 2. Confirmaton (ACC) Handler untuk Simpan Transaksi Nota & Potong Saldo
