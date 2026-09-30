@@ -165,7 +165,10 @@ export default function FinaciDashboard() {
       setShowQuickAdd(false)
       setTxAmount('')
       setTxNote('')
-      loadAllData()
+
+      // Trigger immediate fetch & sync
+      await Promise.all([OlloStore.syncFromSupabase(), Promise.resolve(loadAllData())])
+
       showToast({
         type: 'success',
         title: 'Transaksi Berhasil!',
@@ -184,7 +187,7 @@ export default function FinaciDashboard() {
     if (confirm('Hapus transaksi ini? Saldo dompet akan disesuaikan otomatis.')) {
       await OlloStore.deleteTransactionAsync(id)
       setEditingTx(null)
-      loadAllData()
+      await Promise.all([OlloStore.syncFromSupabase(), Promise.resolve(loadAllData())])
       showToast({ type: 'warning', title: 'Transaksi Dihapus', message: 'Kalkulasi saldo diperbarui.' })
     }
   }
@@ -203,8 +206,23 @@ export default function FinaciDashboard() {
     })
   }
 
+  // Dynamic calculations for totals & balance
+  const totalPemasukan = transactions
+    .filter(t => {
+      const typeStr = (t.type || (t as any).tipe || '').toLowerCase()
+      return typeStr === 'income' || typeStr === 'pemasukan'
+    })
+    .reduce((sum, t) => sum + Number(t.amount ?? (t as any).nominal ?? 0), 0)
+
+  const totalPengeluaran = transactions
+    .filter(t => {
+      const typeStr = (t.type || (t as any).tipe || '').toLowerCase()
+      return typeStr === 'expense' || typeStr === 'pengeluaran'
+    })
+    .reduce((sum, t) => sum + Number(t.amount ?? (t as any).nominal ?? 0), 0)
+
   // Calculate total balance across all wallets
-  const totalBalance = wallets.reduce((acc, w) => acc + w.balance, 0)
+  const totalBalance = wallets.reduce((acc, w) => acc + Number(w.balance || 0), 0)
 
   // Filter transactions
   const filteredTxs = transactions.filter(t => {

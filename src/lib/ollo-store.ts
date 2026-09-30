@@ -43,13 +43,13 @@ export interface OlloSavingsGoal {
   color?: string
 }
 
-// Initial Ollo Seed Data (Cleaned: 1 Primary Account BNI Utama Rp 5.000.000, 0 Dummy Transactions)
+// Initial Ollo Seed Data (Cleaned: 1 Primary Account BNI Utama Base Rp 1.000.000)
 export const INITIAL_WALLETS: OlloWallet[] = [
   {
     id: 'w-bni',
     name: 'BNI Utama',
-    balance: 5000000,
-    initial_balance: 5000000,
+    balance: 1000000,
+    initial_balance: 1000000,
     card_number: '•••• •••• •••• 1922',
     type: 'bank',
     color: 'blue',
@@ -160,12 +160,14 @@ export class OlloStore {
     const txs = this.getTransactions()
     let txDelta = 0
     txs.forEach(t => {
+      const amt = Number(t.amount ?? (t as any).nominal ?? 0)
+      const typeStr = (t.type || (t as any).tipe || '').toLowerCase()
       if (t.wallet_id === id) {
-        if (t.type === 'income') txDelta += t.amount
-        else if (t.type === 'expense' || t.type === 'transfer') txDelta -= t.amount
+        if (typeStr === 'income' || typeStr === 'pemasukan') txDelta += amt
+        else if (typeStr === 'expense' || typeStr === 'pengeluaran' || typeStr === 'transfer') txDelta -= amt
       }
-      if (t.type === 'transfer' && t.to_wallet_id === id) {
-        txDelta += t.amount
+      if (typeStr === 'transfer' && t.to_wallet_id === id) {
+        txDelta += amt
       }
     })
 
@@ -258,16 +260,18 @@ export class OlloStore {
     this.saveTransactions(updatedTxs)
     const updatedWallets = this.recalculateBalances()
 
-    // 2. Persist to Supabase Database
+    // 2. Direct Update to fin_transactions & fin_wallets in Supabase
     try {
+      const amt = Number(tx.amount)
+
       const txPayload = {
         id: newTx.id,
         wallet_id: tx.wallet_id,
         to_wallet_id: tx.to_wallet_id || null,
         type: tx.type,
         tipe: tx.type,
-        amount: Number(tx.amount),
-        nominal: Number(tx.amount),
+        amount: amt,
+        nominal: amt,
         category: tx.category,
         kategori: tx.category,
         note: tx.note || '',
@@ -277,32 +281,42 @@ export class OlloStore {
         merchant: tx.merchant || ''
       }
 
-      const { data: dbRes, error: txErr } = await supabase
+      const { error: txErr } = await supabase
         .from('fin_transactions')
         .insert([txPayload])
-        .select()
 
       if (txErr) {
-        console.error('Supabase transaction insert error:', txErr)
+        console.error('Supabase fin_transactions insert error:', txErr)
       }
 
-      // Update wallet balances in Supabase (Automatic Wallet Balance Update)
+      // Update saldo_sekarang & balance directly on fin_wallets in Supabase
       for (const w of updatedWallets) {
-        const walletPayload = {
-          id: w.id,
-          name: w.name,
-          nama_akun: w.name,
-          balance: Number(w.balance),
-          saldo_sekarang: Number(w.balance),
-          initial_balance: Number(w.initial_balance ?? w.balance),
-          card_number: w.card_number || '',
-          nomor_kartu: w.card_number || '',
-          type: w.type,
-          color: w.color,
-          warna: w.color,
-          logo_url: w.logo_url || ''
+        const { error: wErr } = await supabase
+          .from('fin_wallets')
+          .update({
+            saldo_sekarang: Number(w.balance),
+            balance: Number(w.balance),
+            initial_balance: Number(w.initial_balance ?? 1000000)
+          })
+          .eq('id', w.id)
+
+        if (wErr) {
+          const walletPayload = {
+            id: w.id,
+            name: w.name,
+            nama_akun: w.name,
+            balance: Number(w.balance),
+            saldo_sekarang: Number(w.balance),
+            initial_balance: Number(w.initial_balance ?? 1000000),
+            card_number: w.card_number || '',
+            nomor_kartu: w.card_number || '',
+            type: w.type,
+            color: w.color,
+            warna: w.color,
+            logo_url: w.logo_url || ''
+          }
+          await supabase.from('fin_wallets').upsert(walletPayload)
         }
-        await supabase.from('fin_wallets').upsert(walletPayload)
       }
 
       this.notifyChange()
@@ -343,14 +357,15 @@ export class OlloStore {
     try {
       Promise.resolve().then(async () => {
         const t = txs[idx]
+        const amt = Number(t.amount)
         await supabase.from('fin_transactions').upsert({
           id: t.id,
           wallet_id: t.wallet_id,
           to_wallet_id: t.to_wallet_id || null,
           type: t.type,
           tipe: t.type,
-          amount: Number(t.amount),
-          nominal: Number(t.amount),
+          amount: amt,
+          nominal: amt,
           category: t.category,
           kategori: t.category,
           note: t.note || '',
@@ -361,20 +376,10 @@ export class OlloStore {
         })
 
         for (const w of updatedWallets) {
-          await supabase.from('fin_wallets').upsert({
-            id: w.id,
-            name: w.name,
-            nama_akun: w.name,
-            balance: Number(w.balance),
+          await supabase.from('fin_wallets').update({
             saldo_sekarang: Number(w.balance),
-            initial_balance: Number(w.initial_balance ?? w.balance),
-            card_number: w.card_number || '',
-            nomor_kartu: w.card_number || '',
-            type: w.type,
-            color: w.color,
-            warna: w.color,
-            logo_url: w.logo_url || ''
-          })
+            balance: Number(w.balance)
+          }).eq('id', w.id)
         }
       }).catch(() => {})
     } catch {}
@@ -390,20 +395,10 @@ export class OlloStore {
     try {
       await supabase.from('fin_transactions').delete().eq('id', id)
       for (const w of updatedWallets) {
-        await supabase.from('fin_wallets').upsert({
-          id: w.id,
-          name: w.name,
-          nama_akun: w.name,
-          balance: Number(w.balance),
+        await supabase.from('fin_wallets').update({
           saldo_sekarang: Number(w.balance),
-          initial_balance: Number(w.initial_balance ?? w.balance),
-          card_number: w.card_number || '',
-          nomor_kartu: w.card_number || '',
-          type: w.type,
-          color: w.color,
-          warna: w.color,
-          logo_url: w.logo_url || ''
-        })
+          balance: Number(w.balance)
+        }).eq('id', w.id)
       }
       this.notifyChange()
     } catch (err) {
@@ -427,26 +422,36 @@ export class OlloStore {
     const budgetMap: Record<string, number> = {}
 
     wallets.forEach(w => {
-      let balance = w.initial_balance ?? w.balance
+      const baseInitial = Number(w.initial_balance ?? w.balance ?? 1000000)
+      let currentBal = baseInitial
 
       txs.forEach(t => {
+        const amt = Number(t.amount ?? (t as any).nominal ?? 0)
+        const typeStr = (t.type || (t as any).tipe || '').toLowerCase()
+        const isIncome = typeStr === 'income' || typeStr === 'pemasukan'
+        const isExpense = typeStr === 'expense' || typeStr === 'pengeluaran'
+        const isTransfer = typeStr === 'transfer'
+
         if (t.wallet_id === w.id) {
-          if (t.type === 'income') balance += t.amount
-          else if (t.type === 'expense') balance -= t.amount
-          else if (t.type === 'transfer') balance -= t.amount
+          if (isIncome) currentBal += amt
+          else if (isExpense || isTransfer) currentBal -= amt
         }
-        if (t.type === 'transfer' && t.to_wallet_id === w.id) {
-          balance += t.amount
+        if (isTransfer && t.to_wallet_id === w.id) {
+          currentBal += amt
         }
       })
 
-      w.balance = balance
+      w.balance = currentBal
+      w.initial_balance = baseInitial
     })
 
     // Recalculate budgets spent
     txs.forEach(t => {
-      if (t.type === 'expense') {
-        budgetMap[t.category] = (budgetMap[t.category] || 0) + t.amount
+      const typeStr = (t.type || (t as any).tipe || '').toLowerCase()
+      if (typeStr === 'expense' || typeStr === 'pengeluaran') {
+        const cat = t.category || (t as any).kategori || 'Lainnya'
+        const amt = Number(t.amount ?? (t as any).nominal ?? 0)
+        budgetMap[cat] = (budgetMap[cat] || 0) + amt
       }
     })
 
@@ -524,8 +529,11 @@ export class OlloStore {
     const todayStr = new Date().toISOString().split('T')[0]
 
     const todayExpense = txs
-      .filter(t => t.date === todayStr && t.type === 'expense')
-      .reduce((acc, t) => acc + t.amount, 0)
+      .filter(t => {
+        const typeStr = (t.type || (t as any).tipe || '').toLowerCase()
+        return t.date === todayStr && (typeStr === 'expense' || typeStr === 'pengeluaran')
+      })
+      .reduce((acc, t) => acc + Number(t.amount ?? (t as any).nominal ?? 0), 0)
 
     const dailyAvgTarget = 150000
 
@@ -545,8 +553,8 @@ export class OlloStore {
         const mappedWallets: OlloWallet[] = dbWallets.map(w => ({
           id: w.id ? String(w.id) : `w-${Date.now()}`,
           name: w.name || w.nama_akun || 'BNI Utama',
-          balance: Number(w.balance ?? w.saldo_sekarang ?? 5000000),
-          initial_balance: Number(w.initial_balance ?? w.balance ?? w.saldo_sekarang ?? 5000000),
+          balance: Number(w.balance ?? w.saldo_sekarang ?? 1000000),
+          initial_balance: Number(w.initial_balance ?? 1000000),
           card_number: w.card_number || w.nomor_kartu || '•••• •••• •••• 1922',
           type: w.type || 'bank',
           color: w.color || w.warna || 'blue',
@@ -558,8 +566,9 @@ export class OlloStore {
           id: 'w-bni',
           name: 'BNI Utama',
           nama_akun: 'BNI Utama',
-          balance: 5000000,
-          saldo_sekarang: 5000000,
+          balance: 1000000,
+          saldo_sekarang: 1000000,
+          initial_balance: 1000000,
           card_number: '•••• •••• •••• 1922',
           nomor_kartu: '•••• •••• •••• 1922',
           type: 'bank',
@@ -575,7 +584,7 @@ export class OlloStore {
           id: t.id ? String(t.id) : `ot-${Date.now()}`,
           wallet_id: t.wallet_id,
           to_wallet_id: t.to_wallet_id,
-          type: t.type || t.tipe || 'expense',
+          type: (t.type || t.tipe || 'expense').toLowerCase() as any,
           amount: Number(t.amount ?? t.nominal ?? 0),
           category: t.category || t.kategori || 'Lainnya',
           note: t.note || t.catatan || '',
