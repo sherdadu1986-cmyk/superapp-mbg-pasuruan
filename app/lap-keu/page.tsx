@@ -161,9 +161,11 @@ export default function FinaciDashboard() {
     const num = parseInt(txAmount.replace(/\D/g, '')) || 0
     if (num <= 0) return
 
+    const targetWalletId = txWalletId || (wallets.length > 0 ? wallets[0].id : 'w-bni')
+
     try {
-      await OlloStore.addTransactionAsync({
-        wallet_id: txWalletId,
+      const res = await OlloStore.addTransactionAsync({
+        wallet_id: targetWalletId,
         to_wallet_id: quickAddType === 'transfer' ? txToWalletId : undefined,
         type: quickAddType,
         amount: num,
@@ -172,11 +174,17 @@ export default function FinaciDashboard() {
         date: new Date().toISOString().split('T')[0]
       })
 
+      if (!res.success) {
+        console.error('Insert transaction error:', res.error)
+        alert('Gagal simpan transaksi: ' + (res.error?.message || 'Terjadi kesalahan pada database Supabase.'))
+        return
+      }
+
       setShowQuickAdd(false)
       setTxAmount('')
       setTxNote('')
 
-      // Trigger immediate fetch & sync
+      // Trigger immediate fetch & sync directly to React state
       await fetchOnlineData()
 
       showToast({
@@ -184,12 +192,8 @@ export default function FinaciDashboard() {
         title: 'Transaksi Berhasil!',
         message: `${quickAddType === 'income' ? 'Pemasukan' : quickAddType === 'transfer' ? 'Transfer' : 'Pengeluaran'} ${formatRupiahFull(num)} telah dicatat.`
       })
-    } catch (err) {
-      showToast({
-        type: 'error',
-        title: 'Gagal Menyimpan',
-        message: 'Terjadi kendala saat menyimpan transaksi ke database.'
-      })
+    } catch (err: any) {
+      alert('Gagal simpan transaksi: ' + (err?.message || 'Terjadi kendala koneksi.'))
     }
   }
 

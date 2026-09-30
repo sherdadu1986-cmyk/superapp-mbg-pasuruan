@@ -132,12 +132,12 @@ export class OlloStore {
       if (!tErr && dbTxs) {
         transactions = dbTxs.map(t => ({
           id: String(t.id),
-          wallet_id: String(t.wallet_id),
+          wallet_id: String(t.wallet_id || t.account_id || 'w-bni'),
           to_wallet_id: t.to_wallet_id ? String(t.to_wallet_id) : undefined,
           type: (t.type || t.tipe || 'expense').toLowerCase() as any,
           amount: Number(t.amount ?? t.nominal ?? 0),
-          category: t.category || t.kategori || 'Lainnya',
-          note: t.note || t.catatan || '',
+          category: t.category || t.kategori || t.keterangan || 'Lainnya',
+          note: t.note || t.catatan || t.keterangan || '',
           date: t.date || t.tanggal || new Date().toISOString().split('T')[0],
           merchant: t.merchant || ''
         }))
@@ -260,32 +260,56 @@ export class OlloStore {
   static async addTransactionAsync(tx: Omit<OlloTransaction, 'id'>): Promise<{ success: boolean; error?: any }> {
     try {
       const amt = Number(tx.amount)
-      const txId = `ot-${Date.now()}`
 
+      // Comprehensive payload matching English and Indonesian column schemas in Supabase
       const txPayload = {
-        id: txId,
         wallet_id: tx.wallet_id,
+        account_id: tx.wallet_id,
         to_wallet_id: tx.to_wallet_id || null,
         type: tx.type,
-        tipe: tx.type,
+        tipe: tx.type === 'expense' ? 'pengeluaran' : tx.type === 'income' ? 'pemasukan' : 'transfer',
         amount: amt,
         nominal: amt,
         category: tx.category,
         kategori: tx.category,
-        note: tx.note || '',
-        catatan: tx.note || '',
+        note: tx.note || tx.category || 'Transaksi Manual',
+        catatan: tx.note || tx.category || 'Transaksi Manual',
+        keterangan: tx.note || tx.category || 'Transaksi Manual',
         date: tx.date || new Date().toISOString().split('T')[0],
         tanggal: tx.date || new Date().toISOString().split('T')[0],
-        merchant: tx.merchant || ''
+        merchant: tx.merchant || null
       }
 
       // 1. Insert transaction into fin_transactions
-      const { error: txErr } = await supabase
+      const { data: insertRes, error: txErr } = await supabase
         .from('fin_transactions')
         .insert([txPayload])
+        .select()
 
       if (txErr) {
-        console.error('Supabase fin_transactions insert error:', txErr)
+        console.error('Supabase fin_transactions insert primary error:', txErr)
+
+        // Try minimal fallback payload if full schema payload hit an unexpected column error
+        const fallbackPayload = {
+          wallet_id: tx.wallet_id,
+          account_id: tx.wallet_id,
+          amount: amt,
+          nominal: amt,
+          type: tx.type,
+          tipe: tx.type === 'expense' ? 'pengeluaran' : tx.type === 'income' ? 'pemasukan' : 'transfer',
+          category: tx.category,
+          keterangan: tx.note || tx.category || 'Transaksi Manual',
+          tanggal: tx.date || new Date().toISOString().split('T')[0]
+        }
+
+        const { error: fallbackErr } = await supabase
+          .from('fin_transactions')
+          .insert([fallbackPayload])
+
+        if (fallbackErr) {
+          console.error('Supabase fin_transactions fallback insert error:', fallbackErr)
+          return { success: false, error: fallbackErr }
+        }
       }
 
       // 2. Fetch current target wallet from Supabase to compute exact new balance
@@ -303,13 +327,17 @@ export class OlloStore {
         else if (tx.type === 'income') newBal = currBal + amt
         else if (tx.type === 'transfer') newBal = currBal - amt
 
-        await supabase
+        const { error: updateErr } = await supabase
           .from('fin_wallets')
           .update({
             balance: newBal,
             saldo_sekarang: newBal
           })
           .eq('id', tx.wallet_id)
+
+        if (updateErr) {
+          console.error('Supabase fin_wallets update error:', updateErr)
+        }
       }
 
       // 3. If transfer type, add to receiving wallet balance as well
@@ -364,6 +392,7 @@ export class OlloStore {
     OlloStore.deleteTransactionAsync(id).catch(err => console.error(err))
   }
 
+  // Helper static methods
   static getWallets(): OlloWallet[] {
     return []
   }
@@ -375,7 +404,6 @@ export class OlloStore {
   static saveWallets(wallets: OlloWallet[]) {}
   static saveTransactions(txs: OlloTransaction[]) {}
 
-  // Utility methods
   static getBudgets(): OlloBudget[] {
     return []
   }
