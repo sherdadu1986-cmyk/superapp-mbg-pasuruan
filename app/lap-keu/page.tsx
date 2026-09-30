@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { 
   ArrowUpRight, 
@@ -15,7 +16,9 @@ import {
   ChevronRight,
   Send,
   Download,
-  Wallet as WalletIcon
+  Wallet as WalletIcon,
+  Lock,
+  ArrowLeft
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -144,6 +147,13 @@ export default function MobileBankingFinance() {
     loadData();
   };
 
+  const handleLockSession = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('lap_keu_auth_token');
+      window.location.reload();
+    }
+  };
+
   const filteredTransactions = transactions.filter(t => {
     if (filterType === 'income') return t.tipe === 'pemasukan';
     if (filterType === 'expense') return t.tipe === 'pengeluaran';
@@ -151,27 +161,54 @@ export default function MobileBankingFinance() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-100 flex justify-center py-0 sm:py-8 font-sans antialiased text-slate-800">
+    <div className="min-h-screen bg-slate-900 flex justify-center py-0 sm:py-8 font-sans antialiased text-slate-800 w-full">
       {/* Container Layar HP Presisi */}
       <div className="w-full max-w-sm sm:max-w-md bg-white sm:rounded-[40px] shadow-2xl overflow-hidden flex flex-col min-h-screen sm:min-h-[844px] relative border border-slate-200/60">
         
         {/* 1. CURVED HEADER BIRU ROYAL */}
-        <div className="bg-gradient-to-b from-[#1d4ed8] via-[#1e40af] to-[#1e3a8a] text-white px-6 pt-9 pb-12 rounded-b-[36px] shadow-md relative">
+        <div className="bg-gradient-to-b from-[#1d4ed8] via-[#1e40af] to-[#1e3a8a] text-white px-6 pt-7 pb-12 rounded-b-[36px] shadow-md relative">
           
-          {/* Baris Atas: Profile & Bell */}
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center font-bold text-sm tracking-wider">
-                SH
-              </div>
-              <div>
-                <p className="text-xs text-blue-200 font-medium">Selamat Datang 👋</p>
-                <h4 className="text-sm font-semibold tracking-wide">Sayyid Haq</h4>
-              </div>
+          {/* Baris System Navigation (SPPG BGN, Kunci, Bell) */}
+          <div className="flex justify-between items-center mb-5">
+            <Link
+              href="/"
+              className="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1 backdrop-blur-sm transition"
+              title="Kembali ke Dashboard BGN"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>← SPPG BGN</span>
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLockSession}
+                className="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1 backdrop-blur-sm transition"
+                title="Kunci Dashboard (Logout PIN Sesi)"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Kunci</span>
+              </button>
+
+              <button 
+                type="button"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center backdrop-blur-sm transition"
+                title="Notifikasi"
+              >
+                <Bell className="w-4 h-4 text-white"/>
+              </button>
             </div>
-            <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center backdrop-blur-sm transition">
-              <Bell className="w-5 h-5 text-white"/>
-            </button>
+          </div>
+
+          {/* Baris User Greeting */}
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center font-bold text-sm tracking-wider">
+              SH
+            </div>
+            <div>
+              <p className="text-xs text-blue-200 font-medium leading-tight">Selamat Datang 👋</p>
+              <h4 className="text-sm font-semibold tracking-wide leading-tight">Sayyid Haq</h4>
+            </div>
           </div>
 
           {/* Saldo Utama */}
@@ -349,7 +386,7 @@ export default function MobileBankingFinance() {
           )}
         </div>
 
-        {/* 3. BOTTOM FLOATING NAVIGATION BAR */}
+        {/* 3. BOTTOM FLOATING NAVIGATION BAR (SINGLE SOURCE OF TRUTH) */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[90%] bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-xl rounded-full py-2.5 px-6 flex justify-between items-center z-40">
           <button onClick={() => setActiveTab('home')} className={`p-2 transition ${activeTab === 'home' ? 'text-blue-600' : 'text-slate-400'}`}>
             <Home className="w-5 h-5"/>
