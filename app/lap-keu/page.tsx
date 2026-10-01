@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { BANK_PRESETS } from '@/lib/bank-presets';
 import { 
   ArrowUpRight, 
   ArrowDownLeft, 
@@ -73,11 +74,16 @@ interface ReceiptScanResult {
 }
 
 const COLOR_PALETTES = [
-  { id: 'navy', label: 'Navy Blue', class: 'bg-gradient-to-tr from-slate-900 via-blue-950 to-slate-800' },
-  { id: 'teal', label: 'Teal Emerald', class: 'bg-gradient-to-tr from-teal-900 via-emerald-950 to-slate-900' },
-  { id: 'orange', label: 'Sunset Orange', class: 'bg-gradient-to-tr from-orange-600 via-amber-700 to-slate-900' },
-  { id: 'purple', label: 'Royal Purple', class: 'bg-gradient-to-tr from-purple-900 via-indigo-950 to-slate-900' },
-  { id: 'black', label: 'Obsidian Black', class: 'bg-gradient-to-tr from-zinc-900 via-neutral-900 to-black' },
+  { id: 'black', label: 'Midnight Obsidian', hex: '#111827', class: 'bg-[#111827]' },
+  { id: 'navy', label: 'Royal Deep Navy', hex: '#1e3a8a', class: 'bg-[#1e3a8a]' },
+  { id: 'blue', label: 'Classic Bank Blue', hex: '#2563eb', class: 'bg-[#2563eb]' },
+  { id: 'emerald', label: 'Forest Emerald', hex: '#065f46', class: 'bg-[#065f46]' },
+  { id: 'teal', label: 'Ocean Deep Teal', hex: '#0f766e', class: 'bg-[#0f766e]' },
+  { id: 'orange', label: 'Terracotta BNI Orange', hex: '#ea580c', class: 'bg-[#ea580c]' },
+  { id: 'amber', label: 'Golden Harvest', hex: '#d97706', class: 'bg-[#d97706]' },
+  { id: 'purple', label: 'Royal Plum Jago', hex: '#6b21a8', class: 'bg-[#6b21a8]' },
+  { id: 'rose', label: 'Ruby Crimson', hex: '#be123c', class: 'bg-[#be123c]' },
+  { id: 'slate', label: 'Titanium Grey', hex: '#334155', class: 'bg-[#334155]' },
 ];
 
 // Client-Side Canvas Image Compressor & Normalizer for Mobile Safari / iOS
@@ -140,6 +146,8 @@ export default function MobileBankingFinance() {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletName, setWalletName] = useState('');
   const [walletBalance, setWalletBalance] = useState('');
+  const [walletColor, setWalletColor] = useState('navy');
+  const [walletLogo, setWalletLogo] = useState('');
   const [submittingWallet, setSubmittingWallet] = useState(false);
 
   // Modal Edit Dompet (dengan Logo & Warna)
@@ -183,12 +191,20 @@ export default function MobileBankingFinance() {
 
   const totalSaldo = wallets.reduce((acc, w) => acc + Number(w.saldo_sekarang || 0), 0);
 
-  // Helper Gradien Kartu
-  const getCardGradientClass = (colorKey?: string, idx: number = 0) => {
+  // Helper Warna Solid & Gradien Kartu
+  const getCardColorHex = (colorKey?: string, idx: number = 0) => {
+    const palette = COLOR_PALETTES.find((p) => p.id === colorKey);
+    if (palette) return palette.hex;
+    return COLOR_PALETTES[idx % COLOR_PALETTES.length].hex;
+  };
+
+  const getCardSolidClass = (colorKey?: string, idx: number = 0) => {
     const palette = COLOR_PALETTES.find((p) => p.id === colorKey);
     if (palette) return palette.class;
     return COLOR_PALETTES[idx % COLOR_PALETTES.length].class;
   };
+
+  const getCardGradientClass = getCardSolidClass;
 
   // 1. Trigger File Upload, Compress Image on Client Side & AI Vision Scan
   const handleReceiptFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -415,17 +431,53 @@ export default function MobileBankingFinance() {
 
     setSubmittingWallet(true);
     try {
-      await supabase.from('fin_wallets').insert([{
+      const payload: any = {
         nama_akun: walletName.trim(),
-        saldo_sekarang: Number(walletBalance) || 0
-      }]);
+        saldo_sekarang: Number(walletBalance) || 0,
+        warna: walletColor || 'navy',
+        logo_url: walletLogo || '',
+      };
+
+      const { error } = await supabase.from('fin_wallets').insert([payload]);
+      if (error) {
+        // Fallback insert for core fields if custom columns missing in DB schema
+        await supabase.from('fin_wallets').insert([{
+          nama_akun: walletName.trim(),
+          saldo_sekarang: Number(walletBalance) || 0,
+        }]);
+      }
+
       setWalletName('');
       setWalletBalance('');
+      setWalletColor('navy');
+      setWalletLogo('');
       setShowWalletModal(false);
-      loadData();
+      await loadData();
+    } catch (err: any) {
+      alert('Gagal membuat dompet: ' + err.message);
     } finally {
       setSubmittingWallet(false);
     }
+  };
+
+  // Select File Logo PNG untuk Tambah Dompet
+  const handleAddLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'image/png') {
+      alert('Hanya file format PNG transparan yang diperbolehkan!');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setWalletLogo(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Select File Logo PNG
@@ -566,7 +618,7 @@ export default function MobileBankingFinance() {
               title="Kembali ke Dashboard BGN"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>← SPPG BGN</span>
+              <span>SPPG BGN</span>
             </Link>
 
             <div className="flex items-center gap-2">
@@ -853,54 +905,107 @@ export default function MobileBankingFinance() {
                 </button>
               </div>
 
-              {/* List Kartu Fisik Digital dengan Gradien Warna & Logo Custom */}
+              {/* List Kartu Fisik Digital dengan Warna Solid Premium & Layout Standar Bank Modern */}
               <div className="space-y-4">
                 {wallets.map((w, idx) => {
-                  const gradientClass = getCardGradientClass(w.warna, idx);
+                  const colorHex = getCardColorHex(w.warna, idx);
+                  const solidClass = getCardSolidClass(w.warna, idx);
+                  const isEWallet = w.nama_akun.toLowerCase().includes('gopay') || 
+                                    w.nama_akun.toLowerCase().includes('ovo') || 
+                                    w.nama_akun.toLowerCase().includes('dana') || 
+                                    w.nama_akun.toLowerCase().includes('shopeepay') || 
+                                    w.nama_akun.toLowerCase().includes('wallet');
+
                   return (
                     <div 
                       key={w.id}
-                      className={`bg-gradient-to-tr ${gradientClass} text-white rounded-3xl p-5 shadow-lg relative overflow-hidden aspect-[1.7/1] flex flex-col justify-between`}
+                      style={{ backgroundColor: colorHex }}
+                      className={`${solidClass} rounded-3xl p-6 relative overflow-hidden aspect-[1.58/1] shadow-xl flex flex-col justify-between text-white transition-all hover:scale-[1.01] border border-white/10`}
                     >
-                      <div className="flex justify-between items-center relative z-10">
-                        <span className="text-xs tracking-wider uppercase font-semibold text-blue-200">{w.nama_akun}</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleOpenEditWallet(w)}
-                            className="px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-bold backdrop-blur-md transition flex items-center gap-1 border border-white/20"
-                            title="Edit Kartu & Logo"
-                          >
-                            <Edit3 size={11} /> Ubah
-                          </button>
-                          {wallets.length > 1 && (
+                      {/* Subtle Decorative Pattern Watermarks */}
+                      <div className="absolute -right-16 -bottom-16 w-56 h-56 rounded-full bg-white/5 pointer-events-none blur-xl" />
+                      <div className="absolute -left-12 -top-12 w-44 h-44 rounded-full bg-white/5 pointer-events-none blur-lg" />
+
+                      {/* Baris Atas */}
+                      <div className="flex justify-between items-start relative z-10">
+                        {/* Kiri Atas: Nama Akun / Bank */}
+                        <span className="text-sm font-bold tracking-wider uppercase text-white/90 max-w-[55%] truncate pt-1">
+                          {w.nama_akun}
+                        </span>
+
+                        {/* Kanan Atas: Logo Bank (Fixed Bounding Container) + Minimalist Action Buttons */}
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-20 h-8 flex items-center justify-end overflow-hidden">
+                            {w.logo_url ? (
+                              <img 
+                                src={w.logo_url} 
+                                alt="Logo" 
+                                className="max-w-full max-h-full object-contain filter drop-shadow-sm" 
+                              />
+                            ) : (
+                              <span className="text-xs font-bold tracking-widest text-white/70 uppercase">
+                                FINORA
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button
-                              onClick={() => handleDeleteWallet(w.id)}
-                              className="p-1 bg-red-500/30 hover:bg-red-500/50 rounded-lg text-red-200 transition border border-white/10"
-                              title="Hapus Kartu"
+                              onClick={() => handleOpenEditWallet(w)}
+                              className="bg-white/10 hover:bg-white/20 p-1.5 rounded-full backdrop-blur-md transition text-white/90 hover:text-white"
+                              title="Edit Kartu"
                             >
-                              <Trash2 size={11} />
+                              <Edit3 size={13} />
                             </button>
-                          )}
+                            {wallets.length > 1 && (
+                              <button
+                                onClick={() => handleDeleteWallet(w.id)}
+                                className="bg-white/10 hover:bg-white/20 p-1.5 rounded-full backdrop-blur-md transition text-white/90 hover:text-white"
+                                title="Hapus Kartu"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="my-auto relative z-10 flex justify-between items-center">
-                        <p className="tracking-widest text-xs text-slate-300 font-mono">•••• •••• •••• {w.id.substring(0, 4).toUpperCase()}</p>
-                        
-                        {/* Custom PNG Logo atau Default FINORA */}
-                        {w.logo_url ? (
-                          <img src={w.logo_url} alt="Logo Bank" className="h-6 max-w-[80px] object-contain drop-shadow" />
-                        ) : (
-                          <span className="font-extrabold italic text-sm tracking-widest text-slate-200">FINORA</span>
-                        )}
+                      {/* Baris Tengah */}
+                      <div className="my-auto relative z-10 pt-1">
+                        {/* Chip EMV Kartu */}
+                        <svg className="w-10 h-7 rounded-sm shadow-sm" viewBox="0 0 44 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect width="44" height="30" rx="4" fill="url(#chip_grad)" />
+                          <rect x="0.5" y="0.5" width="43" height="29" rx="3.5" stroke="#D97706" strokeOpacity="0.4" />
+                          <path d="M 0 15 H 44 M 15 0 V 30 M 29 0 V 30 M 15 9 H 29 M 15 21 H 29" stroke="#92400E" strokeOpacity="0.35" strokeWidth="1" />
+                          <rect x="15" y="9" width="14" height="12" rx="2" fill="#F59E0B" fillOpacity="0.3" stroke="#B45309" strokeOpacity="0.4" />
+                          <defs>
+                            <linearGradient id="chip_grad" x1="0" y1="0" x2="44" y2="30" gradientUnits="userSpaceOnUse">
+                              <stop stopColor="#FCD34D" />
+                              <stop offset="0.5" stopColor="#F59E0B" />
+                              <stop offset="1" stopColor="#D97706" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+
+                        {/* Nomor Kartu */}
+                        <p className="text-sm tracking-[0.25em] font-medium text-white/80 font-mono mt-2">
+                          •••• •••• •••• {w.id ? w.id.substring(0, 4).toUpperCase() : '8888'}
+                        </p>
                       </div>
 
+                      {/* Baris Bawah */}
                       <div className="flex justify-between items-end relative z-10">
                         <div>
-                          <p className="text-[10px] text-blue-200/80 uppercase">SALDO REKENING</p>
-                          <p className="text-base font-bold text-white">Rp {Number(w.saldo_sekarang).toLocaleString('id-ID')}</p>
+                          <p className="text-[10px] uppercase tracking-wider text-white/60 font-semibold mb-0.5">
+                            SALDO REKENING
+                          </p>
+                          <p className="text-xl font-extrabold tracking-tight text-white">
+                            Rp {Number(w.saldo_sekarang || 0).toLocaleString('id-ID')}
+                          </p>
                         </div>
-                        <span className="text-[10px] bg-white/20 px-2.5 py-0.5 rounded-full font-bold text-white tracking-wide border border-white/10">DEBIT</span>
+                        <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-white/15 backdrop-blur-md uppercase tracking-widest text-white border border-white/10">
+                          {isEWallet ? 'E-WALLET' : 'DEBIT'}
+                        </span>
                       </div>
                     </div>
                   );
@@ -1287,23 +1392,112 @@ export default function MobileBankingFinance() {
         {/* MODAL TAMBAH DOMPET BARU */}
         {showWalletModal && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <div className="bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4">
-              <div className="flex justify-between items-center">
+            <div className="bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-150">
+              <div className="flex justify-between items-center border-b pb-3">
                 <h3 className="font-bold text-slate-900 text-base">Tambah Dompet / Bank</h3>
                 <button onClick={() => setShowWalletModal(false)} className="text-slate-400 hover:text-slate-600 text-sm">Tutup</button>
               </div>
 
-              <form onSubmit={handleAddWallet} className="space-y-3">
+              {/* Quick Bank Presets */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                  PRESET BANK / DOMPET POPULER
+                </label>
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  {BANK_PRESETS.slice(0, 8).map((bp) => (
+                    <button
+                      key={bp.id}
+                      type="button"
+                      onClick={() => {
+                        setWalletName(bp.shortName.toUpperCase());
+                        setWalletLogo(bp.logoSvg);
+                        if (bp.id === 'bni') setWalletColor('orange');
+                        else if (bp.id === 'jago') setWalletColor('purple');
+                        else if (bp.id === 'bca') setWalletColor('navy');
+                        else if (bp.id === 'mandiri') setWalletColor('blue');
+                        else if (bp.id === 'gopay') setWalletColor('teal');
+                        else if (bp.id === 'bsi') setWalletColor('emerald');
+                        else if (bp.id === 'bri') setWalletColor('blue');
+                        else if (bp.id === 'ovo') setWalletColor('purple');
+                        else if (bp.id === 'dana') setWalletColor('blue');
+                      }}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold shrink-0 border border-slate-200/80 transition flex items-center gap-1"
+                    >
+                      <span>{bp.shortName}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <form onSubmit={handleAddWallet} className="space-y-4">
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500">NAMA DOMPET / REKENING</label>
                   <input 
                     type="text" 
-                    placeholder="Contoh: BNI Utama, GoPay, Tunai"
+                    placeholder="Contoh: BNI UTAMA, BANK JAGO, GoPay"
                     value={walletName}
                     onChange={e => setWalletName(e.target.value)}
-                    className="w-full mt-1 p-2.5 bg-slate-50 border rounded-xl text-xs"
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-500"
                     required 
                   />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                    LOGO BANK / DOMPET (PNG TRANSPARAN)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl border border-slate-200 flex items-center justify-center bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:8px_8px] bg-slate-100 shrink-0 overflow-hidden shadow-inner">
+                      {walletLogo ? (
+                        <img src={walletLogo} alt="Preview Logo" className="w-9 h-9 object-contain drop-shadow-sm" />
+                      ) : (
+                        <ImageIcon className="w-5 h-5 text-slate-400" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-1">
+                      <input
+                        type="file"
+                        accept="image/png"
+                        onChange={handleAddLogoFileSelect}
+                        className="text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                      />
+                      {walletLogo && (
+                        <button
+                          type="button"
+                          onClick={() => setWalletLogo('')}
+                          className="text-[10px] text-red-500 hover:underline font-semibold block"
+                        >
+                          Hapus Logo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 block mb-1.5">
+                    WARNA KARTU SOLID PREMIUM (MATTE)
+                  </label>
+                  <div className="grid grid-cols-5 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                    {COLOR_PALETTES.map((p) => {
+                      const isSelected = walletColor === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setWalletColor(p.id)}
+                          style={{ backgroundColor: p.hex }}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                            isSelected ? 'ring-2 ring-slate-900 ring-offset-2 scale-110 shadow-md' : 'opacity-85 hover:opacity-100'
+                          }`}
+                          title={`${p.label} (${p.hex})`}
+                        >
+                          {isSelected && <Check className="w-4 h-4 text-white stroke-[3]" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>
@@ -1313,14 +1507,14 @@ export default function MobileBankingFinance() {
                     placeholder="0"
                     value={walletBalance}
                     onChange={e => setWalletBalance(e.target.value)}
-                    className="w-full mt-1 p-2.5 bg-slate-50 border rounded-xl text-xs"
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-bold text-slate-900 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <button 
                   type="submit" 
                   disabled={submittingWallet}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs mt-2 transition"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs mt-2 transition shadow-md shadow-blue-500/20"
                 >
                   {submittingWallet ? 'Membuat...' : 'Simpan Dompet'}
                 </button>
@@ -1332,10 +1526,41 @@ export default function MobileBankingFinance() {
         {/* MODAL EDIT KARTU / DOMPET */}
         {editingWallet && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <div className="bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-150">
               <div className="flex justify-between items-center border-b pb-3">
                 <h3 className="font-bold text-slate-900 text-base">Edit Kartu & Logo Bank</h3>
                 <button onClick={() => setEditingWallet(null)} className="text-slate-400 hover:text-slate-600 text-sm">Tutup</button>
+              </div>
+
+              {/* Quick Bank Presets */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                  PRESET BANK / DOMPET POPULER
+                </label>
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  {BANK_PRESETS.slice(0, 8).map((bp) => (
+                    <button
+                      key={bp.id}
+                      type="button"
+                      onClick={() => {
+                        setEditWalletName(bp.shortName.toUpperCase());
+                        setEditWalletLogo(bp.logoSvg);
+                        if (bp.id === 'bni') setEditWalletColor('orange');
+                        else if (bp.id === 'jago') setEditWalletColor('purple');
+                        else if (bp.id === 'bca') setEditWalletColor('navy');
+                        else if (bp.id === 'mandiri') setEditWalletColor('blue');
+                        else if (bp.id === 'gopay') setEditWalletColor('teal');
+                        else if (bp.id === 'bsi') setEditWalletColor('emerald');
+                        else if (bp.id === 'bri') setEditWalletColor('blue');
+                        else if (bp.id === 'ovo') setEditWalletColor('purple');
+                        else if (bp.id === 'dana') setEditWalletColor('blue');
+                      }}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold shrink-0 border border-slate-200/80 transition flex items-center gap-1"
+                    >
+                      <span>{bp.shortName}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <form onSubmit={handleUpdateWallet} className="space-y-4">
@@ -1345,14 +1570,14 @@ export default function MobileBankingFinance() {
                     type="text" 
                     value={editWalletName}
                     onChange={e => setEditWalletName(e.target.value)}
-                    className="w-full mt-1 p-2.5 bg-slate-50 border rounded-xl text-xs font-semibold text-slate-900"
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-500"
                     required 
                   />
                 </div>
 
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500 block mb-1">
-                    LOGO BANK / DOMPET (WAJIB PNG TRANSPARAN)
+                    LOGO BANK / DOMPET (PNG TRANSPARAN)
                   </label>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl border border-slate-200 flex items-center justify-center bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:8px_8px] bg-slate-100 shrink-0 overflow-hidden shadow-inner">
@@ -1385,9 +1610,9 @@ export default function MobileBankingFinance() {
 
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500 block mb-1.5">
-                    TONE WARNA GRADIEN KARTU
+                    WARNA KARTU SOLID PREMIUM (MATTE)
                   </label>
-                  <div className="flex items-center justify-between gap-1.5 bg-slate-50 p-2 rounded-2xl border border-slate-200/80">
+                  <div className="grid grid-cols-5 gap-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
                     {COLOR_PALETTES.map((p) => {
                       const isSelected = editWalletColor === p.id;
                       return (
@@ -1395,10 +1620,11 @@ export default function MobileBankingFinance() {
                           key={p.id}
                           type="button"
                           onClick={() => setEditWalletColor(p.id)}
-                          className={`w-9 h-9 rounded-full ${p.class} flex items-center justify-center transition-all ${
-                            isSelected ? 'ring-2 ring-blue-600 ring-offset-2 scale-110 shadow-md' : 'opacity-80 hover:opacity-100'
+                          style={{ backgroundColor: p.hex }}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                            isSelected ? 'ring-2 ring-slate-900 ring-offset-2 scale-110 shadow-md' : 'opacity-85 hover:opacity-100'
                           }`}
-                          title={p.label}
+                          title={`${p.label} (${p.hex})`}
                         >
                           {isSelected && <Check className="w-4 h-4 text-white stroke-[3]" />}
                         </button>
@@ -1413,7 +1639,7 @@ export default function MobileBankingFinance() {
                     type="number" 
                     value={editWalletBalance}
                     onChange={e => setEditWalletBalance(e.target.value)}
-                    className="w-full mt-1 p-2.5 bg-slate-50 border rounded-xl text-base font-bold text-slate-900"
+                    className="w-full mt-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-bold text-slate-900 focus:outline-none focus:border-blue-500"
                     required
                   />
                 </div>
