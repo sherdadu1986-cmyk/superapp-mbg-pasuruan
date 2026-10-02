@@ -49,6 +49,7 @@ export interface DetailKpmItem {
   hp: string
   email: string
   status: 'Aktif' | 'Non-Aktif'
+  rute?: string
   sd13Laki?: number
   sd13Perem?: number
   sd46Laki?: number
@@ -93,6 +94,7 @@ export default function KelompokPenerimaManfaatPage() {
   const [formSubKategori, setFormSubKategori] = useState('Balita')
   const [formIdentitas, setFormIdentitas] = useState('')
   const [formKepemilikan, setFormKepemilikan] = useState<'Negeri' | 'Swasta'>('Negeri')
+  const [formRute, setFormRute] = useState<'Rute Kiri' | 'Rute Kanan'>('Rute Kiri')
   const [formKecamatan, setFormKecamatan] = useState('')
   const [formKelDesa, setFormKelDesa] = useState('')
   const [formAlamat, setFormAlamat] = useState('')
@@ -555,6 +557,7 @@ const getBnbaCountForGroup = (
         let suratPernyataanUrlVal: string | undefined = kpm.surat_pernyataan_url
         let mouUrlVal: string | undefined = kpm.mou_url
 
+        let ruteVal: string | undefined = kpm.rute
         if (kpm.sub_kategori && typeof kpm.sub_kategori === 'string' && kpm.sub_kategori.trim().startsWith('{')) {
           try {
             const parsed = JSON.parse(kpm.sub_kategori)
@@ -562,9 +565,13 @@ const getBnbaCountForGroup = (
             sd13PeremVal = parsed.sd13Perem
             sd46LakiVal = parsed.sd46Laki
             sd46PeremVal = parsed.sd46Perem
+            if (!ruteVal && parsed.rute) ruteVal = parsed.rute
             if (!suratPernyataanUrlVal && parsed.suratPernyataanUrl) suratPernyataanUrlVal = parsed.suratPernyataanUrl
             if (!mouUrlVal && parsed.mouUrl) mouUrlVal = parsed.mouUrl
           } catch {}
+        }
+        if (!ruteVal) {
+          ruteVal = getRuteSekolah(kpm.nama)
         }
 
         return {
@@ -590,6 +597,7 @@ const getBnbaCountForGroup = (
           hp: kpm.hp || '-',
           email: kpm.email || '-',
           status: (kpm.status as 'Aktif' | 'Non-Aktif') || 'Aktif',
+          rute: ruteVal,
           sd13Laki: sd13LakiVal,
           sd13Perem: sd13PeremVal,
           sd46Laki: sd46LakiVal,
@@ -825,6 +833,7 @@ const getBnbaCountForGroup = (
     setFormSubKategori('Balita')
     setFormIdentitas('')
     setFormKepemilikan('Negeri')
+    setFormRute('Rute Kiri')
     setFormKecamatan('WONOREJO')
     setFormKelDesa('WONOREJO')
     setFormAlamat('Wonorejo Pasuruan')
@@ -865,6 +874,8 @@ const getBnbaCountForGroup = (
     setFormSubKategori(item.jenis.includes('Hamil') ? 'Bumil' : item.jenis.includes('Menyusui') ? 'Busui' : 'Balita')
     setFormIdentitas(item.npsnReg)
     setFormKepemilikan(item.kepemilikan)
+    const rawRute = item.rute || getRuteSekolah(item.nama)
+    setFormRute(rawRute.toLowerCase().includes('kanan') ? 'Rute Kanan' : 'Rute Kiri')
     setFormKecamatan(item.kecamatan)
     setFormKelDesa(item.kelDesa)
     setFormAlamat(item.alamat)
@@ -1018,7 +1029,8 @@ const getBnbaCountForGroup = (
         kader: kaderNum,
         porsiKecil: portionSummary.kecil,
         porsiBesar: portionSummary.besar,
-        subKat: formSubKategori
+        subKat: formSubKategori,
+        rute: formRute
       })
     } else if (isSd) {
       const sd13LakiNum = parseNumberSafe(formSdSiswaLaki13)
@@ -1037,12 +1049,14 @@ const getBnbaCountForGroup = (
         sd46Laki: sd46LakiNum,
         sd46Perem: sd46PeremNum,
         porsiKecil: portionSummary.kecil,
-        porsiBesar: portionSummary.besar
+        porsiBesar: portionSummary.besar,
+        rute: formRute
       })
     } else {
       subKatSummary = JSON.stringify({
         porsiKecil: portionSummary.kecil,
-        porsiBesar: portionSummary.besar
+        porsiBesar: portionSummary.besar,
+        rute: formRute
       })
     }
 
@@ -1065,6 +1079,7 @@ const getBnbaCountForGroup = (
         identitas_npsn_tmp: identitasVal || '-',
         wilayah: fullWilayah,
         kepemilikan: formKepemilikan,
+        rute: formRute,
         kecamatan: formKecamatan.trim(),
         kel_desa: formKelDesa.trim(),
         alamat: formAlamat.trim(),
@@ -1081,18 +1096,27 @@ const getBnbaCountForGroup = (
 
       console.log('Sending KPM Update Payload to Supabase:', updatePayload)
 
-      let query = supabase.from('kelompok_penerima_manfaat').update(updatePayload)
-
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      if (editingItem.id && uuidRegex.test(editingItem.id)) {
-        query = query.eq('id', editingItem.id)
-      } else if (editingItem.npsnReg) {
-        query = query.or(`kode.eq.${editingItem.npsnReg},identitas_npsn_tmp.eq.${editingItem.npsnReg}`)
-      } else {
-        query = query.eq('id', editingItem.id)
+      const buildQuery = (payload: any) => {
+        let q = supabase.from('kelompok_penerima_manfaat').update(payload)
+        if (editingItem.id && uuidRegex.test(editingItem.id)) {
+          return q.eq('id', editingItem.id)
+        } else if (editingItem.npsnReg) {
+          return q.or(`kode.eq.${editingItem.npsnReg},identitas_npsn_tmp.eq.${editingItem.npsnReg}`)
+        } else {
+          return q.eq('id', editingItem.id)
+        }
       }
 
-      const { error: updateErr } = await query
+      let { error: updateErr } = await buildQuery(updatePayload)
+
+      if (updateErr && updateErr.message && updateErr.message.toLowerCase().includes('rute')) {
+        console.warn('Fallback update without root rute column:', updateErr.message)
+        const fallbackPayload = { ...updatePayload }
+        delete fallbackPayload.rute
+        const retryRes = await buildQuery(fallbackPayload)
+        updateErr = retryRes.error
+      }
 
       if (updateErr) {
         console.error('Gagal update KPM di Supabase:', updateErr.message)
@@ -1102,6 +1126,7 @@ const getBnbaCountForGroup = (
       }
 
       await loadData()
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage'))
       showToast({ type: 'success', title: 'Berhasil Memperbarui', message: `Data kelompok "${formNama}" berhasil disimpan.` })
     } else {
       const randomCode = `K${Math.floor(1000000000 + Math.random() * 9000000000)}`
@@ -1117,6 +1142,7 @@ const getBnbaCountForGroup = (
         kode: randomCode,
         wilayah: fullWilayah,
         kepemilikan: formKepemilikan,
+        rute: formRute,
         kecamatan: formKecamatan.trim(),
         kel_desa: formKelDesa.trim(),
         alamat: formAlamat.trim(),
@@ -1132,11 +1158,23 @@ const getBnbaCountForGroup = (
         created_at: new Date().toISOString()
       }
 
-      const { data: insertedKpm, error: insertErr } = await supabase
+      let { data: insertedKpm, error: insertErr } = await supabase
         .from('kelompok_penerima_manfaat')
         .insert(newKpmSupabase)
         .select()
         .single()
+
+      if (insertErr && insertErr.message && insertErr.message.toLowerCase().includes('rute')) {
+        const fallbackInsertPayload = { ...newKpmSupabase }
+        delete fallbackInsertPayload.rute
+        const retryInsert = await supabase
+          .from('kelompok_penerima_manfaat')
+          .insert(fallbackInsertPayload)
+          .select()
+          .single()
+        insertedKpm = retryInsert.data
+        insertErr = retryInsert.error
+      }
 
       if (insertErr) {
         console.error('Gagal tambah KPM baru ke Supabase:', insertErr.message)
@@ -1147,6 +1185,7 @@ const getBnbaCountForGroup = (
 
       await saveKelompokPenerimaManfaat(newKpmSupabase)
       await loadData()
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('storage'))
       triggerToast(`Kelompok baru "${formNama}" berhasil ditambahkan ke Supabase!`)
     }
 
@@ -2708,7 +2747,16 @@ const getBnbaCountForGroup = (
 
                       <td className="py-3 px-3">
                         <span className="font-bold text-slate-900 block">{row.nama}</span>
-                        <span className="font-mono text-[10px] text-slate-500 block">[{row.npsnReg}]</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono text-[10px] text-slate-500">[{row.npsnReg}]</span>
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded border ${
+                            (row.rute || '').includes('Kanan')
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          }`}>
+                            {row.rute || getRuteSekolah(row.nama)}
+                          </span>
+                        </div>
                       </td>
 
                       <td className="py-3 px-3 text-center">
@@ -3025,6 +3073,39 @@ const getBnbaCountForGroup = (
                     <option value="Negeri">Negeri</option>
                     <option value="Swasta">Swasta</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Rute / Armada Distribusi Selector */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="block font-semibold text-slate-800 mb-1.5">
+                  Rute / Armada Distribusi *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormRute('Rute Kiri')}
+                    className={`px-3 py-2.5 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      formRute === 'Rute Kiri'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${formRute === 'Rute Kiri' ? 'bg-white shadow-xs' : 'bg-indigo-500'}`} />
+                    Armada 1: Rute Kiri
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormRute('Rute Kanan')}
+                    className={`px-3 py-2.5 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      formRute === 'Rute Kanan'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${formRute === 'Rute Kanan' ? 'bg-white shadow-xs' : 'bg-emerald-500'}`} />
+                    Armada 2: Rute Kanan
+                  </button>
                 </div>
               </div>
 

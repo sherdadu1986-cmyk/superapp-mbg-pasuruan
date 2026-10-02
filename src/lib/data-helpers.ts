@@ -417,6 +417,7 @@ export interface KelompokPenerimaManfaat {
   hp?: string
   email?: string
   status: string
+  rute?: string
   created_at?: string
   updated_at?: string
   surat_pernyataan_url?: string

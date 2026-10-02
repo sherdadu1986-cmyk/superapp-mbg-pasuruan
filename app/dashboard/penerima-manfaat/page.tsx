@@ -426,7 +426,13 @@ export default function BerandaOperasionalPage() {
 
   const getKpmSetting = (itemKey: string, item: KelompokPenerimaManfaat, idx: number) => {
     const saved = distribusiSettings[itemKey]
-    const itemRute = (item as any).rute
+    let itemRute: string | undefined = (item as any).rute
+    if (!itemRute && (item as any).sub_kategori && typeof (item as any).sub_kategori === 'string' && (item as any).sub_kategori.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse((item as any).sub_kategori)
+        if (parsed.rute) itemRute = parsed.rute
+      } catch {}
+    }
     let defaultRute: 'Kiri' | 'Kanan' = 'Kiri'
 
     if (saved?.rute) {

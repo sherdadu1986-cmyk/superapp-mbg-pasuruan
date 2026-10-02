@@ -179,8 +179,14 @@ export default function CetakLembarDistribusiPage() {
         nameUpper.includes('TAMANSARI') ||
         nameUpper.includes('KARANGMENGGAH') ||
         nameUpper.includes('SMPN 2')
-      const itemRute = (item as any).rute
-      const fallbackRute: 'Kiri' | 'Kanan' = isKiri ? 'Kiri' : isKanan ? 'Kanan' : (itemRute ? (String(itemRute).toLowerCase().includes('kanan') ? 'Kanan' : 'Kiri') : (idx < Math.ceil(sortedData.length / 2) ? 'Kiri' : 'Kanan'))
+      let itemRute = (item as any).rute
+      if (!itemRute && (item as any).sub_kategori && typeof (item as any).sub_kategori === 'string' && (item as any).sub_kategori.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse((item as any).sub_kategori)
+          if (parsed.rute) itemRute = parsed.rute
+        } catch {}
+      }
+      const fallbackRute: 'Kiri' | 'Kanan' = itemRute ? (String(itemRute).toLowerCase().includes('kanan') ? 'Kanan' : 'Kiri') : (isKiri ? 'Kiri' : isKanan ? 'Kanan' : (idx < Math.ceil(sortedData.length / 2) ? 'Kiri' : 'Kanan'))
       const rute: 'Kiri' | 'Kanan' = saved?.rute || fallbackRute
       const noHpPic = saved?.no_hp_pic !== undefined ? saved.no_hp_pic : (item.hp || item.pimpinan || '-')
 
