@@ -22,7 +22,7 @@ import {
   type KelompokPenerimaManfaat,
   type PenerimaManfaatBnba
 } from '@/lib/data-helpers'
-import { validateNikStructure, checkDuplicateNik, auditNik, type NikValidationResult, type DuplicateNikMatch, type NikAuditDetail, type NikStatus } from '@/utils/nikValidator'
+import { validateNikStructure, checkDuplicateNik, auditIdentityNumber, auditNik, type NikValidationResult, type DuplicateNikMatch, type IdentityAuditResult, type NikAuditDetail, type IdType, type IdStatus } from '@/utils/nikValidator'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { showToast } from '@/components/toast'
@@ -545,7 +545,7 @@ export default function KelompokPenerimaManfaatPage() {
 
       groupBnbaList.forEach(item => {
         const nikStr = (item.nisn_nik || item.nik || item.nisn || '').trim()
-        const audit = auditNik(nikStr)
+        const audit = auditIdentityNumber(nikStr)
         const dupInfo = duplicateNikMap.get(item.id)
 
         let isProblem = false
@@ -562,18 +562,17 @@ export default function KelompokPenerimaManfaatPage() {
             fullRecord: partnerRec
           }
           finalAudit = {
+            idType: audit.idType,
             status: 'DUPLICATE',
             badgeLabel: 'Duplikat',
             badgeColor: 'red',
             alasan: `⛔ Duplikat: Dipakai juga oleh ${dupInfo.nama} (${dupInfo.sekolah})`,
-            rekomendasi: 'Bandingkan kedua data penerima dan perbaiki NIK yang keliru'
+            rekomendasi: 'Bandingkan kedua data penerima dan perbaiki NIK/NISN yang keliru'
           }
         } else if (audit.status !== 'VALID') {
           isProblem = true
           if (audit.status === 'TEMP_ZEROS') tempZerosCount++
-          else if (audit.status === 'INVALID_LENGTH') invalidLengthCount++
-          else if (audit.status === 'INVALID_DATE') invalidDateCount++
-          else if (audit.status === 'INVALID_CHAR') invalidCharCount++
+          else if (audit.status === 'INVALID_FORMAT') invalidLengthCount++
         } else {
           validCount++
         }
@@ -4000,6 +3999,17 @@ const getBnbaCountForGroup = (
                                       Lihat Pasangan Duplikat
                                     </button>
                                   </div>
+                                ) : nikAuditDetail && nikAuditDetail.status === 'VALID' ? (
+                                  <span 
+                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border shadow-2xs ${
+                                      nikAuditDetail.idType === 'NISN'
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    }`}
+                                    title={nikAuditDetail.alasan}
+                                  >
+                                    {nikAuditDetail.idType === 'NISN' ? 'NISN Valid' : 'NIK Valid'}
+                                  </span>
                                 ) : nikAuditDetail && nikAuditDetail.status !== 'VALID' ? (
                                   <span 
                                     className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
@@ -4142,17 +4152,23 @@ const getBnbaCountForGroup = (
                   }`}
                 />
 
-                {/* Teks Peringatan NIK Tidak Valid */}
+                {/* Teks Peringatan NIK / NISN Tidak Valid */}
                 {nikValidationResult && !nikValidationResult.isValid && (
                   <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
-                    <span>⚠️ NIK Tidak Valid: {nikValidationResult.message}</span>
+                    <span>⚠️ Format Tidak Valid: {nikValidationResult.message}</span>
                   </p>
                 )}
 
-                {/* Indikator Format NIK Valid */}
+                {/* Indikator Format NIK / NISN Valid */}
                 {nikValidationResult && nikValidationResult.isValid && !duplicateNikMatch && (
-                  <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1 animate-fadeIn">
-                    <span>✅ Format NIK Valid ({nikValidationResult.gender}, Tanggal Lahir: {nikValidationResult.birthDate})</span>
+                  <p className={`text-[11px] font-semibold mt-1 flex items-center gap-1 animate-fadeIn ${
+                    nikValidationResult.idType === 'NISN' ? 'text-blue-600' : 'text-emerald-600'
+                  }`}>
+                    <span>
+                      {nikValidationResult.idType === 'NISN'
+                        ? '✅ Format NISN Valid (10 Digit Kemendikbud)'
+                        : `✅ Format NIK Valid (${nikValidationResult.gender}, Tanggal Lahir: ${nikValidationResult.birthDate})`}
+                    </span>
                   </p>
                 )}
 

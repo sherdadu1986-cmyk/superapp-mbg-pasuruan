@@ -1,8 +1,21 @@
 import { supabase } from '@/lib/supabase';
 
+export type IdType = 'NIK' | 'NISN' | 'UNKNOWN';
+export type IdStatus = 'VALID' | 'DUPLICATE' | 'TEMP_ZEROS' | 'INVALID_FORMAT';
+
+export interface IdentityAuditResult {
+  idType: IdType;
+  status: IdStatus;
+  badgeLabel: string;
+  badgeColor: 'emerald' | 'blue' | 'amber' | 'red';
+  alasan: string;
+  rekomendasi?: string;
+}
+
 export interface NikValidationResult {
   isValid: boolean;
   message: string;
+  idType?: IdType;
   gender?: 'Laki-laki' | 'Perempuan';
   birthDate?: string;
 }
@@ -13,90 +26,137 @@ export interface DuplicateNikMatch {
   nama_sekolah: string;
 }
 
-export type NikStatus = 'VALID' | 'DUPLICATE' | 'TEMP_ZEROS' | 'INVALID_LENGTH' | 'INVALID_DATE' | 'INVALID_CHAR';
+// Legacy alias type for backward compatibility
+export type NikStatus = IdStatus;
+export type NikAuditDetail = IdentityAuditResult;
 
-export interface NikAuditDetail {
-  status: NikStatus;
-  badgeLabel: string;
-  badgeColor: 'green' | 'amber' | 'red' | 'purple';
-  alasan: string;
-  rekomendasi?: string;
-}
+export function auditIdentityNumber(idNumber: string): IdentityAuditResult {
+  const clean = (idNumber || '').trim();
 
-export function auditNik(nik: string): NikAuditDetail {
-  const clean = (nik || '').trim();
   if (!clean) {
     return {
-      status: 'INVALID_CHAR',
-      badgeLabel: 'NIK Kosong',
+      idType: 'UNKNOWN',
+      status: 'INVALID_FORMAT',
+      badgeLabel: 'Kosong',
       badgeColor: 'red',
-      alasan: 'Nomor NIK belum diisi',
-      rekomendasi: 'Isikan nomor NIK 16 digit siswa/balita/ibu'
+      alasan: 'Nomor identitas belum diisi',
+      rekomendasi: 'Isikan 10 digit NISN sekolah atau 16 digit NIK Dukcapil'
     };
   }
+
   if (!/^\d+$/.test(clean)) {
     return {
-      status: 'INVALID_CHAR',
+      idType: 'UNKNOWN',
+      status: 'INVALID_FORMAT',
       badgeLabel: 'Bukan Angka',
       badgeColor: 'red',
-      alasan: 'NIK mengandung karakter non-angka',
-      rekomendasi: 'Hapus karakter simbol/huruf dari nomor NIK'
-    };
-  }
-  if (clean.length !== 16) {
-    return {
-      status: 'INVALID_LENGTH',
-      badgeLabel: `${clean.length} Digit`,
-      badgeColor: 'amber',
-      alasan: `Panjang NIK tidak 16 digit (terdeteksi ${clean.length} digit)`,
-      rekomendasi: 'Cek ulang fisik KK/KIA, pastikan lengkap 16 digit'
+      alasan: 'Hanya boleh berisi angka',
+      rekomendasi: 'Hapus karakter simbol/huruf dari nomor identitas'
     };
   }
 
-  const urut = clean.substring(12, 16);
-  if (urut === '0000') {
+  // =========================
+  // 1. VALIDASI NISN (10 DIGIT)
+  // =========================
+  if (clean.length === 10) {
+    if (clean === '0000000000') {
+      return {
+        idType: 'NISN',
+        status: 'TEMP_ZEROS',
+        badgeLabel: 'NISN 0000',
+        badgeColor: 'amber',
+        alasan: 'Nomor NISN sementara (belum diisi nomor asli)',
+        rekomendasi: 'Cek nomor NISN resmi siswa di DAPODIK / EMIS'
+      };
+    }
     return {
-      status: 'TEMP_ZEROS',
-      badgeLabel: 'Ujung 0000',
-      badgeColor: 'amber',
-      alasan: '4 Digit terakhir 0000 (Nomor urut kependudukan sementara/belum verifikasi KIA/KK)',
-      rekomendasi: 'Mintakan FC Kartu Keluarga asli ke wali murid / ibu penerima manfaat'
+      idType: 'NISN',
+      status: 'VALID',
+      badgeLabel: 'NISN Valid',
+      badgeColor: 'blue',
+      alasan: 'Format 10 Digit Resmi Kemendikbud',
+      rekomendasi: 'Nomor NISN siswa terverifikasi resmi Kemendikbud'
     };
   }
 
-  let tgl = parseInt(clean.substring(6, 8), 10);
-  if (tgl > 40) tgl -= 40; // perempuan
-  const bln = parseInt(clean.substring(8, 10), 10);
-  if (tgl < 1 || tgl > 31 || bln < 1 || bln > 12) {
+  // =========================
+  // 2. VALIDASI NIK (16 DIGIT)
+  // =========================
+  if (clean.length === 16) {
+    const urut = clean.substring(12, 16);
+    if (urut === '0000') {
+      return {
+        idType: 'NIK',
+        status: 'TEMP_ZEROS',
+        badgeLabel: 'Ujung 0000',
+        badgeColor: 'amber',
+        alasan: '4 Digit terakhir 0000 (Data sementara/belum verifikasi Dukcapil)',
+        rekomendasi: 'Mintakan FC Kartu Keluarga asli ke wali murid / ibu'
+      };
+    }
+
+    let tgl = parseInt(clean.substring(6, 8), 10);
+    if (tgl > 40) tgl -= 40; // perempuan
+    const bln = parseInt(clean.substring(8, 10), 10);
+
+    if (tgl < 1 || tgl > 31 || bln < 1 || bln > 12) {
+      return {
+        idType: 'NIK',
+        status: 'INVALID_FORMAT',
+        badgeLabel: 'Tgl/Bln Salah',
+        badgeColor: 'red',
+        alasan: 'Struktur tanggal/bulan lahir NIK tidak valid',
+        rekomendasi: 'Verifikasi ulang tanggal lahir dan NIK pada Kartu Keluarga'
+      };
+    }
+
     return {
-      status: 'INVALID_DATE',
-      badgeLabel: 'Format Tgl Salah',
-      badgeColor: 'red',
-      alasan: 'Kombinasi tanggal/bulan pada NIK tidak logis',
-      rekomendasi: 'Verifikasi ulang tanggal lahir dan NIK pada Kartu Keluarga'
+      idType: 'NIK',
+      status: 'VALID',
+      badgeLabel: 'NIK Valid',
+      badgeColor: 'emerald',
+      alasan: 'Format 16 Digit Resmi Dukcapil',
+      rekomendasi: 'Format NIK 16 digit terverifikasi resmi Dukcapil'
     };
   }
 
+  // =========================
+  // 3. DI LUAR 10 ATAU 16 DIGIT
+  // =========================
   return {
-    status: 'VALID',
-    badgeLabel: 'Valid',
-    badgeColor: 'green',
-    alasan: 'Format NIK 16 Digit Sesuai Standar Dukcapil',
-    rekomendasi: 'Data NIK terverifikasi sesuai standar'
+    idType: 'UNKNOWN',
+    status: 'INVALID_FORMAT',
+    badgeLabel: `${clean.length} Digit`,
+    badgeColor: 'red',
+    alasan: `Jumlah digit tidak sesuai standar (Harus 10 digit untuk NISN atau 16 digit untuk NIK)`,
+    rekomendasi: 'Pastikan nomor berupa 10 digit NISN sekolah atau 16 digit NIK Dukcapil'
   };
 }
 
+// Backwards compatibility alias for auditNik
+export const auditNik = auditIdentityNumber;
+
 export function validateNikStructure(nik: string): NikValidationResult {
-  const audit = auditNik(nik);
+  const audit = auditIdentityNumber(nik);
 
   if (audit.status !== 'VALID') {
     return {
       isValid: false,
-      message: audit.alasan
+      message: audit.alasan,
+      idType: audit.idType
     };
   }
 
   const cleanNik = nik.trim();
+
+  if (audit.idType === 'NISN') {
+    return {
+      isValid: true,
+      message: 'Format NISN Valid (10 Digit Kemendikbud)',
+      idType: 'NISN'
+    };
+  }
+
   let tgl = parseInt(cleanNik.substring(6, 8), 10);
   const bln = parseInt(cleanNik.substring(8, 10), 10);
   const thn = cleanNik.substring(10, 12);
@@ -109,7 +169,8 @@ export function validateNikStructure(nik: string): NikValidationResult {
 
   return {
     isValid: true,
-    message: 'Format NIK Valid',
+    message: 'Format NIK Valid (16 Digit Dukcapil)',
+    idType: 'NIK',
     gender,
     birthDate: `${String(tgl).padStart(2, '0')}-${String(bln).padStart(2, '0')}-${thn}`
   };
@@ -179,7 +240,7 @@ export async function checkDuplicateNik(
       // Abaikan jika tabel master_penerima_manfaat belum dibuat
     }
   } catch (err) {
-    console.warn('Supabase duplicate NIK check exception:', err);
+    console.warn('Supabase duplicate NIK/NISN check exception:', err);
   }
 
   // 3. Fallback: Cek data lokal / cache jika ada
