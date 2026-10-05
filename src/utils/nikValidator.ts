@@ -13,52 +13,98 @@ export interface DuplicateNikMatch {
   nama_sekolah: string;
 }
 
-export function validateNikStructure(nik: string): NikValidationResult {
-  const cleanNik = nik.trim();
+export type NikStatus = 'VALID' | 'DUPLICATE' | 'TEMP_ZEROS' | 'INVALID_LENGTH' | 'INVALID_DATE' | 'INVALID_CHAR';
 
-  // 1. Cek panjang dan hanya angka
-  if (!/^\d{16}$/.test(cleanNik)) {
-    return { 
-      isValid: false, 
-      message: cleanNik.length !== 16 
-        ? `Panjang NIK harus 16 digit (saat ini ${cleanNik.length} digit)` 
-        : 'NIK hanya boleh berisi angka' 
+export interface NikAuditDetail {
+  status: NikStatus;
+  badgeLabel: string;
+  badgeColor: 'green' | 'amber' | 'red' | 'purple';
+  alasan: string;
+  rekomendasi?: string;
+}
+
+export function auditNik(nik: string): NikAuditDetail {
+  const clean = (nik || '').trim();
+  if (!clean) {
+    return {
+      status: 'INVALID_CHAR',
+      badgeLabel: 'NIK Kosong',
+      badgeColor: 'red',
+      alasan: 'Nomor NIK belum diisi',
+      rekomendasi: 'Isikan nomor NIK 16 digit siswa/balita/ibu'
+    };
+  }
+  if (!/^\d+$/.test(clean)) {
+    return {
+      status: 'INVALID_CHAR',
+      badgeLabel: 'Bukan Angka',
+      badgeColor: 'red',
+      alasan: 'NIK mengandung karakter non-angka',
+      rekomendasi: 'Hapus karakter simbol/huruf dari nomor NIK'
+    };
+  }
+  if (clean.length !== 16) {
+    return {
+      status: 'INVALID_LENGTH',
+      badgeLabel: `${clean.length} Digit`,
+      badgeColor: 'amber',
+      alasan: `Panjang NIK tidak 16 digit (terdeteksi ${clean.length} digit)`,
+      rekomendasi: 'Cek ulang fisik KK/KIA, pastikan lengkap 16 digit'
     };
   }
 
-  // 2. Ekstrak bagian kode
-  const prov = cleanNik.substring(0, 2);
-  const kab = cleanNik.substring(2, 4);
-  const kec = cleanNik.substring(4, 6);
+  const urut = clean.substring(12, 16);
+  if (urut === '0000') {
+    return {
+      status: 'TEMP_ZEROS',
+      badgeLabel: 'Ujung 0000',
+      badgeColor: 'amber',
+      alasan: '4 Digit terakhir 0000 (Nomor urut kependudukan sementara/belum verifikasi KIA/KK)',
+      rekomendasi: 'Mintakan FC Kartu Keluarga asli ke wali murid / ibu penerima manfaat'
+    };
+  }
+
+  let tgl = parseInt(clean.substring(6, 8), 10);
+  if (tgl > 40) tgl -= 40; // perempuan
+  const bln = parseInt(clean.substring(8, 10), 10);
+  if (tgl < 1 || tgl > 31 || bln < 1 || bln > 12) {
+    return {
+      status: 'INVALID_DATE',
+      badgeLabel: 'Format Tgl Salah',
+      badgeColor: 'red',
+      alasan: 'Kombinasi tanggal/bulan pada NIK tidak logis',
+      rekomendasi: 'Verifikasi ulang tanggal lahir dan NIK pada Kartu Keluarga'
+    };
+  }
+
+  return {
+    status: 'VALID',
+    badgeLabel: 'Valid',
+    badgeColor: 'green',
+    alasan: 'Format NIK 16 Digit Sesuai Standar Dukcapil',
+    rekomendasi: 'Data NIK terverifikasi sesuai standar'
+  };
+}
+
+export function validateNikStructure(nik: string): NikValidationResult {
+  const audit = auditNik(nik);
+
+  if (audit.status !== 'VALID') {
+    return {
+      isValid: false,
+      message: audit.alasan
+    };
+  }
+
+  const cleanNik = nik.trim();
   let tgl = parseInt(cleanNik.substring(6, 8), 10);
   const bln = parseInt(cleanNik.substring(8, 10), 10);
   const thn = cleanNik.substring(10, 12);
-  const urut = cleanNik.substring(12, 16);
 
-  // Cek kode wilayah dasar
-  if (prov === '00' || kab === '00' || kec === '00') {
-    return { isValid: false, message: 'Kode wilayah NIK tidak valid' };
-  }
-
-  // Cek tanggal & gender (perempuan tanggal lahir + 40)
   let gender: 'Laki-laki' | 'Perempuan' = 'Laki-laki';
   if (tgl > 40) {
     gender = 'Perempuan';
     tgl -= 40;
-  }
-
-  if (tgl < 1 || tgl > 31) {
-    return { isValid: false, message: 'Format tanggal lahir pada NIK tidak valid (01-31 atau 41-71)' };
-  }
-
-  // Cek bulan (01 - 12)
-  if (bln < 1 || bln > 12) {
-    return { isValid: false, message: 'Format bulan lahir pada NIK tidak valid (01-12)' };
-  }
-
-  // Cek nomor urut
-  if (urut === '0000') {
-    return { isValid: false, message: 'Nomor urut penerbitan NIK tidak valid (0000)' };
   }
 
   return {

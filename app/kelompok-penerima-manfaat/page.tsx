@@ -22,7 +22,7 @@ import {
   type KelompokPenerimaManfaat,
   type PenerimaManfaatBnba
 } from '@/lib/data-helpers'
-import { validateNikStructure, checkDuplicateNik, type NikValidationResult, type DuplicateNikMatch } from '@/utils/nikValidator'
+import { validateNikStructure, checkDuplicateNik, auditNik, type NikValidationResult, type DuplicateNikMatch, type NikAuditDetail, type NikStatus } from '@/utils/nikValidator'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { showToast } from '@/components/toast'
@@ -397,6 +397,13 @@ export default function KelompokPenerimaManfaatPage() {
   const [duplicateNikMatch, setDuplicateNikMatch] = useState<DuplicateNikMatch | null>(null)
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
+  // Interactive Audit NIK Modal & Duplicate Inspection States
+  const [activeAuditGroupModal, setActiveAuditGroupModal] = useState<DetailKpmItem | null>(null)
+  const [duplicateComparisonPair, setDuplicateComparisonPair] = useState<{
+    record1: PenerimaManfaatBnba;
+    record2: { id: string; nama: string; NIK: string; lembaga: string; ortu?: string; posisi?: string; kelas?: string; kelompok_id?: string };
+  } | null>(null)
+
   // Live / Debounced NIK Structural Validation & Duplicate Detection
   useEffect(() => {
     if (!showAddBnbaModal) {
@@ -486,6 +493,116 @@ export default function KelompokPenerimaManfaatPage() {
 
     return map
   }, [allBnbaRecords, kpmItems, activeBnbaGroup])
+
+  // Group-level NIK Audit Calculator for Main KPM Summary Table & Interactive Audit Modal
+  const kpmNikAuditMap = useMemo(() => {
+    const map = new Map<string, {
+      totalBnba: number;
+      validCount: number;
+      problemCount: number;
+      duplicateCount: number;
+      tempZerosCount: number;
+      invalidLengthCount: number;
+      invalidDateCount: number;
+      invalidCharCount: number;
+      problemItems: Array<{
+        bnba: PenerimaManfaatBnba;
+        audit: NikAuditDetail;
+        dupMatch?: { nama: string; sekolah: string; fullRecord?: PenerimaManfaatBnba };
+      }>;
+    }>()
+
+    // Map records by group UUID or NPSN / code
+    const bnbaByGroup = new Map<string, PenerimaManfaatBnba[]>()
+    allBnbaRecords.forEach(rec => {
+      const keys = [rec.kelompok_id, (rec as any).kpm_id, (rec as any).npsn].filter(Boolean)
+      keys.forEach(k => {
+        if (!bnbaByGroup.has(k)) bnbaByGroup.set(k, [])
+        bnbaByGroup.get(k)!.push(rec)
+      })
+    })
+
+    const kpmNameMap = new Map<string, string>()
+    kpmItems.forEach(k => kpmNameMap.set(k.id, k.nama))
+
+    kpmItems.forEach(kpm => {
+      const rawList = bnbaByGroup.get(kpm.id) || bnbaByGroup.get(kpm.npsnReg) || allBnbaRecords.filter(r => r.kelompok_id === kpm.id || r.kelompok_id === kpm.npsnReg)
+      const groupBnbaList = Array.from(new Set(rawList.map(r => r.id)))
+        .map(id => rawList.find(r => r.id === id)!)
+        .filter(Boolean)
+      
+      let validCount = 0
+      let duplicateCount = 0
+      let tempZerosCount = 0
+      let invalidLengthCount = 0
+      let invalidDateCount = 0
+      let invalidCharCount = 0
+      const problemItems: Array<{
+        bnba: PenerimaManfaatBnba;
+        audit: NikAuditDetail;
+        dupMatch?: { nama: string; sekolah: string; fullRecord?: PenerimaManfaatBnba };
+      }> = []
+
+      groupBnbaList.forEach(item => {
+        const nikStr = (item.nisn_nik || item.nik || item.nisn || '').trim()
+        const audit = auditNik(nikStr)
+        const dupInfo = duplicateNikMap.get(item.id)
+
+        let isProblem = false
+        let finalAudit = audit
+        let dupMatch: { nama: string; sekolah: string; fullRecord?: PenerimaManfaatBnba } | undefined = undefined
+
+        if (dupInfo) {
+          isProblem = true
+          duplicateCount++
+          const partnerRec = allBnbaRecords.find(b => b.id !== item.id && ((b.nisn_nik || b.nik || '').trim() === nikStr))
+          dupMatch = {
+            nama: dupInfo.nama,
+            sekolah: dupInfo.sekolah,
+            fullRecord: partnerRec
+          }
+          finalAudit = {
+            status: 'DUPLICATE',
+            badgeLabel: 'Duplikat',
+            badgeColor: 'red',
+            alasan: `⛔ Duplikat: Dipakai juga oleh ${dupInfo.nama} (${dupInfo.sekolah})`,
+            rekomendasi: 'Bandingkan kedua data penerima dan perbaiki NIK yang keliru'
+          }
+        } else if (audit.status !== 'VALID') {
+          isProblem = true
+          if (audit.status === 'TEMP_ZEROS') tempZerosCount++
+          else if (audit.status === 'INVALID_LENGTH') invalidLengthCount++
+          else if (audit.status === 'INVALID_DATE') invalidDateCount++
+          else if (audit.status === 'INVALID_CHAR') invalidCharCount++
+        } else {
+          validCount++
+        }
+
+        if (isProblem) {
+          problemItems.push({
+            bnba: item,
+            audit: finalAudit,
+            dupMatch
+          })
+        }
+      })
+
+      const problemCount = problemItems.length
+      map.set(kpm.id, {
+        totalBnba: groupBnbaList.length,
+        validCount,
+        problemCount,
+        duplicateCount,
+        tempZerosCount,
+        invalidLengthCount,
+        invalidDateCount,
+        invalidCharCount,
+        problemItems
+      })
+    })
+
+    return map
+  }, [allBnbaRecords, kpmItems, duplicateNikMap])
 
   // Helper check for Posyandu 3B Category
   const isPosyanduCategory = useMemo(() => {
@@ -2770,6 +2887,7 @@ const getBnbaCountForGroup = (
                   <th className="py-3 px-3 text-right min-w-[140px]">JUMLAH GURU/KADER</th>
                   <th className="py-3 px-3 text-right min-w-[110px]">JUMLAH TENDIK</th>
                   <th className="py-3 px-3 text-right min-w-[130px]">TOTAL / RINCIAN</th>
+                  <th className="py-3 px-3 text-center min-w-[160px]">AUDIT NIK</th>
                   <th className="py-3 px-3 text-center min-w-[150px]">KETERANGAN</th>
                   <th className="py-3 px-3 text-center min-w-[260px]">DOKUMEN PENDUKUNG</th>
                   <th className="py-3 px-3 min-w-[200px]">NAMA PIMPINAN/KETUA/PENGHUBUNG</th>
@@ -2891,6 +3009,49 @@ const getBnbaCountForGroup = (
 
                       <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">
                         {row.totalTarget} Orang
+                      </td>
+
+                      <td className="py-3 px-3 text-center">
+                        {(() => {
+                          const auditData = kpmNikAuditMap.get(row.id)
+                          if (!auditData || auditData.totalBnba === 0) {
+                            return (
+                              <span className="px-2.5 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                                ⚪ Belum Ada BNBA
+                              </span>
+                            )
+                          }
+                          if (auditData.problemCount === 0) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setActiveAuditGroupModal(row)}
+                                className="px-2.5 py-1 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs hover:bg-emerald-200 cursor-pointer transition flex items-center justify-center gap-1 mx-auto"
+                                title="Klik untuk membuka Laporan Audit NIK 100% Valid"
+                              >
+                                <span>✅ 100% Valid</span>
+                              </button>
+                            )
+                          }
+
+                          let pillText = `⚠️ ${auditData.problemCount} NIK Perlu Cek`
+                          if (auditData.duplicateCount > 0 && auditData.tempZerosCount === 0) {
+                            pillText = `⚠️ ${auditData.duplicateCount} Duplikat`
+                          } else if (auditData.tempZerosCount > 0 && auditData.duplicateCount === 0) {
+                            pillText = `⚠️ ${auditData.tempZerosCount} Ujung 0000`
+                          }
+
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setActiveAuditGroupModal(row)}
+                              className="px-2.5 py-1 rounded text-[10px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs cursor-pointer transition flex items-center justify-center gap-1.5 mx-auto animate-pulse"
+                              title="Klik untuk membuka Laporan Anomali & Masalah NIK"
+                            >
+                              <span>{pillText}</span>
+                            </button>
+                          )
+                        })()}
                       </td>
 
                       <td className="py-3 px-3 text-center">
@@ -3785,7 +3946,7 @@ const getBnbaCountForGroup = (
                         const kelas = row.kelas || '-'
 
                         const cleanNik = nisnNik.trim()
-                        const nikVal = cleanNik ? validateNikStructure(cleanNik) : null
+                        const nikAuditDetail = cleanNik ? auditNik(cleanNik) : null
                         const dupInfo = duplicateNikMap.get(row.id)
 
                         return (
@@ -3809,18 +3970,46 @@ const getBnbaCountForGroup = (
                               <div className="flex flex-wrap items-center gap-1.5">
                                 <span>{nisnNik}</span>
                                 {dupInfo ? (
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span 
+                                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs cursor-help animate-pulse"
+                                      title={`⛔ Duplikat: Dipakai juga oleh ${dupInfo.nama} (${dupInfo.sekolah})`}
+                                    >
+                                      ⛔ Duplikat: {dupInfo.nama} ({dupInfo.sekolah})
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const partnerRec = allBnbaRecords.find(b => b.id !== row.id && ((b.nisn_nik || b.nik || '').trim() === cleanNik))
+                                        setDuplicateComparisonPair({
+                                          record1: row,
+                                          record2: {
+                                            id: partnerRec?.id || 'unknown',
+                                            nama: dupInfo.nama,
+                                            NIK: cleanNik,
+                                            lembaga: dupInfo.sekolah,
+                                            ortu: partnerRec?.nama_ortu,
+                                            posisi: partnerRec?.posisi,
+                                            kelas: partnerRec?.kelas,
+                                            kelompok_id: partnerRec?.kelompok_id
+                                          }
+                                        })
+                                      }}
+                                      className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[9px] font-bold transition cursor-pointer shadow-2xs whitespace-nowrap"
+                                    >
+                                      Lihat Pasangan Duplikat
+                                    </button>
+                                  </div>
+                                ) : nikAuditDetail && nikAuditDetail.status !== 'VALID' ? (
                                   <span 
-                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs cursor-help animate-pulse"
-                                    title={`Kembar dengan ${dupInfo.nama} di ${dupInfo.sekolah}`}
+                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                      nikAuditDetail.badgeColor === 'red'
+                                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                        : 'bg-amber-100 text-amber-900 border border-amber-300'
+                                    } shadow-2xs cursor-help`}
+                                    title={`⚠️ ${nikAuditDetail.badgeLabel}: ${nikAuditDetail.alasan}`}
                                   >
-                                    ⚠️ NIK Duplikat
-                                  </span>
-                                ) : nikVal && !nikVal.isValid ? (
-                                  <span 
-                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs cursor-help"
-                                    title={`⚠️ NIK Tidak Valid: ${nikVal.message}`}
-                                  >
-                                    ⚠️ NIK Tidak Valid
+                                    ⚠️ {nikAuditDetail.badgeLabel}
                                   </span>
                                 ) : null}
                               </div>
@@ -4172,6 +4361,309 @@ const getBnbaCountForGroup = (
                   onLoad={() => setIsPreviewLoading(false)}
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Group Audit NIK Pop-Up Modal */}
+      {activeAuditGroupModal && (() => {
+        const groupAudit = kpmNikAuditMap.get(activeAuditGroupModal.id)
+        const groupBnbaList = groupAudit?.problemItems || []
+
+        return (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4 animate-fadeIn">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden border border-slate-200 h-[90vh] flex flex-col">
+              {/* Header Modal */}
+              <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert size={20} className="text-amber-600 shrink-0" />
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">
+                      Daftar Anomali & Masalah NIK: <span className="text-indigo-700">{activeAuditGroupModal.nama}</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Audit kualitas data NIK By Name By Address Dukcapil.
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setActiveAuditGroupModal(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Audit Metric Bar */}
+              <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="bg-white px-2.5 py-1 rounded border border-slate-200 font-semibold text-slate-700">
+                    Total BNBA: <strong className="text-slate-900">{groupAudit?.totalBnba || 0}</strong>
+                  </span>
+                  <span className="bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded border border-emerald-200 font-bold">
+                    ✅ Valid: {groupAudit?.validCount || 0}
+                  </span>
+                  {groupAudit?.duplicateCount ? (
+                    <span className="bg-rose-50 text-rose-800 px-2.5 py-1 rounded border border-rose-200 font-bold">
+                      ⛔ Duplikat: {groupAudit.duplicateCount}
+                    </span>
+                  ) : null}
+                  {groupAudit?.tempZerosCount ? (
+                    <span className="bg-amber-50 text-amber-900 px-2.5 py-1 rounded border border-amber-200 font-bold">
+                      ⚠️ Ujung 0000: {groupAudit.tempZerosCount}
+                    </span>
+                  ) : null}
+                  {groupAudit?.invalidLengthCount ? (
+                    <span className="bg-amber-50 text-amber-900 px-2.5 py-1 rounded border border-amber-200 font-bold">
+                      📏 Kurang Digit: {groupAudit.invalidLengthCount}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div>
+                  {groupAudit?.problemCount === 0 ? (
+                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs px-3 py-1 rounded-lg">
+                      ✅ Data NIK 100% Sesuai Standar
+                    </span>
+                  ) : (
+                    <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-xs px-3 py-1 rounded-lg">
+                      ⚠️ Ditemukan {groupAudit?.problemCount} NIK Perlu Diperbaiki
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Table Content */}
+              <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase text-[11px]">
+                        <th className="py-2.5 px-3 text-center w-10">NO</th>
+                        <th className="py-2.5 px-3 min-w-[150px]">NAMA PENERIMA</th>
+                        <th className="py-2.5 px-3 min-w-[140px]">NIK / NISN</th>
+                        <th className="py-2.5 px-3 min-w-[200px]">STATUS & ALASAN MASALAH</th>
+                        <th className="py-2.5 px-3 min-w-[200px]">REKOMENDASI TINDAKAN</th>
+                        <th className="py-2.5 px-3 text-center min-w-[130px]">AKSI</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-medium">
+                      {groupBnbaList.length > 0 ? (
+                        groupBnbaList.map((item, idx) => {
+                          const row = item.bnba
+                          const audit = item.audit
+                          const nikStr = (row.nisn_nik || row.nik || '-').trim()
+
+                          return (
+                            <tr key={row.id} className="hover:bg-slate-50 transition">
+                              <td className="py-2.5 px-3 text-center text-slate-500 font-bold">{idx + 1}</td>
+                              <td className="py-2.5 px-3 font-bold text-slate-900">
+                                <div>{row.nama_lengkap || row.nama_penerima || row.nama}</div>
+                                <div className="text-[10px] font-normal text-slate-500">{row.posisi} • {row.kelas}</div>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">{nikStr}</td>
+                              <td className="py-2.5 px-3">
+                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold mb-0.5 ${
+                                  audit.badgeColor === 'red' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-amber-100 text-amber-900 border border-amber-200'
+                                }`}>
+                                  {audit.badgeLabel}
+                                </span>
+                                <p className="text-[11px] text-slate-700 font-medium leading-tight">{audit.alasan}</p>
+                              </td>
+                              <td className="py-2.5 px-3 text-[11px] text-slate-600 italic">
+                                {audit.rekomendasi || 'Mintakan FC Kartu Keluarga asli ke wali murid'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <div className="flex flex-col gap-1 items-center">
+                                  {item.dupMatch && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDuplicateComparisonPair({
+                                          record1: row,
+                                          record2: {
+                                            id: item.dupMatch?.fullRecord?.id || 'unknown',
+                                            nama: item.dupMatch?.nama || 'Penerima Pasangan',
+                                            NIK: nikStr,
+                                            lembaga: item.dupMatch?.sekolah || 'Lembaga/Posyandu Pasangan',
+                                            ortu: item.dupMatch?.fullRecord?.nama_ortu,
+                                            posisi: item.dupMatch?.fullRecord?.posisi,
+                                            kelas: item.dupMatch?.fullRecord?.kelas,
+                                            kelompok_id: item.dupMatch?.fullRecord?.kelompok_id
+                                          }
+                                        })
+                                      }}
+                                      className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold transition cursor-pointer shadow-2xs whitespace-nowrap"
+                                    >
+                                      Lihat Pasangan Duplikat
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const targetGroup = activeAuditGroupModal
+                                      setActiveAuditGroupModal(null)
+                                      handleOpenBnbaModal(targetGroup)
+                                      setTimeout(() => handleOpenEditBnbaModal(row), 150)
+                                    }}
+                                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded text-[10px] font-bold transition cursor-pointer shadow-2xs flex items-center gap-1"
+                                  >
+                                    <Edit size={11} />
+                                    <span>Edit NIK</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-500 font-medium">
+                            ✅ Seluruh NIK By Name By Address di kelompok ini valid 100% Sesuai Dukcapil.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-between text-xs">
+                <div className="text-slate-500">
+                  Daftar audit ini diperbarui secara otomatis dari database.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveAuditGroupModal(null)}
+                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-bold transition cursor-pointer"
+                >
+                  Tutup Laporan Audit
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Duplicate Partner Comparison Modal */}
+      {duplicateComparisonPair && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 flex flex-col">
+            <div className="p-4 border-b border-slate-200 bg-rose-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert size={20} className="text-rose-600 shrink-0" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    Inspeksi Pasangan NIK Duplikat
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    NIK: <strong className="text-rose-700 font-bold">{duplicateComparisonPair.record1.nisn_nik}</strong>
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setDuplicateComparisonPair(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 bg-slate-50 text-xs">
+              <p className="text-slate-700 font-medium leading-relaxed">
+                Sistem menemukan NIK yang sama digunakan oleh 2 data penerima manfaat yang berbeda. Silakan bandingkan detail kedua warga penerima berikut:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Card Record 1 */}
+                <div className="bg-white p-4 rounded-xl border-2 border-rose-300 shadow-sm space-y-2 relative">
+                  <span className="absolute -top-2.5 left-3 bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
+                    RECORD A (UTAMA)
+                  </span>
+                  <div className="pt-1">
+                    <span className="text-[10px] text-slate-400 font-semibold block uppercase">Nama Penerima</span>
+                    <h4 className="font-bold text-slate-900 text-sm">{duplicateComparisonPair.record1.nama_lengkap || duplicateComparisonPair.record1.nama}</h4>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block uppercase">Lembaga / Posyandu</span>
+                    <p className="font-semibold text-indigo-700">{activeBnbaGroup?.nama || 'Lembaga Ini'}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">Ortu / Wali</span>
+                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record1.nama_ortu || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">Posisi & Kelas</span>
+                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record1.posisi || '-'} ({duplicateComparisonPair.record1.kelas || '-'})</p>
+                    </div>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const rec1 = duplicateComparisonPair.record1
+                        setDuplicateComparisonPair(null)
+                        handleOpenEditBnbaModal(rec1)
+                      }}
+                      className="w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-xs transition cursor-pointer shadow-2xs"
+                    >
+                      Edit NIK Record A
+                    </button>
+                  </div>
+                </div>
+
+                {/* Card Record 2 */}
+                <div className="bg-white p-4 rounded-xl border-2 border-amber-300 shadow-sm space-y-2 relative">
+                  <span className="absolute -top-2.5 left-3 bg-amber-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
+                    RECORD B (PASANGAN KEMBAR)
+                  </span>
+                  <div className="pt-1">
+                    <span className="text-[10px] text-slate-400 font-semibold block uppercase">Nama Penerima</span>
+                    <h4 className="font-bold text-slate-900 text-sm">{duplicateComparisonPair.record2.nama}</h4>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block uppercase">Lembaga / Posyandu</span>
+                    <p className="font-semibold text-purple-700">{duplicateComparisonPair.record2.lembaga}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">Ortu / Wali</span>
+                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record2.ortu || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">Posisi & Kelas</span>
+                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record2.posisi || '-'} ({duplicateComparisonPair.record2.kelas || '-'})</p>
+                    </div>
+                  </div>
+                  <div className="pt-2">
+                    {duplicateComparisonPair.record2.id !== 'unknown' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const partnerObj = allBnbaRecords.find(b => b.id === duplicateComparisonPair.record2.id)
+                          setDuplicateComparisonPair(null)
+                          if (partnerObj) {
+                            handleOpenEditBnbaModal(partnerObj)
+                          }
+                        }}
+                        className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-xs transition cursor-pointer shadow-2xs"
+                      >
+                        Edit NIK Record B
+                      </button>
+                    ) : (
+                      <span className="block text-center text-[11px] text-slate-400 font-medium py-1.5 bg-slate-100 rounded">
+                        Record B di kelompok lain
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setDuplicateComparisonPair(null)}
+                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded font-bold text-xs transition cursor-pointer"
+              >
+                Tutup Inspeksi
+              </button>
             </div>
           </div>
         </div>
