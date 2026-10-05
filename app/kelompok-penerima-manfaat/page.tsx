@@ -22,6 +22,7 @@ import {
   type KelompokPenerimaManfaat,
   type PenerimaManfaatBnba
 } from '@/lib/data-helpers'
+import { validateNikStructure, checkDuplicateNik, type NikValidationResult, type DuplicateNikMatch } from '@/utils/nikValidator'
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { showToast } from '@/components/toast'
@@ -390,6 +391,101 @@ export default function KelompokPenerimaManfaatPage() {
   const [bnbaOrtu, setBnbaOrtu] = useState('')
   const [bnbaPosisi, setBnbaPosisi] = useState<'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'>('Siswa')
   const [bnbaKelas, setBnbaKelas] = useState('')
+
+  // NIK Smart Validation & Duplicate Detection States
+  const [nikValidationResult, setNikValidationResult] = useState<NikValidationResult | null>(null)
+  const [duplicateNikMatch, setDuplicateNikMatch] = useState<DuplicateNikMatch | null>(null)
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
+
+  // Live / Debounced NIK Structural Validation & Duplicate Detection
+  useEffect(() => {
+    if (!showAddBnbaModal) {
+      setNikValidationResult(null)
+      setDuplicateNikMatch(null)
+      setIsCheckingDuplicate(false)
+      return
+    }
+
+    const cleanInput = bnbaNisnNik.trim()
+    if (!cleanInput) {
+      setNikValidationResult(null)
+      setDuplicateNikMatch(null)
+      setIsCheckingDuplicate(false)
+      return
+    }
+
+    // 1. Structural NIK Validation
+    const valResult = validateNikStructure(cleanInput)
+    setNikValidationResult(valResult)
+
+    // Smart Auto-fill gender if valid NIK structure (Perempuan = tanggal lahir + 40)
+    if (valResult.isValid) {
+      if (valResult.gender) {
+        setBnbaJk(valResult.gender === 'Perempuan' ? 'P' : 'L')
+      }
+      if (valResult.birthDate) {
+        const parts = valResult.birthDate.split('-')
+        if (parts.length === 3) {
+          const dd = parts[0]
+          const mm = parts[1]
+          const yy = parts[2]
+          const fullYear = parseInt(yy, 10) > 30 ? `19${yy}` : `20${yy}`
+          setBnbaTglLahir(`${fullYear}-${mm}-${dd}`)
+        }
+      }
+    }
+
+    // 2. Real-time / Debounced Duplicate Check to Supabase
+    setIsCheckingDuplicate(true)
+    const timer = setTimeout(async () => {
+      try {
+        const dupMatch = await checkDuplicateNik(cleanInput, editingBnbaItem?.id, allBnbaRecords)
+        setDuplicateNikMatch(dupMatch)
+      } catch (err) {
+        console.warn('Duplicate NIK check error:', err)
+      } finally {
+        setIsCheckingDuplicate(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [bnbaNisnNik, editingBnbaItem, showAddBnbaModal, allBnbaRecords])
+
+  // Map NIK duplicates across all records for Table Indicators
+  const duplicateNikMap = useMemo(() => {
+    const map = new Map<string, { nama: string; sekolah: string }>()
+    const countMap = new Map<string, Array<{ id: string; nama: string; kelompok_id: string }>>()
+
+    allBnbaRecords.forEach((rec) => {
+      const nik = (rec.nisn_nik || rec.nik || '').trim()
+      if (!nik || nik.length < 5) return
+      const existing = countMap.get(nik) || []
+      existing.push({
+        id: rec.id,
+        nama: rec.nama_lengkap || rec.nama_penerima || rec.nama || 'Penerima',
+        kelompok_id: rec.kelompok_id
+      })
+      countMap.set(nik, existing)
+    })
+
+    const kpmNameMap = new Map<string, string>()
+    kpmItems.forEach(k => kpmNameMap.set(k.id, k.nama))
+
+    countMap.forEach((list) => {
+      if (list.length > 1) {
+        list.forEach((item) => {
+          const other = list.find(o => o.id !== item.id)
+          const otherSekolah = other ? (kpmNameMap.get(other.kelompok_id) || activeBnbaGroup?.nama || 'Lembaga/Sekolah') : 'Lembaga/Sekolah'
+          map.set(item.id, {
+            nama: other?.nama || 'Penerima Lain',
+            sekolah: otherSekolah
+          })
+        })
+      }
+    })
+
+    return map
+  }, [allBnbaRecords, kpmItems, activeBnbaGroup])
 
   // Helper check for Posyandu 3B Category
   const isPosyanduCategory = useMemo(() => {
@@ -3688,6 +3784,10 @@ const getBnbaCountForGroup = (
                         const posisi = row.posisi || '-'
                         const kelas = row.kelas || '-'
 
+                        const cleanNik = nisnNik.trim()
+                        const nikVal = cleanNik ? validateNikStructure(cleanNik) : null
+                        const dupInfo = duplicateNikMap.get(row.id)
+
                         return (
                           <tr key={row.id} className={`hover:bg-slate-50 transition ${isSelected ? 'bg-amber-50/60' : ''}`}>
                             <td className="py-2.5 px-3 text-center">
@@ -3705,7 +3805,26 @@ const getBnbaCountForGroup = (
                               />
                             </td>
                             <td className="py-2.5 px-3 text-center text-slate-500">{idx + 1}</td>
-                            <td className="py-2.5 px-3 font-mono font-semibold">{nisnNik}</td>
+                            <td className="py-2.5 px-3 font-mono font-semibold">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span>{nisnNik}</span>
+                                {dupInfo ? (
+                                  <span 
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs cursor-help animate-pulse"
+                                    title={`Kembar dengan ${dupInfo.nama} di ${dupInfo.sekolah}`}
+                                  >
+                                    ⚠️ NIK Duplikat
+                                  </span>
+                                ) : nikVal && !nikVal.isValid ? (
+                                  <span 
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs cursor-help"
+                                    title={`⚠️ NIK Tidak Valid: ${nikVal.message}`}
+                                  >
+                                    ⚠️ NIK Tidak Valid
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
                             <td className="py-2.5 px-3 font-bold text-slate-900">{nama}</td>
                             <td className="py-2.5 px-3 font-mono">{tglLahir}</td>
                             <td className="py-2.5 px-3 text-center">{jk}</td>
@@ -3809,8 +3928,56 @@ const getBnbaCountForGroup = (
             </div>
             <form onSubmit={handleSaveBnbaItem} className="p-4 space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">NIK / NISN *</label>
-                <input type="text" required value={bnbaNisnNik} onChange={(e) => setBnbaNisnNik(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono" />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">
+                    NIK / NISN *
+                  </label>
+                  {isCheckingDuplicate && (
+                    <span className="text-[10px] font-semibold text-indigo-600 animate-pulse flex items-center gap-1">
+                      <RotateCw size={10} className="animate-spin" /> Checking duplicate...
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={bnbaNisnNik}
+                  onChange={(e) => setBnbaNisnNik(e.target.value)}
+                  placeholder="Masukkan 16 digit NIK resmi"
+                  className={`w-full px-3 py-1.5 border rounded font-mono transition ${
+                    nikValidationResult && !nikValidationResult.isValid
+                      ? 'border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-rose-500 focus:border-rose-500'
+                      : duplicateNikMatch
+                      ? 'border-amber-500 bg-amber-50/40 text-amber-900 focus:ring-amber-500 focus:border-amber-500'
+                      : 'border-slate-300 bg-white'
+                  }`}
+                />
+
+                {/* Teks Peringatan NIK Tidak Valid */}
+                {nikValidationResult && !nikValidationResult.isValid && (
+                  <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+                    <span>⚠️ NIK Tidak Valid: {nikValidationResult.message}</span>
+                  </p>
+                )}
+
+                {/* Indikator Format NIK Valid */}
+                {nikValidationResult && nikValidationResult.isValid && !duplicateNikMatch && (
+                  <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1 animate-fadeIn">
+                    <span>✅ Format NIK Valid ({nikValidationResult.gender}, Tanggal Lahir: {nikValidationResult.birthDate})</span>
+                  </p>
+                )}
+
+                {/* Banner Peringatan NIK Duplikat */}
+                {duplicateNikMatch && (
+                  <div className="mt-2 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 text-xs font-semibold space-y-1 animate-fadeIn shadow-2xs">
+                    <div className="flex items-center gap-1.5 font-bold text-rose-700">
+                      <span>⛔ NIK Duplikat!</span>
+                    </div>
+                    <p className="text-[11px] text-rose-800 leading-tight">
+                      Sudah terdaftar atas nama <strong className="font-bold underline">{duplicateNikMatch.nama}</strong> di <strong className="font-bold">{duplicateNikMatch.nama_sekolah}</strong>.
+                    </p>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Nama Penerima *</label>
@@ -3851,7 +4018,11 @@ const getBnbaCountForGroup = (
               </div>
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button type="button" onClick={() => { setShowAddBnbaModal(false); setEditingBnbaItem(null); }} className="px-3 py-1.5 bg-white border border-slate-300 rounded text-slate-700 font-semibold cursor-pointer">Batal</button>
-                <button type="submit" disabled={savingBnba} className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded font-bold cursor-pointer flex items-center gap-1.5">
+                <button 
+                  type="submit" 
+                  disabled={savingBnba || (Boolean(nikValidationResult) && !nikValidationResult?.isValid) || Boolean(duplicateNikMatch)} 
+                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded font-bold cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   {savingBnba && <RotateCw size={13} className="animate-spin" />}
                   <span>{savingBnba ? 'Menyimpan...' : editingBnbaItem ? 'Simpan Perubahan' : 'Simpan'}</span>
                 </button>
