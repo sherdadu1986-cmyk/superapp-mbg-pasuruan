@@ -25,6 +25,49 @@ export default function LembarDistribusiPrint({
   const [ruteFilter, setRuteFilter] = useState<'ALL' | 'Kiri' | 'Kanan'>('ALL')
   const [distribusiSettings, setDistribusiSettings] = useState<Record<string, { rute: 'Kiri' | 'Kanan'; no_hp_pic: string }>>({})
 
+  // 1. State Tanggal Operasional di Modal Pratinjau
+  const [tanggalOperasional, setTanggalOperasional] = useState<string>(() => {
+    // Default: Tanggal Hari Ini (format YYYY-MM-DD)
+    return new Date().toISOString().split('T')[0];
+  });
+
+  const getTodayStr = () => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const getTomorrowStr = () => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const year = tomorrow.getFullYear()
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0')
+    const day = String(tomorrow.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const handleHariIni = () => {
+    setTanggalOperasional(getTodayStr())
+  }
+
+  const handleBesok = () => {
+    setTanggalOperasional(getTomorrowStr())
+  }
+
+  // Format Tampilan di Lembar Dokumen (Reactive)
+  const formatTanggalResmi = (dateStr: string) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr + 'T00:00:00')
+    return new Intl.DateTimeFormat('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(date)
+  }
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -38,40 +81,11 @@ export default function LembarDistribusiPrint({
           setDistribusiSettings(JSON.parse(saved))
         } catch {}
       }
-    }
-  }, [isOpen])
-
-  // Dynamic Indonesian full date formatting (e.g. "Senin, 15 September 2026")
-  const fullDateFormatted = useMemo(() => {
-    if (selectedDate) return selectedDate
-    const d = new Date()
-    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
-    const months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-    ]
-    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
-  }, [selectedDate])
-
-  // Official Indonesian Date Formatting for Signature Block (e.g. "15 September 2026")
-  const formattedDate = useMemo(() => {
-    if (selectedDate) {
-      const d = new Date(selectedDate)
-      if (!isNaN(d.getTime())) {
-        return new Intl.DateTimeFormat('id-ID', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        }).format(d)
+      if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+        setTanggalOperasional(selectedDate)
       }
-      return selectedDate
     }
-    return new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    }).format(new Date())
-  }, [selectedDate])
+  }, [isOpen, selectedDate])
 
   // Real-time print time formatting (e.g. "04:30 WIB")
   const printTimeFormatted = useMemo(() => {
@@ -92,7 +106,7 @@ export default function LembarDistribusiPrint({
       }
     }
     const liburParam = ids.join(',')
-    const url = `/cetak/lembar-distribusi?libur=${encodeURIComponent(liburParam)}&rute=${targetRute}`
+    const url = `/cetak/lembar-distribusi?libur=${encodeURIComponent(liburParam)}&rute=${targetRute}&tanggal=${tanggalOperasional}`
     window.open(url, '_blank')
   }
 
@@ -587,6 +601,35 @@ export default function LembarDistribusiPrint({
                 Rute Kanan
               </button>
             </div>
+
+            {/* Quick Presets & Date Picker */}
+            <div className="bg-slate-800 p-1 rounded-lg flex items-center gap-1.5 border border-slate-700">
+              <button
+                type="button"
+                onClick={handleHariIni}
+                className={`px-2.5 py-1 text-xs font-semibold rounded cursor-pointer transition ${
+                  tanggalOperasional === getTodayStr() ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                Hari Ini
+              </button>
+              <button
+                type="button"
+                onClick={handleBesok}
+                className={`px-2.5 py-1 text-xs font-semibold rounded cursor-pointer transition ${
+                  tanggalOperasional === getTomorrowStr() ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                Besok
+              </button>
+              <input
+                type="date"
+                value={tanggalOperasional}
+                onChange={(e) => setTanggalOperasional(e.target.value)}
+                className="bg-white/10 hover:bg-white/20 text-white text-xs border border-white/20 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+              />
+            </div>
+
             <button
               onClick={() => handleBukaLembarCetak(ruteFilter)}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -640,7 +683,7 @@ export default function LembarDistribusiPrint({
                 <div className="bg-[#f8fafc] border border-slate-300 rounded-md p-2 text-right shrink-0 min-w-[160px]">
                   <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">TANGGAL OPERASIONAL</div>
                   <div className="font-black text-[#0f172a] text-[10pt] mt-0.5 leading-snug">
-                    {fullDateFormatted}
+                    {formatTanggalResmi(tanggalOperasional)}
                   </div>
                   <div className="text-[8pt] font-medium text-slate-500 mt-0.5">
                     Waktu Cetak: <span className="font-bold text-slate-700">{printTimeFormatted}</span>
@@ -1034,7 +1077,7 @@ export default function LembarDistribusiPrint({
                   <div className="text-[#0f172a] text-[11.5px] leading-tight space-y-0.5">
                     <p className="font-medium text-slate-700">Ditetapkan di Pasuruan</p>
                     <p className="font-medium text-slate-700">
-                      pada tanggal <span className="font-bold text-[#0f172a]">{formattedDate}</span>
+                      pada tanggal <span className="font-bold text-[#0f172a]">{formatTanggalResmi(tanggalOperasional).replace(/^[A-Za-z]+,\s*/, '')}</span>
                     </p>
                     <p className="font-bold text-[#0f172a] mt-0.5">Kepala SPPG,</p>
                   </div>

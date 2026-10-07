@@ -22,6 +22,11 @@ export default function CetakLembarDistribusiPage() {
         setRuteFilter(ruteQuery)
       }
 
+      const tanggalQuery = params.get('tanggal')
+      if (tanggalQuery) {
+        setTanggalOperasional(tanggalQuery)
+      }
+
       if (liburQuery) {
         setLiburIds(liburQuery.split(',').filter(Boolean))
       } else {
@@ -75,23 +80,33 @@ export default function CetakLembarDistribusiPage() {
     return () => clearTimeout(timer)
   }, [loaded])
 
-  const fullDateFormatted = useMemo(() => {
-    const d = new Date()
-    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
-    const months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-    ]
-    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
-  }, [])
+  const [tanggalOperasional, setTanggalOperasional] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tQuery = params.get('tanggal')
+      if (tQuery) return tQuery
+    }
+    return new Date().toISOString().split('T')[0]
+  })
 
-  const formattedDate = useMemo(() => {
+  const formatTanggalResmi = (dateStr: string) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr + 'T00:00:00')
     return new Intl.DateTimeFormat('id-ID', {
+      weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric'
-    }).format(new Date())
-  }, [])
+    }).format(date)
+  }
+
+  const fullDateFormatted = useMemo(() => {
+    return formatTanggalResmi(tanggalOperasional)
+  }, [tanggalOperasional])
+
+  const formattedDate = useMemo(() => {
+    return formatTanggalResmi(tanggalOperasional).replace(/^[A-Za-z]+,\s*/, '')
+  }, [tanggalOperasional])
 
   const printTimeFormatted = useMemo(() => {
     const d = new Date()
