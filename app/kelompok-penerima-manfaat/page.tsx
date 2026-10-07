@@ -60,6 +60,19 @@ export interface DetailKpmItem {
   mouUrl?: string
 }
 
+export interface DuplicatePairRecord {
+  id: string
+  kelompok_id?: string
+  nisn_nik: string
+  nama: string
+  nama_ortu: string
+  posisi: string
+  kelas: string
+  nama_lembaga: string
+  rawItem?: PenerimaManfaatBnba
+  kpmGroup?: DetailKpmItem
+}
+
 export default function KelompokPenerimaManfaatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -400,9 +413,10 @@ export default function KelompokPenerimaManfaatPage() {
   // Interactive Audit NIK Modal & Duplicate Inspection States
   const [activeAuditGroupModal, setActiveAuditGroupModal] = useState<DetailKpmItem | null>(null)
   const [duplicateComparisonPair, setDuplicateComparisonPair] = useState<{
-    record1: PenerimaManfaatBnba;
-    record2: { id: string; nama: string; NIK: string; lembaga: string; ortu?: string; posisi?: string; kelas?: string; kelompok_id?: string };
+    record1: DuplicatePairRecord;
+    record2: DuplicatePairRecord;
   } | null>(null)
+  const [isLoadingDuplicatePair, setIsLoadingDuplicatePair] = useState(false)
 
   // Live / Debounced NIK Structural Validation & Duplicate Detection
   useEffect(() => {
@@ -602,6 +616,163 @@ export default function KelompokPenerimaManfaatPage() {
 
     return map
   }, [allBnbaRecords, kpmItems, duplicateNikMap])
+
+  // Global Cross-School Supabase Lookup for Duplicate NIK Pair
+  const handleInspectDuplicatePair = async (targetNik: string, currentRecord?: PenerimaManfaatBnba | null) => {
+    const cleanNik = (targetNik || '').trim()
+    if (!cleanNik) return
+
+    setIsLoadingDuplicatePair(true)
+
+    // Pre-set initial comparison pair while fetching from database
+    const rec1Nama = currentRecord?.nama_lengkap || currentRecord?.nama_penerima || currentRecord?.nama || 'Record A'
+    setDuplicateComparisonPair({
+      record1: {
+        id: currentRecord?.id || 'rec-a',
+        kelompok_id: currentRecord?.kelompok_id || activeBnbaGroup?.id,
+        nisn_nik: cleanNik,
+        nama: rec1Nama,
+        nama_ortu: !currentRecord?.nama_ortu || currentRecord.nama_ortu === '-' ? '-' : currentRecord.nama_ortu,
+        posisi: currentRecord?.posisi || 'Siswa',
+        kelas: currentRecord?.kelas || '-',
+        nama_lembaga: activeBnbaGroup?.nama || 'Lembaga Ini',
+        rawItem: currentRecord || undefined,
+        kpmGroup: activeBnbaGroup || undefined
+      },
+      record2: {
+        id: 'loading',
+        nisn_nik: cleanNik,
+        nama: 'Memuat Data Terkini...',
+        nama_ortu: '...',
+        posisi: '...',
+        kelas: '...',
+        nama_lembaga: 'Memuat Lembaga...'
+      }
+    })
+
+    try {
+      // 1. Fetch all matching BNBA records from Supabase table 'penerima_manfaat_bnba'
+      const { data: bnbaData, error: bnbaErr } = await supabase
+        .from('penerima_manfaat_bnba')
+        .select('*')
+        .or(`nisn_nik.eq.${cleanNik},nik.eq.${cleanNik}`)
+
+      let allMatches: PenerimaManfaatBnba[] = bnbaData && bnbaData.length > 0 ? bnbaData : []
+
+      // Fallback: if Supabase query returns empty or error, check local allBnbaRecords
+      if (allMatches.length === 0) {
+        allMatches = allBnbaRecords.filter(b => (b.nisn_nik || b.nik || '').trim() === cleanNik)
+      }
+
+      // Identify Record A (current record being inspected)
+      const rawRecordA = (currentRecord && allMatches.find(b => b.id === currentRecord.id)) || allMatches[0] || currentRecord
+      // Identify Record B (the twin duplicate record with different ID)
+      const rawRecordB = allMatches.find(b => b.id !== rawRecordA?.id) || allMatches[1]
+
+      // 2. Fetch KPM / Institution names for both records
+      const kelompokIds = Array.from(new Set([rawRecordA?.kelompok_id, rawRecordB?.kelompok_id].filter(Boolean) as string[]))
+
+      const kpmMap = new Map<string, { nama: string; kpmItem?: DetailKpmItem }>()
+
+      // Pre-fill map from existing local kpmItems
+      kpmItems.forEach(item => {
+        if (item.id) kpmMap.set(item.id, { nama: item.nama, kpmItem: item })
+        if (item.npsnReg) kpmMap.set(item.npsnReg, { nama: item.nama, kpmItem: item })
+      })
+
+      if (kelompokIds.length > 0) {
+        const missingIds = kelompokIds.filter(id => !kpmMap.has(id))
+        if (missingIds.length > 0) {
+          const { data: dbKpm } = await supabase
+            .from('kelompok_penerima_manfaat')
+            .select('*')
+            .or(`id.in.(${missingIds.join(',')}),kode.in.(${missingIds.join(',')}),identitas_npsn_tmp.in.(${missingIds.join(',')})`)
+
+          if (dbKpm) {
+            dbKpm.forEach((k: any) => {
+              const kpmItem: DetailKpmItem = {
+                id: k.id,
+                no: k.urutan || 1,
+                jenis: k.jenis || 'Sekolah',
+                nama: k.nama,
+                npsnReg: k.identitas_npsn_tmp || k.kode || '',
+                kepemilikan: k.kepemilikan || 'Negeri',
+                kecamatan: k.kecamatan || '',
+                kelDesa: k.kel_desa || '',
+                alamat: k.alamat || '',
+                pria: k.pria || 0,
+                wanita: k.wanita || 0,
+                guru: k.guru || 0,
+                tendik: k.tendik || 0,
+                totalTarget: k.total_target || 0,
+                rincianTerisi: 0,
+                keteranganStatus: 'Belum ada detail',
+                keteranganMsg: '',
+                pimpinan: k.pimpinan || '',
+                hp: k.hp || '',
+                email: k.email || '',
+                status: k.status || 'Aktif'
+              }
+              if (k.id) kpmMap.set(k.id, { nama: k.nama, kpmItem })
+              if (k.kode) kpmMap.set(k.kode, { nama: k.nama, kpmItem })
+              if (k.identitas_npsn_tmp) kpmMap.set(k.identitas_npsn_tmp, { nama: k.nama, kpmItem })
+            })
+          }
+        }
+      }
+
+      // Build Record A object
+      const kpmAInfo = rawRecordA?.kelompok_id ? kpmMap.get(rawRecordA.kelompok_id) : undefined
+      const recA: DuplicatePairRecord = {
+        id: rawRecordA?.id || 'rec-a',
+        kelompok_id: rawRecordA?.kelompok_id || activeBnbaGroup?.id,
+        nisn_nik: rawRecordA?.nisn_nik || rawRecordA?.nik || cleanNik,
+        nama: rawRecordA?.nama_lengkap || rawRecordA?.nama_penerima || rawRecordA?.nama || 'Nama Tidak Ditemukan',
+        nama_ortu: !rawRecordA?.nama_ortu || rawRecordA.nama_ortu === '-' ? '-' : rawRecordA.nama_ortu,
+        posisi: rawRecordA?.posisi || 'Siswa',
+        kelas: rawRecordA?.kelas || '-',
+        nama_lembaga: kpmAInfo?.nama || activeBnbaGroup?.nama || 'Lembaga Ini',
+        rawItem: rawRecordA || undefined,
+        kpmGroup: kpmAInfo?.kpmItem || activeBnbaGroup || undefined
+      }
+
+      // Build Record B object
+      let recB: DuplicatePairRecord
+      if (rawRecordB) {
+        const kpmBInfo = rawRecordB.kelompok_id ? kpmMap.get(rawRecordB.kelompok_id) : undefined
+        recB = {
+          id: rawRecordB.id,
+          kelompok_id: rawRecordB.kelompok_id,
+          nisn_nik: rawRecordB.nisn_nik || rawRecordB.nik || cleanNik,
+          nama: rawRecordB.nama_lengkap || rawRecordB.nama_penerima || rawRecordB.nama || 'Nama Tidak Ditemukan',
+          nama_ortu: !rawRecordB.nama_ortu || rawRecordB.nama_ortu === '-' ? '-' : rawRecordB.nama_ortu,
+          posisi: rawRecordB.posisi || 'Siswa',
+          kelas: rawRecordB.kelas || '-',
+          nama_lembaga: kpmBInfo?.nama || 'Lembaga Terdaftar',
+          rawItem: rawRecordB,
+          kpmGroup: kpmBInfo?.kpmItem
+        }
+      } else {
+        // Check duplicateNikMap for fallback info if Supabase had no 2nd row
+        const dupInfo = duplicateNikMap.get(rawRecordA?.id || '')
+        recB = {
+          id: 'external-dup',
+          nisn_nik: cleanNik,
+          nama: dupInfo?.nama || 'Pemegang NIK Kembar',
+          nama_ortu: '-',
+          posisi: 'Siswa',
+          kelas: '-',
+          nama_lembaga: dupInfo?.sekolah || 'Lembaga Terdaftar'
+        }
+      }
+
+      setDuplicateComparisonPair({ record1: recA, record2: recB })
+    } catch (err) {
+      console.error('Error fetching duplicate pair:', err)
+    } finally {
+      setIsLoadingDuplicatePair(false)
+    }
+  }
 
   // Helper check for Posyandu 3B Category
   const isPosyanduCategory = useMemo(() => {
@@ -4048,22 +4219,7 @@ const getBnbaCountForGroup = (
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        const partnerRec = allBnbaRecords.find(b => b.id !== row.id && ((b.nisn_nik || b.nik || '').trim() === cleanNik))
-                                        setDuplicateComparisonPair({
-                                          record1: row,
-                                          record2: {
-                                            id: partnerRec?.id || 'unknown',
-                                            nama: dupInfo.nama,
-                                            NIK: cleanNik,
-                                            lembaga: dupInfo.sekolah,
-                                            ortu: partnerRec?.nama_ortu,
-                                            posisi: partnerRec?.posisi,
-                                            kelas: partnerRec?.kelas,
-                                            kelompok_id: partnerRec?.kelompok_id
-                                          }
-                                        })
-                                      }}
+                                      onClick={() => handleInspectDuplicatePair(cleanNik, row)}
                                       className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[9px] font-bold transition cursor-pointer shadow-2xs whitespace-nowrap"
                                     >
                                       Lihat Pasangan Duplikat
@@ -4637,21 +4793,7 @@ const getBnbaCountForGroup = (
                                   {item.dupMatch && (
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        setDuplicateComparisonPair({
-                                          record1: row,
-                                          record2: {
-                                            id: item.dupMatch?.fullRecord?.id || 'unknown',
-                                            nama: item.dupMatch?.nama || 'Penerima Pasangan',
-                                            NIK: nikStr,
-                                            lembaga: item.dupMatch?.sekolah || 'Lembaga/Posyandu Pasangan',
-                                            ortu: item.dupMatch?.fullRecord?.nama_ortu,
-                                            posisi: item.dupMatch?.fullRecord?.posisi,
-                                            kelas: item.dupMatch?.fullRecord?.kelas,
-                                            kelompok_id: item.dupMatch?.fullRecord?.kelompok_id
-                                          }
-                                        })
-                                      }}
+                                      onClick={() => handleInspectDuplicatePair(nikStr, row)}
                                       className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold transition cursor-pointer shadow-2xs whitespace-nowrap"
                                     >
                                       Lihat Pasangan Duplikat
@@ -4725,24 +4867,31 @@ const getBnbaCountForGroup = (
               </button>
             </div>
 
-            <div className="p-5 space-y-4 bg-slate-50 text-xs">
+            <div className="p-5 space-y-4 bg-slate-50 text-xs relative">
+              {isLoadingDuplicatePair && (
+                <div className="absolute inset-0 bg-white/70 backdrop-blur-2xs z-10 flex items-center justify-center gap-2 text-indigo-700 font-bold rounded-b-xl">
+                  <RotateCw size={18} className="animate-spin" />
+                  <span>Mencari data pasangan kembar di seluruh database Supabase...</span>
+                </div>
+              )}
+
               <p className="text-slate-700 font-medium leading-relaxed">
                 Sistem menemukan NIK yang sama digunakan oleh 2 data penerima manfaat yang berbeda. Silakan bandingkan detail kedua warga penerima berikut:
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Card Record 1 */}
+                {/* Card Record 1 (RECORD A) */}
                 <div className="bg-white p-4 rounded-xl border-2 border-rose-300 shadow-sm space-y-2 relative">
                   <span className="absolute -top-2.5 left-3 bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
                     RECORD A (UTAMA)
                   </span>
                   <div className="pt-1">
                     <span className="text-[10px] text-slate-400 font-semibold block uppercase">Nama Penerima</span>
-                    <h4 className="font-bold text-slate-900 text-sm">{duplicateComparisonPair.record1.nama_lengkap || duplicateComparisonPair.record1.nama}</h4>
+                    <h4 className="font-bold text-slate-900 text-sm">{duplicateComparisonPair.record1.nama || 'Nama Tidak Ditemukan'}</h4>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 font-semibold block uppercase">Lembaga / Posyandu</span>
-                    <p className="font-semibold text-indigo-700">{activeBnbaGroup?.nama || 'Lembaga Ini'}</p>
+                    <p className="font-bold text-indigo-700">{duplicateComparisonPair.record1.nama_lembaga || 'Lembaga Ini'}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-[11px]">
                     <div>
@@ -4751,65 +4900,84 @@ const getBnbaCountForGroup = (
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 font-semibold block uppercase">Posisi & Kelas</span>
-                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record1.posisi || '-'} ({duplicateComparisonPair.record1.kelas || '-'})</p>
+                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record1.posisi || 'Siswa'} ({duplicateComparisonPair.record1.kelas || '-'})</p>
                     </div>
                   </div>
                   <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const rec1 = duplicateComparisonPair.record1
-                        setDuplicateComparisonPair(null)
-                        handleOpenEditBnbaModal(rec1)
-                      }}
-                      className="w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-xs transition cursor-pointer shadow-2xs"
-                    >
-                      Edit NIK Record A
-                    </button>
+                    {duplicateComparisonPair.record1.rawItem ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rec1 = duplicateComparisonPair.record1.rawItem!
+                          setDuplicateComparisonPair(null)
+                          handleOpenEditBnbaModal(rec1)
+                        }}
+                        className="w-full py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-xs transition cursor-pointer shadow-2xs"
+                      >
+                        Edit NIK Record A
+                      </button>
+                    ) : (
+                      <span className="block text-center text-[11px] text-slate-400 font-medium py-1.5 bg-slate-100 rounded">
+                        Record A
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Card Record 2 */}
-                <div className="bg-white p-4 rounded-xl border-2 border-amber-300 shadow-sm space-y-2 relative">
+                {/* Card Record 2 (RECORD B) */}
+                <div className="bg-white p-4 rounded-xl border-2 border-amber-400 shadow-sm space-y-2 relative">
                   <span className="absolute -top-2.5 left-3 bg-amber-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
                     RECORD B (PASANGAN KEMBAR)
                   </span>
                   <div className="pt-1">
                     <span className="text-[10px] text-slate-400 font-semibold block uppercase">Nama Penerima</span>
-                    <h4 className="font-bold text-slate-900 text-sm">{duplicateComparisonPair.record2.nama}</h4>
+                    <h4 className="font-bold text-slate-900 text-sm">{duplicateComparisonPair.record2.nama || 'Nama Tidak Ditemukan'}</h4>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 font-semibold block uppercase">Lembaga / Posyandu</span>
-                    <p className="font-semibold text-purple-700">{duplicateComparisonPair.record2.lembaga}</p>
+                    <p className="font-bold text-purple-700">{duplicateComparisonPair.record2.nama_lembaga || 'Lembaga Terdaftar'}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-[11px]">
                     <div>
                       <span className="text-[10px] text-slate-400 font-semibold block uppercase">Ortu / Wali</span>
-                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record2.ortu || '-'}</p>
+                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record2.nama_ortu || '-'}</p>
                     </div>
                     <div>
                       <span className="text-[10px] text-slate-400 font-semibold block uppercase">Posisi & Kelas</span>
-                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record2.posisi || '-'} ({duplicateComparisonPair.record2.kelas || '-'})</p>
+                      <p className="font-medium text-slate-700">{duplicateComparisonPair.record2.posisi || 'Siswa'} ({duplicateComparisonPair.record2.kelas || '-'})</p>
                     </div>
                   </div>
-                  <div className="pt-2">
-                    {duplicateComparisonPair.record2.id !== 'unknown' ? (
+                  <div className="pt-2 space-y-1.5">
+                    {duplicateComparisonPair.record2.kpmGroup && duplicateComparisonPair.record2.kpmGroup.id !== activeBnbaGroup?.id ? (
                       <button
                         type="button"
                         onClick={() => {
-                          const partnerObj = allBnbaRecords.find(b => b.id === duplicateComparisonPair.record2.id)
+                          const targetGroup = duplicateComparisonPair.record2.kpmGroup!
                           setDuplicateComparisonPair(null)
-                          if (partnerObj) {
-                            handleOpenEditBnbaModal(partnerObj)
-                          }
+                          handleOpenBnbaModal(targetGroup)
+                          triggerToast(`Beralih ke kelompok "${targetGroup.nama}".`)
+                        }}
+                        className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-xs transition cursor-pointer shadow-2xs flex items-center justify-center gap-1"
+                      >
+                        <span>🚚 Buka Lembaga Record B ({duplicateComparisonPair.record2.nama_lembaga})</span>
+                      </button>
+                    ) : null}
+
+                    {duplicateComparisonPair.record2.rawItem ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const partnerObj = duplicateComparisonPair.record2.rawItem!
+                          setDuplicateComparisonPair(null)
+                          handleOpenEditBnbaModal(partnerObj)
                         }}
                         className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-xs transition cursor-pointer shadow-2xs"
                       >
                         Edit NIK Record B
                       </button>
                     ) : (
-                      <span className="block text-center text-[11px] text-slate-400 font-medium py-1.5 bg-slate-100 rounded">
-                        Record B di kelompok lain
+                      <span className="block text-center text-[11px] text-slate-500 font-medium py-1.5 bg-amber-50 border border-amber-200 rounded">
+                        Terdaftar di: <strong>{duplicateComparisonPair.record2.nama_lembaga}</strong>
                       </span>
                     )}
                   </div>
