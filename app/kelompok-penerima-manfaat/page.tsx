@@ -1821,6 +1821,76 @@ const getBnbaCountForGroup = (
 
   const normalizeBirthDate = parseSmartDate
 
+  // Helper to format any birth date to Indonesian standard format DD/MM/YYYY
+  const formatDDMMYYYY = (dateStr: string | null | undefined): string => {
+    if (!dateStr || dateStr === '-') return '-'
+    
+    // If already in DD/MM/YYYY format
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return dateStr
+    
+    // If in ISO YYYY-MM-DD format
+    const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (isoMatch) {
+      const [, yyyy, mm, dd] = isoMatch
+      return `${dd}/${mm}/${yyyy}`
+    }
+    
+    // If in DD-MM-YYYY format
+    const dmMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    if (dmMatch) {
+      const dd = String(parseInt(dmMatch[1], 10)).padStart(2, '0')
+      const mm = String(parseInt(dmMatch[2], 10)).padStart(2, '0')
+      const yyyy = dmMatch[3]
+      return `${dd}/${mm}/${yyyy}`
+    }
+
+    // Fallback to JS Date object
+    try {
+      const d = new Date(dateStr)
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, '0')
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const yyyy = d.getFullYear()
+        return `${dd}/${mm}/${yyyy}`
+      }
+    } catch {}
+
+    return dateStr
+  }
+
+  // Helper to parse date string into day, month, year components for 3-Dropdown Selector
+  const parseDateParts = (dateStr: string | null | undefined) => {
+    if (!dateStr) return { day: '15', month: '05', year: '2015' }
+    
+    // If YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-')
+      return { day: d, month: m, year: y }
+    }
+    
+    // If DD/MM/YYYY or DD-MM-YYYY
+    const dmMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    if (dmMatch) {
+      const d = String(parseInt(dmMatch[1], 10)).padStart(2, '0')
+      const m = String(parseInt(dmMatch[2], 10)).padStart(2, '0')
+      const y = dmMatch[3]
+      return { day: d, month: m, year: y }
+    }
+
+    // Try Date constructor
+    try {
+      const date = new Date(dateStr)
+      if (!isNaN(date.getTime())) {
+        const d = String(date.getDate()).padStart(2, '0')
+        const m = String(date.getMonth() + 1).padStart(2, '0')
+        const y = String(date.getFullYear())
+        return { day: d, month: m, year: y }
+      }
+    } catch {}
+
+    return { day: '15', month: '05', year: '2015' }
+  }
+
   const parseSmartGender = (val: any): 'L' | 'P' => {
     if (!val) return 'L'
     const s = String(val).trim().toUpperCase()
@@ -3938,7 +4008,7 @@ const getBnbaCountForGroup = (
                         const isSelected = selectedBnbaIds.includes(row.id)
                         const nama = row.nama_lengkap || row.nama_penerima || row.nama || '-'
                         const nisnNik = row.nisn_nik || row.nik || row.nisn || '-'
-                        const tglLahir = row.tanggal_lahir || '-'
+                        const tglLahir = formatDDMMYYYY(row.tanggal_lahir)
                         const jk = row.jenis_kelamin || row.jk || '-'
                         const ortu = row.nama_ortu || '-'
                         const posisi = row.posisi || '-'
@@ -4188,14 +4258,89 @@ const getBnbaCountForGroup = (
                 <label className="block font-semibold text-slate-700 mb-1">Nama Penerima *</label>
                 <input type="text" required value={bnbaNama} onChange={(e) => setBnbaNama(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-bold" />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {/* Tanggal Lahir (Format Indonesia DD/MM/YYYY) & Jenis Kelamin */}
+              <div className="space-y-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Lahir *</label>
-                  <input type="date" required value={bnbaTglLahir} onChange={(e) => setBnbaTglLahir(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono bg-white" />
+                  <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Tanggal Lahir *</span>
+                    <span className="text-[10.5px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300">
+                      📅 {formatDDMMYYYY(bnbaTglLahir)}
+                    </span>
+                  </label>
+                  
+                  {/* Selector 3 Kolom Ringkas (Hari / Bulan / Tahun) */}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {/* Dropdown Hari / Tanggal (01 - 31) */}
+                    <div>
+                      <span className="block text-[9px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">HARI (01-31)</span>
+                      <select
+                        value={parseDateParts(bnbaTglLahir).day}
+                        onChange={(e) => {
+                          const current = parseDateParts(bnbaTglLahir)
+                          setBnbaTglLahir(`${current.year}-${current.month}-${e.target.value}`)
+                        }}
+                        className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-slate-900 bg-white focus:ring-2 focus:ring-emerald-400 focus:outline-none text-xs cursor-pointer"
+                      >
+                        {Array.from({ length: 31 }, (_, i) => {
+                          const val = String(i + 1).padStart(2, '0')
+                          return <option key={val} value={val}>{val}</option>
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Dropdown Bulan (01 - 12) */}
+                    <div>
+                      <span className="block text-[9px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">BULAN (01-12)</span>
+                      <select
+                        value={parseDateParts(bnbaTglLahir).month}
+                        onChange={(e) => {
+                          const current = parseDateParts(bnbaTglLahir)
+                          setBnbaTglLahir(`${current.year}-${e.target.value}-${current.day}`)
+                        }}
+                        className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-slate-900 bg-white focus:ring-2 focus:ring-emerald-400 focus:outline-none text-xs cursor-pointer"
+                      >
+                        {[
+                          { val: '01', label: '01 - Jan' },
+                          { val: '02', label: '02 - Feb' },
+                          { val: '03', label: '03 - Mar' },
+                          { val: '04', label: '04 - Apr' },
+                          { val: '05', label: '05 - Mei' },
+                          { val: '06', label: '06 - Jun' },
+                          { val: '07', label: '07 - Jul' },
+                          { val: '08', label: '08 - Agu' },
+                          { val: '09', label: '09 - Sep' },
+                          { val: '10', label: '10 - Okt' },
+                          { val: '11', label: '11 - Nov' },
+                          { val: '12', label: '12 - Des' }
+                        ].map((m) => (
+                          <option key={m.val} value={m.val}>{m.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Dropdown Tahun (1950 - 2026) */}
+                    <div>
+                      <span className="block text-[9px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">TAHUN</span>
+                      <select
+                        value={parseDateParts(bnbaTglLahir).year}
+                        onChange={(e) => {
+                          const current = parseDateParts(bnbaTglLahir)
+                          setBnbaTglLahir(`${e.target.value}-${current.month}-${current.day}`)
+                        }}
+                        className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-slate-900 bg-white focus:ring-2 focus:ring-emerald-400 focus:outline-none text-xs font-mono cursor-pointer"
+                      >
+                        {Array.from({ length: 77 }, (_, i) => {
+                          const y = 2026 - i
+                          return <option key={y} value={String(y)}>{y}</option>
+                        })}
+                      </select>
+                    </div>
+                  </div>
                 </div>
+
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Jenis Kelamin (JK) *</label>
-                  <select value={bnbaJk} onChange={(e) => setBnbaJk(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white">
+                  <select value={bnbaJk} onChange={(e) => setBnbaJk(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white cursor-pointer">
                     <option value="L">L - Laki-laki</option>
                     <option value="P">P - Perempuan</option>
                   </select>
