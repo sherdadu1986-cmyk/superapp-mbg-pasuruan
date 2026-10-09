@@ -1,78 +1,35 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { Lock, Check, Delete, ArrowLeft } from 'lucide-react'
+import { Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 
-const SECRET_PIN = '001922'
 const AUTH_KEY = 'lap_keu_auth_token'
-const AUTH_TOKEN = 'authenticated_001922'
+const AUTH_TOKEN = 'authenticated_MBG'
 
-function PinAuthScreen({ onSuccess }: { onSuccess: () => void }) {
-  const [pin, setPin] = useState('')
-  const [isError, setIsError] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
-  const [isShaking, setIsShaking] = useState(false)
+function FinanceAuthScreen({ onSuccess }: { onSuccess: () => void }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const passwordRef = useRef<HTMLInputElement>(null)
 
-  const handleKeyPress = (numStr: string) => {
-    if (pin.length >= 6 || isSuccess) return
-    setErrorMsg('')
-    setIsError(false)
-    const newPin = pin + numStr
-    setPin(newPin)
-
-    if (newPin.length === 6) {
-      if (newPin === SECRET_PIN) {
-        setIsSuccess(true)
-        setErrorMsg('')
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem(AUTH_KEY, AUTH_TOKEN)
-        }
-        setTimeout(() => {
-          onSuccess()
-        }, 500)
-      } else {
-        setIsError(true)
-        setIsShaking(true)
-        setErrorMsg('PIN salah. Akses ditolak.')
-        setTimeout(() => {
-          setIsShaking(false)
-          setPin('')
-          setIsError(false)
-        }, 800)
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (username === 'MBG' && password === 'wonorejo') {
+      setErrorMsg('')
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(AUTH_KEY, AUTH_TOKEN)
       }
+      onSuccess()
+    } else {
+      setErrorMsg('⚠️ Username atau password tidak sesuai')
+      setPassword('')
+      setTimeout(() => {
+        passwordRef.current?.focus()
+      }, 0)
     }
   }
-
-  const handleBackspace = () => {
-    if (isSuccess) return
-    setErrorMsg('')
-    setIsError(false)
-    setPin((prev) => prev.slice(0, -1))
-  }
-
-  const handleClear = () => {
-    if (isSuccess) return
-    setErrorMsg('')
-    setIsError(false)
-    setPin('')
-  }
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key >= '0' && e.key <= '9') {
-        handleKeyPress(e.key)
-      } else if (e.key === 'Backspace') {
-        handleBackspace()
-      } else if (e.key === 'Escape' || e.key.toLowerCase() === 'c') {
-        handleClear()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [pin, isSuccess])
 
   return (
     <div className="min-h-screen bg-slate-900/95 flex items-center justify-center p-4 relative overflow-hidden font-sans select-none w-full">
@@ -80,120 +37,89 @@ function PinAuthScreen({ onSuccess }: { onSuccess: () => void }) {
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-600/30 rounded-full blur-3xl pointer-events-none animate-pulse" />
       <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-purple-600/30 rounded-full blur-3xl pointer-events-none animate-pulse" />
 
-      {/* Main Glassmorphism PIN Card */}
-      <div className="backdrop-blur-xl bg-white/80 border border-white/40 shadow-2xl rounded-3xl p-8 max-w-sm w-full mx-auto relative z-10 flex flex-col items-center">
-        {/* Header Icon */}
-        <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mb-4 shadow-inner relative">
-          <Lock className="w-8 h-8 text-indigo-600 animate-pulse" />
-          <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-indigo-600 rounded-full border-2 border-white" />
+      {/* Main Login Card */}
+      <div className="rounded-[32px] p-8 max-w-sm w-full bg-slate-100 shadow-2xl relative z-10 flex flex-col items-center">
+        {/* Top Lock Icon */}
+        <div className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 text-purple-600 flex items-center justify-center shadow-inner relative">
+          <Lock className="w-8 h-8 text-purple-600" />
+          <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-purple-600 rounded-full border-2 border-white" />
         </div>
 
-        <h2 className="text-xl font-extrabold text-slate-900 tracking-tight mb-1 text-center">
+        <h2 className="text-xl font-bold text-slate-800 text-center mt-3">
           Laporan Keuangan Terproteksi
         </h2>
-        <p className="text-xs text-slate-500 font-medium mb-6 text-center">
-          Masukkan 6 digit PIN untuk melanjutkan
+        <p className="text-xs text-slate-500 text-center mb-6">
+          Masukkan kredensial akun untuk membuka akses
         </p>
 
-        {/* 6 PIN Indicator Dots */}
-        <motion.div
-          animate={isShaking ? { x: [-12, 12, -10, 10, -5, 5, 0] } : {}}
-          transition={{ duration: 0.4 }}
-          className="flex items-center justify-center gap-3 mb-3"
-        >
-          {[0, 1, 2, 3, 4, 5].map((index) => {
-            const isFilled = pin.length > index
-            return (
-              <div
-                key={index}
-                className={`w-4 h-4 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
-                  isError
-                    ? 'border-rose-500 bg-rose-500/20 shadow-xs shadow-rose-500/50 scale-110'
-                    : isSuccess
-                    ? 'border-emerald-500 bg-emerald-500 scale-110 shadow-xs shadow-emerald-500/50'
-                    : isFilled
-                    ? 'border-indigo-600 bg-indigo-600 shadow-xs shadow-indigo-600/40 scale-110'
-                    : 'border-slate-300 bg-slate-100'
-                }`}
+        {/* Form Input */}
+        <form onSubmit={handleLogin} className="w-full space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-700 mb-1 block">
+              Username
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value)
+                if (errorMsg) setErrorMsg('')
+              }}
+              placeholder="Masukkan username..."
+              className="w-full rounded-2xl bg-white border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all text-slate-800"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-700 mb-1 block">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                ref={passwordRef}
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  if (errorMsg) setErrorMsg('')
+                }}
+                placeholder="Masukkan password..."
+                className="w-full rounded-2xl bg-white border border-slate-200 px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all text-slate-800"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
               >
-                {isFilled && !isSuccess && !isError && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                )}
-                {isSuccess && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
-              </div>
-            )
-          })}
-        </motion.div>
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
 
-        {/* Status Error / Success Message */}
-        <div className="h-6 mb-4 flex items-center justify-center">
           {errorMsg && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200/80 px-3 py-0.5 rounded-full"
-            >
+            <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-center mt-1">
               {errorMsg}
-            </motion.p>
+            </p>
           )}
-          {isSuccess && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/80 px-3 py-0.5 rounded-full"
-            >
-              ✓ PIN Benar! Membuka Dashboard...
-            </motion.p>
-          )}
-        </div>
-
-        {/* Numpad Keypad Virtual */}
-        <div className="grid grid-cols-3 gap-3 w-full mb-6">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-            <button
-              key={num}
-              type="button"
-              onClick={() => handleKeyPress(num.toString())}
-              className="w-full aspect-square rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 shadow-xs hover:shadow-md text-slate-800 font-extrabold text-xl flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-            >
-              {num}
-            </button>
-          ))}
 
           <button
-            type="button"
-            onClick={handleClear}
-            className="w-full aspect-square rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/80 text-slate-600 font-bold text-xs flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-            title="Hapus Semua (Clear)"
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-2xl shadow-md transition-all active:scale-[0.98] mt-2"
           >
-            C
+            Buka Laporan Keuangan
           </button>
+        </form>
 
-          <button
-            type="button"
-            onClick={() => handleKeyPress('0')}
-            className="w-full aspect-square rounded-2xl bg-white/90 hover:bg-white border border-slate-200/80 shadow-xs hover:shadow-md text-slate-800 font-extrabold text-xl flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-          >
-            0
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBackspace}
-            className="w-full aspect-square rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/80 text-slate-600 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-            title="Hapus (Backspace)"
-          >
-            <Delete size={20} />
-          </button>
-        </div>
-
-        {/* Exit Link */}
+        {/* Back Link */}
         <Link
           href="/"
-          className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition py-1 group"
+          className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition py-1 mt-6 group"
         >
           <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-          <span>← Kembali ke Dashboard BGN</span>
+          <span>Kembali ke Dashboard BGN</span>
         </Link>
       </div>
     </div>
@@ -207,7 +133,7 @@ export default function LapKeuLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const token = sessionStorage.getItem(AUTH_KEY)
-      if (token === AUTH_TOKEN) {
+      if (token) {
         setIsAuthenticated(true)
       } else {
         setIsAuthenticated(false)
@@ -225,7 +151,7 @@ export default function LapKeuLayout({ children }: { children: React.ReactNode }
   }
 
   if (!isAuthenticated) {
-    return <PinAuthScreen onSuccess={() => setIsAuthenticated(true)} />
+    return <FinanceAuthScreen onSuccess={() => setIsAuthenticated(true)} />
   }
 
   return (
@@ -234,3 +160,4 @@ export default function LapKeuLayout({ children }: { children: React.ReactNode }
     </div>
   )
 }
+

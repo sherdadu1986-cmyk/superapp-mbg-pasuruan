@@ -626,7 +626,7 @@ export default function MobileBankingFinance() {
                 type="button"
                 onClick={handleLockSession}
                 className="bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1 backdrop-blur-sm transition"
-                title="Kunci Dashboard (Logout PIN Sesi)"
+                title="Kunci Dashboard (Logout Sesi Keuangan)"
               >
                 <Lock className="w-3.5 h-3.5" />
                 <span>Kunci</span>
@@ -1045,14 +1045,14 @@ export default function MobileBankingFinance() {
                 </div>
               </div>
 
-              {/* Security PIN Status */}
+              {/* Security Credentials Status */}
               <div className="bg-indigo-50/80 border border-indigo-100 p-4 rounded-2xl space-y-2">
                 <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs">
                   <ShieldCheck size={16} className="text-indigo-600" />
-                  <span>Proteksi Keamanan PIN Terpasang</span>
+                  <span>Proteksi Keamanan Terpasang</span>
                 </div>
                 <p className="text-[11px] text-indigo-700 leading-relaxed">
-                  Sesi ini dilindungi PIN 6-digit. Sesi akan otomatis berakhir begitu browser ditutup atau jika Anda menekan tombol Kunci.
+                  Sesi ini dilindungi kredensial Username & Password. Sesi akan otomatis berakhir begitu browser ditutup atau jika Anda menekan tombol Kunci.
                 </p>
               </div>
 
@@ -1063,7 +1063,7 @@ export default function MobileBankingFinance() {
                 className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200/80 rounded-2xl transition flex items-center justify-center gap-2"
               >
                 <Lock size={15} />
-                <span>🔒 Kunci Sesi Sekarang (Logout PIN)</span>
+                <span>🔒 Kunci Sesi Sekarang</span>
               </button>
             </div>
           )}
