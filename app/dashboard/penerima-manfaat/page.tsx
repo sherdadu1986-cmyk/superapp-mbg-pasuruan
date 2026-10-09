@@ -376,7 +376,7 @@ export default function BerandaOperasionalPage() {
       if (saved) {
         try {
           return JSON.parse(saved)
-        } catch {}
+        } catch { }
       }
     }
     return {}
@@ -431,7 +431,7 @@ export default function BerandaOperasionalPage() {
       try {
         const parsed = JSON.parse((item as any).sub_kategori)
         if (parsed.rute) itemRute = parsed.rute
-      } catch {}
+      } catch { }
     }
     let defaultRute: 'Kiri' | 'Kanan' = 'Kiri'
 
@@ -441,7 +441,7 @@ export default function BerandaOperasionalPage() {
       defaultRute = String(itemRute).toLowerCase().includes('kanan') ? 'Kanan' : 'Kiri'
     } else {
       const nameUpper = String(item.nama || '').toUpperCase()
-      const isKiri = 
+      const isKiri =
         nameUpper.includes('KB PERTIWI') ||
         nameUpper.includes('RA USWATUN') ||
         nameUpper.includes('TK PGRI') ||
@@ -453,7 +453,7 @@ export default function BerandaOperasionalPage() {
       if (isKiri) {
         defaultRute = 'Kiri'
       } else {
-        const isKanan = 
+        const isKanan =
           nameUpper.includes('HARAPAN') ||
           nameUpper.includes('AL-FALAH') ||
           nameUpper.includes('MELATI') ||
@@ -800,25 +800,25 @@ export default function BerandaOperasionalPage() {
   // ─── Multi-Column FK & Multi-Key Indexing for BNBA records ──────────────────────
   const bnbaKeyToRowsMap = React.useMemo(() => {
     const map = new Map<string, Set<PenerimaManfaatBnba>>()
-    ;(bnbaList || []).forEach(b => {
-      const raw = b as any
-      const candidateKeys = [
-        raw.kelompok_id,
-        raw.kpm_id,
-        raw.npsn,
-        raw.kode,
-        raw.sekolah_id,
-        raw.kode_kelompok
-      ].filter(Boolean)
+      ; (bnbaList || []).forEach(b => {
+        const raw = b as any
+        const candidateKeys = [
+          raw.kelompok_id,
+          raw.kpm_id,
+          raw.npsn,
+          raw.kode,
+          raw.sekolah_id,
+          raw.kode_kelompok
+        ].filter(Boolean)
 
-      candidateKeys.forEach(k => {
-        const cleanKey = String(k).trim().toLowerCase()
-        if (cleanKey) {
-          if (!map.has(cleanKey)) map.set(cleanKey, new Set())
-          map.get(cleanKey)!.add(b)
-        }
+        candidateKeys.forEach(k => {
+          const cleanKey = String(k).trim().toLowerCase()
+          if (cleanKey) {
+            if (!map.has(cleanKey)) map.set(cleanKey, new Set())
+            map.get(cleanKey)!.add(b)
+          }
+        })
       })
-    })
     return map
   }, [bnbaList])
 
@@ -1106,7 +1106,7 @@ export default function BerandaOperasionalPage() {
               </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
-              Selamat Bertugas, Ahmad Sayyidani
+              Selamat Bertugas, Ahmad Sayyidani Khaqiqi
             </h1>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
               Pemantauan alokasi porsi gizi harian, verifikasi BNBA, dan kesiapan distribusi real-time BGN Pasuruan.
@@ -1136,7 +1136,7 @@ export default function BerandaOperasionalPage() {
           <button
             onClick={() => {
               if (typeof window !== 'undefined' && document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => {})
+                document.documentElement.requestFullscreen().catch(() => { })
               }
               setShowKioskModal(true)
             }}
@@ -1489,9 +1489,8 @@ export default function BerandaOperasionalPage() {
                                 </td>
                                 <td className="py-2.5 px-3 border-b border-slate-200/50">
                                   <span
-                                    className={`font-semibold block truncate max-w-[180px] ${
-                                      isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
-                                    }`}
+                                    className={`font-semibold block truncate max-w-[180px] ${isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
+                                      }`}
                                     title={item.nama}
                                   >
                                     {item.nama}
@@ -1502,11 +1501,10 @@ export default function BerandaOperasionalPage() {
                                     type="button"
                                     onClick={() => toggleLibur(itemKey)}
                                     title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
-                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
-                                      isLibur
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${isLibur
                                         ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
-                                    }`}
+                                      }`}
                                   >
                                     {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
                                   </button>
@@ -1632,9 +1630,8 @@ export default function BerandaOperasionalPage() {
                                 </td>
                                 <td className="py-2.5 px-3 border-b border-slate-200/50">
                                   <span
-                                    className={`font-semibold block truncate max-w-[180px] ${
-                                      isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
-                                    }`}
+                                    className={`font-semibold block truncate max-w-[180px] ${isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
+                                      }`}
                                     title={item.nama}
                                   >
                                     {item.nama}
@@ -1645,11 +1642,10 @@ export default function BerandaOperasionalPage() {
                                     type="button"
                                     onClick={() => toggleLibur(itemKey)}
                                     title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
-                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
-                                      isLibur
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${isLibur
                                         ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
-                                    }`}
+                                      }`}
                                   >
                                     {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
                                   </button>
@@ -1820,9 +1816,8 @@ export default function BerandaOperasionalPage() {
                                 </td>
                                 <td className="py-2.5 px-3 border-b border-slate-200/50">
                                   <span
-                                    className={`font-semibold block truncate max-w-[180px] ${
-                                      isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
-                                    }`}
+                                    className={`font-semibold block truncate max-w-[180px] ${isLibur ? 'line-through text-slate-400 opacity-60' : 'text-slate-900'
+                                      }`}
                                     title={item.nama}
                                   >
                                     {item.nama}
@@ -1833,11 +1828,10 @@ export default function BerandaOperasionalPage() {
                                     type="button"
                                     onClick={() => toggleLibur(itemKey)}
                                     title={isLibur ? 'Klik untuk mengaktifkan kembali' : 'Klik untuk meliburkan KPM ini'}
-                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${
-                                      isLibur
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border cursor-pointer transition flex items-center gap-1 mx-auto ${isLibur
                                         ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-amber-100 hover:text-amber-800'
-                                    }`}
+                                      }`}
                                   >
                                     {isLibur ? <span>✖ Libur</span> : <span>● Aktif</span>}
                                   </button>
