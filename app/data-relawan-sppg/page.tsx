@@ -1,9 +1,11 @@
 "use client"
 import React, { useState, useEffect, useMemo, useRef } from 'react'
+import Link from 'next/link'
 import { 
   Users, Plus, Download, Upload, Search, Edit3, Trash2, X, Phone, Mail, 
   Building2, ShieldCheck, UserCheck, CheckCircle2, Clock, AlertCircle, Filter, 
-  FileSpreadsheet, FileText, Check, AlertTriangle, Truck
+  FileSpreadsheet, FileText, Check, AlertTriangle, Truck, LayoutGrid, List,
+  MapPin, Calendar, LogOut, Menu, Home, Briefcase, Layers, ChevronRight
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { 
@@ -82,39 +84,26 @@ export const HIERARCHICAL_DIVISI_GROUPS: DivisiGroup[] = [
 export const ALL_DIVISI_OPTIONS: string[] = HIERARCHICAL_DIVISI_GROUPS.flatMap(g => g.options)
 
 export const DIVISION_ORDER: Record<string, number> = {
-  // Kelompok 1: Manajemen & Pengawasan
   'KEPALA SPPG': 1,
   'PENGAWAS GIZI': 2,
   'PENGAWAS KEUANGAN': 3,
   'ASISTEN LAPANGAN': 3.5,
   'ADMIN': 4,
-
-  // Kelompok 2: Persiapan Bahan
   'KOORDINATOR PERSIAPAN': 5,
   'PERSIAPAN': 6,
-
-  // Kelompok 3: Pengolahan & Masak
   'KOORDINATOR PENGOLAHAN': 7,
   'JURU UTAMA MASAK': 8,
   'KOKI': 9,
   'PENGOLAHAN': 10,
-
-  // Kelompok 4: Pemorsian & Packing
   'KOORDINATOR PEMORSIAN': 11,
   'PEMORSIAN': 12,
   'PACKING': 13,
-
-  // Kelompok 5: Logistik & Distribusi
   'DRIVER': 14,
   'HELPER': 15,
-
-  // Kelompok 6: Sanitasi & Kebersihan
   'KOORDINATOR CUCI OMPRENG': 16,
   'CUCI OMPRENG': 17,
   'KOORDINATOR KEBERSIHAN': 18,
   'KEBERSIHAN': 19,
-
-  // Kelompok 7: Pengamanan
   'KEAMANAN': 20
 }
 
@@ -142,12 +131,10 @@ function formatDateIndo(dateStr?: string | null): string {
   }
 }
 
-// Clean header name for smart fuzzy matching
 function cleanHeader(str: any): string {
   return String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
-// Clean text / identity numbers to prevent scientific notation & leading quote issues
 function cleanTextStr(val: any): string {
   if (val === null || val === undefined) return ''
   let s = String(val).trim()
@@ -156,11 +143,8 @@ function cleanTextStr(val: any): string {
   return s
 }
 
-// Smart date parser: handles Excel serial numbers, DD/MM/YYYY, YYYY-MM-DD, etc.
 function normalizeDateStr(val: any): string {
   if (val === null || val === undefined || val === '') return ''
-  
-  // If numeric (Excel serial date number like 44195)
   if (typeof val === 'number' || !isNaN(Number(val))) {
     const num = Number(val)
     if (num > 30000 && num < 60000 && (XLSX as any)?.SSF?.parse_date_code) {
@@ -173,14 +157,9 @@ function normalizeDateStr(val: any): string {
       }
     }
   }
-
   const s = String(val).trim()
   if (!s) return ''
-
-  // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-
-  // DD/MM/YYYY or DD-MM-YYYY
   const dmYMatch = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/)
   if (dmYMatch) {
     const d = String(dmYMatch[1]).padStart(2, '0')
@@ -188,16 +167,29 @@ function normalizeDateStr(val: any): string {
     const y = dmYMatch[3]
     return `${y}-${m}-${d}`
   }
-
-  // Fallback JS Date parsing
   try {
     const parsed = new Date(s)
     if (!isNaN(parsed.getTime())) {
       return parsed.toISOString().split('T')[0]
     }
   } catch {}
-
   return s
+}
+
+function getInitials(name?: string | null): string {
+  if (!name) return 'R'
+  const clean = name.replace(/^(h\.|hjh\.|dr\.|drs\.|ir\.|ss\.|s\.pd\.|s\.st\.|m\.pd\.|se\.|st\.)\s+/i, '').trim()
+  const words = clean.split(/\s+/).filter(Boolean)
+  if (words.length === 0) return 'R'
+  if (words.length === 1) return words[0].substring(0, 2).toUpperCase()
+  return (words[0][0] + words[1][0]).toUpperCase()
+}
+
+function getWaUrl(phone?: string | null): string {
+  if (!phone) return '#'
+  const clean = phone.replace(/[^0-9]/g, '')
+  if (clean.startsWith('0')) return `https://wa.me/62${clean.slice(1)}`
+  return `https://wa.me/${clean}`
 }
 
 interface ImportPreviewItem extends Partial<RelawanSppg> {
@@ -212,6 +204,9 @@ export default function DataRelawanSppgPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [divisiFilter, setDivisiFilter] = useState<string>('ALL')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [wilayahFilter, setWilayahFilter] = useState<string>('ALL')
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // File Input Ref for Import
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -263,7 +258,6 @@ export default function DataRelawanSppgPage() {
   }
 
   useEffect(() => {
-    // Purge legacy dummy entries from local storage & Supabase
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('sppg_relawan_list')
       if (stored) {
@@ -278,19 +272,16 @@ export default function DataRelawanSppgPage() {
       }
     }
 
-    // Clean dummy records in database table
     supabase.from('relawan_sppg').delete().in('nik', DUMMY_NIKS_TO_PURGE).then(() => {
       loadRelawanData()
     })
 
-    // Supabase Realtime Subscription
     const channel = supabase
       .channel('schema-db-changes-relawan')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'relawan_sppg' },
         () => {
-          console.log('Realtime update detected on relawan_sppg')
           loadRelawanData()
         }
       )
@@ -301,7 +292,7 @@ export default function DataRelawanSppgPage() {
     }
   }, [])
 
-  // 1. Download Template Excel dengan Optgroup Referensi Divisi
+  // 1. Download Template Excel
   const handleDownloadTemplate = () => {
     const templateHeaders = [
       'NO',
@@ -373,12 +364,9 @@ export default function DataRelawanSppgPage() {
 
     const wsData = [templateHeaders, sampleRow, sampleRow2, sampleRow3]
     const ws = XLSX.utils.aoa_to_sheet(wsData)
-
-    // Column widths
     const colWidths = templateHeaders.map(h => ({ wch: Math.max(h.length + 4, 18) }))
     ws['!cols'] = colWidths
 
-    // Sheet 2: Daftar Referensi Divisi Berdasarkan 7 Kelompok Operasional
     const refSheetHeaders = ['NO', 'KELOMPOK OPERASIONAL', 'NAMA DIVISI RESMI SPPG BGN']
     const refSheetRows: any[] = []
     let counter = 1
@@ -440,7 +428,6 @@ export default function DataRelawanSppgPage() {
 
     const wsData = [exportHeaders, ...dataRows]
     const ws = XLSX.utils.aoa_to_sheet(wsData)
-
     const colWidths = exportHeaders.map(h => ({ wch: Math.max(h.length + 4, 18) }))
     ws['!cols'] = colWidths
 
@@ -451,7 +438,7 @@ export default function DataRelawanSppgPage() {
     XLSX.writeFile(wb, `Data_Relawan_SPPG_${dateStr}.xlsx`)
   }
 
-  // 3. Import Excel Cerdas (Smart Column Matcher & Normalizer DRIVER/HELPER/dll)
+  // 3. Import Excel Cerdas
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -470,7 +457,6 @@ export default function DataRelawanSppgPage() {
           return
         }
 
-        // Detect Header Row
         let headerRowIdx = 0
         for (let i = 0; i < Math.min(5, rows.length); i++) {
           const rowStr = (rows[i] || []).map(c => cleanHeader(c)).join(' ')
@@ -514,7 +500,6 @@ export default function DataRelawanSppgPage() {
           }
         })
 
-        // Parse Data Rows
         const parsedItems: ImportPreviewItem[] = []
         for (let i = headerRowIdx + 1; i < rows.length; i++) {
           const row = rows[i]
@@ -546,7 +531,6 @@ export default function DataRelawanSppgPage() {
                 if (exactMatch) {
                   item.divisi = exactMatch
                 } else {
-                  // Smart Fuzzy Matcher (Termasuk DRIVER, SOPIR, HELPER, KERNET, ASISTEN LAPANGAN)
                   if (rawDiv.includes('DRIVER') || rawDiv.includes('SOPIR') || rawDiv.includes('SUPIR')) item.divisi = 'DRIVER'
                   else if (rawDiv.includes('HELPER') || rawDiv.includes('KERNET') || rawDiv.includes('ASISTEN DISTRIBUSI')) item.divisi = 'HELPER'
                   else if (rawDiv.includes('ASISTEN LAPANGAN') || rawDiv.includes('LAPANGAN')) item.divisi = 'ASISTEN LAPANGAN'
@@ -609,7 +593,7 @@ export default function DataRelawanSppgPage() {
     reader.readAsArrayBuffer(file)
   }
 
-  // Confirm Import & Save to Database
+  // Confirm Import & Save
   const handleConfirmImport = async () => {
     const validItems = importPreviewItems.filter(item => item._isValid)
     if (validItems.length === 0) {
@@ -634,7 +618,6 @@ export default function DataRelawanSppgPage() {
 
       const res = await bulkSaveRelawanSppg(cleanPayload)
       if (res.error) {
-        console.error('Gagal Import Relawan:', res.error)
         alert('Gagal menyimpan ke database: ' + res.error.message)
       } else {
         const importedCount = res.data?.length || cleanPayload.length
@@ -644,14 +627,13 @@ export default function DataRelawanSppgPage() {
       await loadRelawanData()
       setIsImportModalOpen(false)
     } catch (err: any) {
-      console.error('Gagal Import Relawan Catch:', err)
       alert(`Gagal menyimpan data import: ${err?.message || 'Error server'}`)
     } finally {
       setImporting(false)
     }
   }
 
-  // Open Modal for New Entry
+  // Open Add Modal
   const handleOpenAddModal = () => {
     setEditingItem(null)
     setFormData({
@@ -672,7 +654,7 @@ export default function DataRelawanSppgPage() {
     setIsModalOpen(true)
   }
 
-  // Open Modal for Edit
+  // Open Edit Modal
   const handleOpenEditModal = (item: RelawanSppg) => {
     setEditingItem(item)
     setFormData({ ...item })
@@ -689,7 +671,6 @@ export default function DataRelawanSppgPage() {
 
     setFormSubmitting(true)
     try {
-      // 1. Mapping payload sesuai kolom tabel relawan_sppg yang valid
       const payload = {
         nama_lengkap: formData.nama_lengkap,
         divisi: formData.divisi || 'PENGOLAHAN',
@@ -707,22 +688,17 @@ export default function DataRelawanSppgPage() {
         id: editingItem ? editingItem.id : undefined
       }
 
-      // 2. Eksekusi Supabase insert / update lewat helper dengan validation & error boundary
       const saved = await saveRelawanSppg(payload)
-
       if (!saved) {
         alert('Gagal menyimpan data ke database!')
         return
       }
 
-      // 3. Jika berhasil, beri notifikasi, re-fetch data master dari Supabase dan tutup modal
       alert('Data relawan berhasil disimpan permanen ke database!')
       await loadRelawanData()
       setIsModalOpen(false)
-
     } catch (err: any) {
-      console.error('Submit catch error:', err)
-      alert('Gagal menyimpan data ke database: ' + (err?.message || 'Terjadi kesalahan jaringan atau sistem'))
+      alert('Gagal menyimpan data ke database: ' + (err?.message || 'Terjadi kesalahan sistem'))
     } finally {
       setFormSubmitting(false)
     }
@@ -739,7 +715,7 @@ export default function DataRelawanSppgPage() {
     }
   }
 
-  // Filtered & Hierarchically Sorted List
+  // Filtered List
   const filteredList = useMemo(() => {
     const list = relawanList.filter(item => {
       const matchSearch = 
@@ -751,26 +727,20 @@ export default function DataRelawanSppgPage() {
 
       const matchDivisi = divisiFilter === 'ALL' || item.divisi === divisiFilter
       const matchStatus = statusFilter === 'ALL' || item.status === statusFilter
+      const matchWilayah = wilayahFilter === 'ALL' || (item.alamat || '').toLowerCase().includes(wilayahFilter.toLowerCase())
 
-      return matchSearch && matchDivisi && matchStatus
+      return matchSearch && matchDivisi && matchStatus && matchWilayah
     })
 
     return list.sort((a, b) => {
       const divA = (a.divisi || '').trim().toUpperCase()
       const divB = (b.divisi || '').trim().toUpperCase()
-
       const rankA = DIVISION_ORDER[divA] ?? 99
       const rankB = DIVISION_ORDER[divB] ?? 99
-
-      // 1. Urutkan berdasarkan hierarki divisi
-      if (rankA !== rankB) {
-        return rankA - rankB
-      }
-
-      // 2. Jika divisinya sama, urutkan alfabetis berdasarkan Nama Lengkap
+      if (rankA !== rankB) return rankA - rankB
       return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '')
     })
-  }, [relawanList, searchTerm, divisiFilter, statusFilter])
+  }, [relawanList, searchTerm, divisiFilter, statusFilter, wilayahFilter])
 
   // Statistics
   const stats = useMemo(() => {
@@ -794,53 +764,63 @@ export default function DataRelawanSppgPage() {
       (r.divisi || '').includes('PEMORSIAN') ||
       (r.divisi || '').includes('PACKING')
     ).length
-
     return { total, aktif, manajemen, pengolahan, logistik }
   }, [relawanList])
 
-  // Badge Divisi Styling Hierarkis per Kelompok Operasional
+  // Badge Divisi Styling
   const getDivisiBadge = (divisi?: string | null) => {
     const d = (divisi || '').toUpperCase()
-
     if (d.includes('KEPALA') || d.includes('PENGAWAS') || d.includes('ASISTEN LAPANGAN')) {
-      return 'bg-purple-900 text-purple-100 border-purple-950 font-black'
+      return 'bg-purple-50 text-purple-700 border-purple-200 font-bold'
     }
     if (d.includes('KOORDINATOR') || d.includes('ADMIN')) {
-      return 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold'
+      return 'bg-indigo-50 text-indigo-700 border-indigo-200 font-bold'
     }
     if (d.includes('PENGOLAHAN') || d.includes('PERSIAPAN') || d.includes('JURU') || d.includes('KOKI')) {
-      return 'bg-amber-100 text-amber-900 border-amber-300 font-bold'
+      return 'bg-amber-50 text-amber-800 border-amber-200 font-bold'
     }
     if (d.includes('PEMORSIAN') || d.includes('PACKING')) {
-      return 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold'
+      return 'bg-emerald-50 text-emerald-800 border-emerald-200 font-bold'
     }
     if (d.includes('DRIVER') || d.includes('HELPER')) {
-      return 'bg-blue-100 text-blue-900 border-blue-300 font-bold'
+      return 'bg-blue-50 text-blue-800 border-blue-200 font-bold'
     }
     if (d.includes('CUCI') || d.includes('OMPRENG') || d.includes('KEBERSIHAN')) {
-      return 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold'
+      return 'bg-cyan-50 text-cyan-800 border-cyan-200 font-bold'
     }
     if (d.includes('KEAMANAN')) {
-      return 'bg-slate-800 text-slate-100 border-slate-900 font-bold'
+      return 'bg-slate-100 text-slate-800 border-slate-300 font-bold'
     }
-    return 'bg-slate-100 text-slate-800 border-slate-300 font-semibold'
+    return 'bg-slate-100 text-slate-700 border-slate-200 font-medium'
   }
 
   // Badge Status Styling
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string | null) => {
     switch (status) {
       case 'Aktif':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-300'
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200'
       case 'Cuti':
-        return 'bg-amber-50 text-amber-700 border-amber-300'
+        return 'bg-amber-50 text-amber-700 border-amber-200'
       default:
-        return 'bg-rose-50 text-rose-700 border-rose-300'
+        return 'bg-rose-50 text-rose-700 border-rose-200'
     }
   }
 
+  // Avatar Gradient Helper
+  const getAvatarGradient = (divisi?: string | null) => {
+    const d = (divisi || '').toUpperCase()
+    if (d.includes('KEPALA') || d.includes('PENGAWAS')) return 'from-purple-600 to-indigo-700'
+    if (d.includes('KOORDINATOR') || d.includes('ADMIN')) return 'from-blue-600 to-indigo-600'
+    if (d.includes('PENGOLAHAN') || d.includes('MASAK') || d.includes('KOKI')) return 'from-amber-500 to-orange-600'
+    if (d.includes('PEMORSIAN') || d.includes('PACKING')) return 'from-emerald-500 to-teal-600'
+    if (d.includes('DRIVER') || d.includes('HELPER')) return 'from-sky-500 to-blue-600'
+    return 'from-slate-600 to-slate-800'
+  }
+
   return (
-    <div className="space-y-6 pb-12">
-      {/* Hidden File Input for Excel Import */}
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col md:flex-row font-sans text-slate-800 antialiased selection:bg-blue-100 selection:text-blue-800">
+      
+      {/* Hidden File Input */}
       <input
         type="file"
         ref={fileInputRef}
@@ -849,303 +829,610 @@ export default function DataRelawanSppgPage() {
         className="hidden"
       />
 
-      {/* Header Halaman */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-blue-200">
-              SDM & OPERASIONAL BGN
-            </span>
-            <span className="text-slate-300">·</span>
-            <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-              <Building2 size={13} className="text-blue-600" />
-              SPPG Kiduldalem Wonorejo
-            </span>
+      {/* ─── 1. KIRI: SIDEBAR DESKTOP & MOBILE ───────────────────────────────── */}
+      {/* Mobile Header Bar */}
+      <div className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-700 text-white flex items-center justify-center font-bold shadow-sm">
+            <Building2 size={18} />
           </div>
-          <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight mt-1">
-            Data Relawan SPPG Kiduldalem
-          </h1>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Manajemen data personil & kepesertaan relawan BGN SPPG Pasuruan (7 Kelompok Hierarki Divisi Operasional).
-          </p>
+          <div>
+            <h2 className="font-extrabold text-sm text-slate-900 leading-none">SPPG Kiduldalem</h2>
+            <p className="text-[10px] text-slate-500 mt-0.5">Dapur MBG Pasuruan</p>
+          </div>
         </div>
-
-        {/* 4 Header Toolbar Actions */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 1. Download Template */}
-          <button
-            onClick={handleDownloadTemplate}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition flex items-center gap-1.5 cursor-pointer"
-            title="Unduh File Template .xlsx (7 Kelompok Divisi)"
-          >
-            <Download size={15} className="text-slate-600" />
-            <span>Download Template</span>
-          </button>
-
-          {/* 2. Import Excel */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            title="Upload Data Relawan (.xlsx / .csv)"
-          >
-            <Upload size={15} />
-            <span>Import Excel</span>
-          </button>
-
-          {/* 3. Ekspor Excel */}
-          <button
-            onClick={handleExportExcel}
-            className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            title="Download Data Relawan Spreadsheet"
-          >
-            <FileSpreadsheet size={15} />
-            <span>Ekspor Excel</span>
-          </button>
-
-          {/* 4. + Tambah Relawan */}
-          <button
-            onClick={handleOpenAddModal}
-            className="px-4 py-2 bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-          >
-            <Plus size={16} />
-            <span>+ Tambah Relawan</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-2 text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200"
+        >
+          {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Relawan</div>
-          <div className="text-2xl font-black text-slate-900 mt-0.5 font-mono">{stats.total}</div>
-          <div className="text-[11px] text-slate-500 mt-0.5">Personil Terdaftar</div>
+      {/* Sidebar Overlay for Mobile */}
+      {sidebarOpen && (
+        <div 
+          onClick={() => setSidebarOpen(false)} 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 md:hidden" 
+        />
+      )}
+
+      {/* Sidebar Content Shell */}
+      <aside className={`
+        fixed md:sticky top-0 left-0 bottom-0 z-50 md:z-auto
+        w-64 bg-white border-r border-slate-200/80 min-h-screen shrink-0 p-5 
+        flex flex-col justify-between shadow-2xs transition-transform duration-200
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        <div className="space-y-6">
+          {/* Logo Brand Header */}
+          <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center font-extrabold shadow-md border border-white/80 shrink-0">
+              <Building2 size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-black text-slate-900 text-sm tracking-tight">SPPG Kiduldalem</span>
+              </div>
+              <p className="text-[11px] font-semibold text-slate-400 leading-tight">SDM & Relawan BGN</p>
+            </div>
+          </div>
+
+          {/* Navigasi Utama */}
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase px-3 mb-2">Navigasi Utama</p>
+            
+            <Link
+              href="/data-relawan-sppg"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 bg-blue-50/80 text-blue-600 font-semibold rounded-xl border border-blue-100/80 text-xs shadow-2xs transition group"
+            >
+              <Users size={16} className="text-blue-600" />
+              <span className="flex-1">Data Relawan</span>
+              <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+            </Link>
+
+            <Link
+              href="/"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium rounded-xl text-xs transition"
+            >
+              <Home size={16} className="text-slate-400 group-hover:text-slate-600" />
+              <span>Dashboard Utama</span>
+            </Link>
+
+            <Link
+              href="/dashboard/penerima-manfaat"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium rounded-xl text-xs transition"
+            >
+              <Building2 size={16} className="text-slate-400" />
+              <span>Penerima Manfaat</span>
+            </Link>
+
+            <Link
+              href="/lap-keu"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium rounded-xl text-xs transition"
+            >
+              <FileText size={16} className="text-slate-400" />
+              <span>Laporan Keuangan</span>
+            </Link>
+
+            <Link
+              href="/kelola-menu-harian"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium rounded-xl text-xs transition"
+            >
+              <Calendar size={16} className="text-slate-400" />
+              <span>Jadwal Menu</span>
+            </Link>
+          </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Status Aktif</div>
-          <div className="text-2xl font-black text-emerald-700 mt-0.5 font-mono">{stats.aktif}</div>
-          <div className="text-[11px] text-emerald-600 mt-0.5">Siap Bertugas</div>
+        {/* Profil Admin & Logout (Bottom Sidebar) */}
+        <div className="pt-4 border-t border-slate-100 space-y-3">
+          <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                AS
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 text-xs truncate leading-tight">Ahmad Sayyidani</p>
+                <p className="text-[10px] text-slate-400 truncate leading-tight">Super Admin BGN</p>
+              </div>
+            </div>
+            <Link
+              href="/"
+              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition shrink-0"
+              title="Keluar / Dashboard Utama"
+            >
+              <LogOut size={15} />
+            </Link>
+          </div>
+        </div>
+      </aside>
+
+      {/* ─── 2. KANAN: MAIN CONTENT AREA ────────────────────────────────────── */}
+      <main className="flex-1 min-h-screen p-4 sm:p-6 md:p-8 space-y-6 overflow-y-auto">
+        
+        {/* Header Title & Switch View Toggle */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-blue-200/80">
+                Directory SaaS Modern
+              </span>
+              <span className="text-slate-300">·</span>
+              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                <ShieldCheck size={13} className="text-emerald-600" />
+                21 Divisi Resmi BGN
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+              Daftar Relawan SPPG
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1 max-w-2xl">
+              Kelola data, penugasan, dan informasi relawan aktif wilayah Kiduldalem Pasuruan.
+            </p>
+          </div>
+
+          {/* Switch View Toggle & Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Toggle Card vs Table View */}
+            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  viewMode === 'grid' 
+                    ? 'bg-blue-600 text-white shadow-2xs' 
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                title="Tampilan Card Grid Modern"
+              >
+                <LayoutGrid size={14} />
+                <span>Card Grid</span>
+              </button>
+
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  viewMode === 'table' 
+                    ? 'bg-blue-600 text-white shadow-2xs' 
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                title="Tampilan Tabel Ringkas"
+              >
+                <List size={14} />
+                <span>Tabel</span>
+              </button>
+            </div>
+
+            {/* Quick Actions Dropdown / Toolbar */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadTemplate}
+                className="p-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                title="Download Template Excel"
+              >
+                <Download size={15} />
+              </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Upload Excel"
+              >
+                <Upload size={14} />
+                <span className="hidden sm:inline">Import</span>
+              </button>
+
+              <button
+                onClick={handleExportExcel}
+                className="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Export Excel"
+              >
+                <FileSpreadsheet size={14} />
+                <span className="hidden sm:inline">Ekspor</span>
+              </button>
+
+              <button
+                onClick={handleOpenAddModal}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Plus size={16} />
+                <span>+ Relawan</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Manajemen & Admin</div>
-          <div className="text-2xl font-black text-purple-900 mt-0.5 font-mono">{stats.manajemen}</div>
-          <div className="text-[11px] text-purple-700 mt-0.5">Kepala, Gizi, Admin</div>
+        {/* KPI Summary Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Relawan</div>
+            <div className="text-2xl font-black text-slate-900 mt-0.5 font-mono">{stats.total}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">Personil Terdaftar</div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Status Aktif</div>
+            <div className="text-2xl font-black text-emerald-700 mt-0.5 font-mono">{stats.aktif}</div>
+            <div className="text-[11px] text-emerald-600 mt-0.5">Siap Bertugas</div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Manajemen & Admin</div>
+            <div className="text-2xl font-black text-purple-900 mt-0.5 font-mono">{stats.manajemen}</div>
+            <div className="text-[11px] text-purple-700 mt-0.5">Kepala & Pengawas</div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Olah & Masak</div>
+            <div className="text-2xl font-black text-amber-800 mt-0.5 font-mono">{stats.pengolahan}</div>
+            <div className="text-[11px] text-amber-700 mt-0.5">Koki & Dapur SPPG</div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs col-span-2 sm:col-span-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Logistik & Distribusi</div>
+            <div className="text-2xl font-black text-blue-800 mt-0.5 font-mono">{stats.logistik}</div>
+            <div className="text-[11px] text-blue-700 mt-0.5">Driver & Helper</div>
+          </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Olah & Masak</div>
-          <div className="text-2xl font-black text-amber-800 mt-0.5 font-mono">{stats.pengolahan}</div>
-          <div className="text-[11px] text-amber-700 mt-0.5">Koki & Dapur SPPG</div>
-        </div>
+        {/* ─── FLOATING SEARCH & FILTER BAR ─────────────────────────────────── */}
+        <div className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+          {/* Input Search Nama / NIK */}
+          <div className="relative flex-1 min-w-[260px]">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Cari nama relawan, NIK, divisi, no HP..."
+              className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Logistik & Distribusi</div>
-          <div className="text-2xl font-black text-blue-800 mt-0.5 font-mono">{stats.logistik}</div>
-          <div className="text-[11px] text-blue-700 mt-0.5">Driver, Helper, Packing</div>
-        </div>
-      </div>
+          {/* Multi-Dropdown Filters */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Filter Posisi / Divisi */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+              <Filter size={14} className="text-slate-400" />
+              <span className="font-semibold text-slate-500 text-[11px]">Divisi:</span>
+              <select
+                value={divisiFilter}
+                onChange={e => setDivisiFilter(e.target.value)}
+                className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer max-w-[200px] truncate"
+              >
+                <option value="ALL">Semua Divisi</option>
+                {HIERARCHICAL_DIVISI_GROUPS.map(grp => (
+                  <optgroup key={grp.groupName} label={grp.groupName}>
+                    {grp.options.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
 
-      {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Search Bar */}
-        <div className="relative w-full md:w-96">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Cari berdasarkan Nama, NIK, Divisi, atau No HP..."
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-          />
-          {searchTerm && (
+            {/* Filter Wilayah / RT / RW */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+              <MapPin size={14} className="text-slate-400" />
+              <span className="font-semibold text-slate-500 text-[11px]">Wilayah:</span>
+              <select
+                value={wilayahFilter}
+                onChange={e => setWilayahFilter(e.target.value)}
+                className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">Semua Wilayah</option>
+                <option value="Kiduldalem">Kiduldalem</option>
+                <option value="Wonorejo">Wonorejo</option>
+                <option value="Pasuruan">Pasuruan</option>
+              </select>
+            </div>
+
+            {/* Filter Status */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+              <span className="font-semibold text-slate-500 text-[11px]">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">Semua Status</option>
+                {STATUS_OPTIONS.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tombol Aksi "Cari Relawan" */}
             <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              onClick={() => {}}
+              className="bg-blue-600 text-white rounded-xl px-5 py-2 text-xs font-semibold hover:bg-blue-700 transition shadow-2xs cursor-pointer"
             >
-              <X size={14} />
+              Cari Relawan
             </button>
-          )}
-        </div>
-
-        {/* Dropdown Filters (Hierarchical optgroups) */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600">
-            <Filter size={14} className="text-slate-400" />
-            <span className="font-semibold text-slate-500 text-[11px]">Divisi:</span>
-            <select
-              value={divisiFilter}
-              onChange={e => setDivisiFilter(e.target.value)}
-              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer text-xs max-w-[240px] truncate"
-            >
-              <option value="ALL">Semua Divisi Operasional</option>
-              {HIERARCHICAL_DIVISI_GROUPS.map(grp => (
-                <optgroup key={grp.groupName} label={grp.groupName}>
-                  {grp.options.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600">
-            <span className="font-semibold text-slate-500 text-[11px]">Status:</span>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">Semua Status</option>
-              {STATUS_OPTIONS.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
           </div>
         </div>
-      </div>
 
-      {/* Table Relawan SPPG (Full Responsive Scrollable Container) */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs min-w-[1280px]">
-            <thead>
-              <tr className="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider">
-                <th className="py-3 px-3.5 text-center w-12 border-b border-slate-800">NO</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 min-w-[180px]">NAMA LENGKAP</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 min-w-[180px]">DIVISI PENUGASAN</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 font-mono">NIK</th>
-                <th className="py-3 px-3.5 border-b border-slate-800">EMAIL</th>
-                <th className="py-3 px-3.5 border-b border-slate-800">TEMPAT LAHIR</th>
-                <th className="py-3 px-3.5 border-b border-slate-800">TANGGAL LAHIR</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 text-center">STATUS</th>
-                <th className="py-3 px-3.5 border-b border-slate-800">NO HP (WA)</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 text-center">PENDIDIKAN</th>
-                <th className="py-3 px-3.5 border-b border-slate-800">MULAI BEKERJA</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 min-w-[200px]">ALAMAT DOMISILI</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 font-mono">NO BPJSTK</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 font-mono">REKENING BNI</th>
-                <th className="py-3 px-3.5 border-b border-slate-800 text-center w-24">AKSI</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
-              {loading ? (
-                <tr>
-                  <td colSpan={15} className="py-12 text-center text-slate-400 font-medium">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      <span>Memuat data relawan SPPG...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : filteredList.length > 0 ? (
-                filteredList.map((item, idx) => {
+        {/* ─── 3. CONTENT VIEW: CARD GRID (SAAS DIRECTORY) VS TABLE VIEW ────── */}
+        {loading ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-2">
+              <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs font-semibold text-slate-600 mt-2">Memuat data directory relawan SPPG...</span>
+            </div>
+          </div>
+        ) : viewMode === 'grid' ? (
+          /* CARD GRID VIEW (SAAS DIRECTORY) */
+          <div>
+            {filteredList.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
+                <Users size={32} className="mx-auto text-slate-300 mb-2" />
+                <p className="text-sm font-semibold text-slate-600">Tidak ada data relawan yang sesuai dengan kriteria pencarian.</p>
+                <p className="text-xs text-slate-400 mt-1">Coba sesuaikan filter kata kunci, divisi, atau status.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {filteredList.map((item, idx) => {
                   const cleanPhone = (item.no_hp || '').replace(/[^0-9]/g, '')
-                  const waUrl = cleanPhone.startsWith('0') 
-                    ? `https://wa.me/62${cleanPhone.slice(1)}` 
-                    : `https://wa.me/${cleanPhone}`
+                  const waUrl = cleanPhone ? getWaUrl(cleanPhone) : '#'
 
                   return (
-                    <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3.5 text-center font-mono text-slate-400 text-[11px] font-bold">
-                        {idx + 1}
-                      </td>
-                      <td className="py-3 px-3.5">
-                        <span className="font-bold text-slate-900 block text-xs">
-                          {item.nama_lengkap}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3.5">
-                        <span className={`inline-block px-2.5 py-0.5 text-[10px] rounded-md border ${getDivisiBadge(item.divisi)}`}>
-                          {item.divisi || 'PENGOLAHAN'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3.5 font-mono text-slate-800 text-[11px]">
-                        {item.nik || '-'}
-                      </td>
-                      <td className="py-3 px-3.5 text-slate-600 text-[11px]">
-                        {item.email || '-'}
-                      </td>
-                      <td className="py-3 px-3.5 text-slate-700">
-                        {item.tempat_lahir || '-'}
-                      </td>
-                      <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
-                        {formatDateIndo(item.tanggal_lahir)}
-                      </td>
-                      <td className="py-3 px-3.5 text-center">
-                        <span className={`inline-block px-2 py-0.5 text-[10px] font-extrabold rounded border ${getStatusBadge(item.status)}`}>
-                          {item.status || 'Aktif'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3.5 whitespace-nowrap">
+                    <div 
+                      key={item.id || idx}
+                      className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col justify-between overflow-hidden group"
+                    >
+                      {/* Card Top Section */}
+                      <div className="p-5 pb-4 space-y-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            {/* Profile Picture Circle or Initials */}
+                            <div className={`w-14 h-14 rounded-full bg-gradient-to-tr ${getAvatarGradient(item.divisi)} text-white font-extrabold text-base flex items-center justify-center ring-4 ring-slate-100/80 shadow-sm shrink-0 uppercase`}>
+                              {getInitials(item.nama_lengkap)}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="font-bold text-slate-900 text-base leading-snug truncate group-hover:text-blue-600 transition-colors" title={item.nama_lengkap}>
+                                {item.nama_lengkap}
+                              </h3>
+                              <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                                {item.divisi || 'PENGOLAHAN'}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full border shrink-0 ${getStatusBadge(item.status || 'Aktif')}`}>
+                            ● {item.status || 'Aktif'}
+                          </span>
+                        </div>
+
+                        {/* Location & Tenure Info */}
+                        <div className="space-y-2 pt-1 border-t border-slate-100">
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <MapPin size={14} className="text-rose-500 shrink-0" />
+                            <span className="truncate font-medium" title={item.alamat || 'Kiduldalem, Wonorejo, Pasuruan'}>
+                              {item.alamat || 'Kiduldalem, Wonorejo, Pasuruan'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                            <span className="flex items-center gap-1">
+                              <Calendar size={13} className="text-slate-400" />
+                              Mulai: <strong className="text-slate-700 font-medium">{formatDateIndo(item.mulai_bekerja)}</strong>
+                            </span>
+                            <span className="font-mono text-slate-400">
+                              NIK: {item.nik ? `${item.nik.slice(0, 6)}...` : '-'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Skill & Credential Badges/Pills */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className={`text-[11px] px-2.5 py-1 rounded-full border ${getDivisiBadge(item.divisi)}`}>
+                            {item.divisi || 'PENGOLAHAN'}
+                          </span>
+                          {item.pendidikan_terakhir && (
+                            <span className="bg-slate-100 text-slate-600 text-[11px] px-2.5 py-1 rounded-full border border-slate-200/80 font-medium">
+                              {item.pendidikan_terakhir}
+                            </span>
+                          )}
+                          {item.no_bpjstk && (
+                            <span className="bg-indigo-50 text-indigo-700 text-[11px] px-2.5 py-1 rounded-full border border-indigo-200/60 font-mono">
+                              BPJSTK OK
+                            </span>
+                          )}
+                          {item.no_rekening_bni && (
+                            <span className="bg-emerald-50 text-emerald-700 text-[11px] px-2.5 py-1 rounded-full border border-emerald-200/60 font-mono">
+                              BNI OK
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card Footer Actions */}
+                      <div className="bg-slate-50/80 px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
                         {item.no_hp ? (
                           <a
                             href={waUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-emerald-700 hover:text-emerald-800 font-bold font-mono text-[11px] flex items-center gap-1 underline underline-offset-2"
-                            title="Buka Chat WhatsApp"
+                            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-200/80 transition flex items-center gap-1.5"
+                            title="Hubungi via WhatsApp"
                           >
-                            <Phone size={12} className="text-emerald-600" />
-                            <span>{item.no_hp}</span>
+                            <Phone size={13} className="text-emerald-600" />
+                            <span>WhatsApp</span>
                           </a>
                         ) : (
-                          <span className="text-slate-400 font-mono">-</span>
+                          <span className="text-[11px] text-slate-400 font-mono italic">No Kontak -</span>
                         )}
-                      </td>
-                      <td className="py-3 px-3.5 text-center font-bold text-slate-800">
-                        {item.pendidikan_terakhir || '-'}
-                      </td>
-                      <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
-                        {formatDateIndo(item.mulai_bekerja)}
-                      </td>
-                      <td className="py-3 px-3.5 text-slate-700 max-w-xs truncate" title={item.alamat || undefined}>
-                        {item.alamat || '-'}
-                      </td>
-                      <td className="py-3 px-3.5 font-mono text-slate-800 text-[11px]">
-                        {item.no_bpjstk || '-'}
-                      </td>
-                      <td className="py-3 px-3.5 font-mono text-slate-900 font-bold text-[11px]">
-                        {item.no_rekening_bni || '-'}
-                      </td>
-                      <td className="py-3 px-3.5 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+
+                        <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleOpenEditModal(item)}
-                            className="p-1.5 text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded transition cursor-pointer"
-                            title="Edit Data Relawan"
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                            title="Edit Detail Relawan"
                           >
-                            <Edit3 size={15} />
+                            <Edit3 size={13} />
+                            <span>Edit</span>
                           </button>
+
                           <button
                             onClick={() => setDeleteConfirmId(item.id)}
-                            className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded transition cursor-pointer"
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
                             title="Hapus Data Relawan"
                           >
-                            <Trash2 size={15} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* TABLE RINGKAS VIEW */
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs min-w-[1280px]">
+                <thead>
+                  <tr className="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider">
+                    <th className="py-3 px-3.5 text-center w-12 border-b border-slate-800">NO</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 min-w-[180px]">NAMA LENGKAP</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 min-w-[180px]">DIVISI PENUGASAN</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 font-mono">NIK</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800">EMAIL</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800">TEMPAT LAHIR</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800">TANGGAL LAHIR</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 text-center">STATUS</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800">NO HP (WA)</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 text-center">PENDIDIKAN</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800">MULAI BEKERJA</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 min-w-[200px]">ALAMAT DOMISILI</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 font-mono">NO BPJSTK</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 font-mono">REKENING BNI</th>
+                    <th className="py-3 px-3.5 border-b border-slate-800 text-center w-24">AKSI</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+                  {filteredList.length > 0 ? (
+                    filteredList.map((item, idx) => {
+                      const cleanPhone = (item.no_hp || '').replace(/[^0-9]/g, '')
+                      const waUrl = cleanPhone ? getWaUrl(cleanPhone) : '#'
+
+                      return (
+                        <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3.5 text-center font-mono text-slate-400 text-[11px] font-bold">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3 px-3.5">
+                            <span className="font-bold text-slate-900 block text-xs">
+                              {item.nama_lengkap}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5">
+                            <span className={`inline-block px-2.5 py-0.5 text-[10px] rounded-md border ${getDivisiBadge(item.divisi)}`}>
+                              {item.divisi || 'PENGOLAHAN'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5 font-mono text-slate-800 text-[11px]">
+                            {item.nik || '-'}
+                          </td>
+                          <td className="py-3 px-3.5 text-slate-600 text-[11px]">
+                            {item.email || '-'}
+                          </td>
+                          <td className="py-3 px-3.5 text-slate-700">
+                            {item.tempat_lahir || '-'}
+                          </td>
+                          <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
+                            {formatDateIndo(item.tanggal_lahir)}
+                          </td>
+                          <td className="py-3 px-3.5 text-center">
+                            <span className={`inline-block px-2 py-0.5 text-[10px] font-extrabold rounded border ${getStatusBadge(item.status)}`}>
+                              {item.status || 'Aktif'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5 whitespace-nowrap">
+                            {item.no_hp ? (
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-emerald-700 hover:text-emerald-800 font-bold font-mono text-[11px] flex items-center gap-1 underline underline-offset-2"
+                                title="Buka Chat WhatsApp"
+                              >
+                                <Phone size={12} className="text-emerald-600" />
+                                <span>{item.no_hp}</span>
+                              </a>
+                            ) : (
+                              <span className="text-slate-400 font-mono">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3.5 text-center font-bold text-slate-800">
+                            {item.pendidikan_terakhir || '-'}
+                          </td>
+                          <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
+                            {formatDateIndo(item.mulai_bekerja)}
+                          </td>
+                          <td className="py-3 px-3.5 text-slate-700 max-w-xs truncate" title={item.alamat || undefined}>
+                            {item.alamat || '-'}
+                          </td>
+                          <td className="py-3 px-3.5 font-mono text-slate-800 text-[11px]">
+                            {item.no_bpjstk || '-'}
+                          </td>
+                          <td className="py-3 px-3.5 font-mono text-slate-900 font-bold text-[11px]">
+                            {item.no_rekening_bni || '-'}
+                          </td>
+                          <td className="py-3 px-3.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenEditModal(item)}
+                                className="p-1.5 text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded transition cursor-pointer"
+                                title="Edit Data Relawan"
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirmId(item.id)}
+                                className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded transition cursor-pointer"
+                                title="Hapus Data Relawan"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={15} className="py-12 text-center text-slate-400 font-medium">
+                        Tidak ada data relawan yang ditemukan.
                       </td>
                     </tr>
-                  )
-                })
-              ) : (
-                <tr>
-                  <td colSpan={15} className="py-12 text-center text-slate-400 font-medium">
-                    Tidak ada data relawan yang ditemukan.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
-      {/* Modal Preview Import Excel */}
+      </main>
+
+      {/* ─── MODAL PREVIEW IMPORT EXCEL ───────────────────────────────────── */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200">
-            {/* Modal Header */}
             <div className="bg-amber-900 text-white p-4 px-6 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-amber-600 text-white rounded-lg">
@@ -1168,7 +1455,6 @@ export default function DataRelawanSppgPage() {
               </button>
             </div>
 
-            {/* Modal Body Info Stats */}
             <div className="p-4 px-6 bg-amber-50/50 border-b border-amber-100 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-4">
                 <span className="font-bold text-slate-700">
@@ -1190,7 +1476,6 @@ export default function DataRelawanSppgPage() {
               </p>
             </div>
 
-            {/* Modal Table Preview */}
             <div className="flex-1 overflow-y-auto p-4 px-6">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
@@ -1236,7 +1521,6 @@ export default function DataRelawanSppgPage() {
               </table>
             </div>
 
-            {/* Modal Footer */}
             <div className="p-4 px-6 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2.5">
               <button
                 type="button"
@@ -1259,11 +1543,10 @@ export default function DataRelawanSppgPage() {
         </div>
       )}
 
-      {/* Modal Form Tambah / Edit Data Relawan (Hierarchical optgroups) */}
+      {/* ─── MODAL FORM TAMBAH / EDIT DATA RELAWAN ──────────────────────────── */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200">
-            {/* Modal Header */}
             <div className="bg-slate-900 text-white p-4 px-6 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-blue-600 text-white rounded-lg">
@@ -1286,10 +1569,8 @@ export default function DataRelawanSppgPage() {
               </button>
             </div>
 
-            {/* Modal Form Content */}
             <form onSubmit={handleSubmitForm} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Nama Lengkap */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">
                     Nama Lengkap <span className="text-rose-500">*</span>
@@ -1304,7 +1585,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* NIK */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">
                     NIK (16 Digit) <span className="text-rose-500">*</span>
@@ -1320,7 +1600,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* Divisi Dropdown 7 Kelompok Optgroup */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">
                     Divisi Penugasan (7 Kelompok Operasional) <span className="text-rose-500">*</span>
@@ -1340,7 +1619,6 @@ export default function DataRelawanSppgPage() {
                   </select>
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Status Keaktifan</label>
                   <select
@@ -1354,7 +1632,6 @@ export default function DataRelawanSppgPage() {
                   </select>
                 </div>
 
-                {/* Tempat Lahir */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Tempat Lahir</label>
                   <input
@@ -1366,7 +1643,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* Tanggal Lahir */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Tanggal Lahir</label>
                   <input
@@ -1377,7 +1653,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* Email */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Alamat Email</label>
                   <input
@@ -1389,7 +1664,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* No HP */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">No HP / WhatsApp</label>
                   <input
@@ -1401,7 +1675,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* Pendidikan Terakhir */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Pendidikan Terakhir</label>
                   <select
@@ -1415,7 +1688,6 @@ export default function DataRelawanSppgPage() {
                   </select>
                 </div>
 
-                {/* Mulai Bekerja */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Tanggal Mulai Bekerja</label>
                   <input
@@ -1426,7 +1698,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* BPJSTK */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Nomor BPJSTK</label>
                   <input
@@ -1438,7 +1709,6 @@ export default function DataRelawanSppgPage() {
                   />
                 </div>
 
-                {/* Rekening BNI */}
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Nomor Rekening BNI</label>
                   <input
@@ -1451,7 +1721,6 @@ export default function DataRelawanSppgPage() {
                 </div>
               </div>
 
-              {/* Alamat */}
               <div>
                 <label className="block font-bold text-slate-800 mb-1">Alamat Domisili Lengkap</label>
                 <textarea
@@ -1463,7 +1732,6 @@ export default function DataRelawanSppgPage() {
                 />
               </div>
 
-              {/* Modal Footer */}
               <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
@@ -1475,7 +1743,7 @@ export default function DataRelawanSppgPage() {
                 <button
                   type="submit"
                   disabled={formSubmitting}
-                  className="px-5 py-2 bg-blue-700 hover:bg-blue-600 text-white font-bold rounded-lg transition shadow-2xs cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-2xs cursor-pointer flex items-center gap-1.5"
                 >
                   {formSubmitting && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                   <span>{editingItem ? 'Simpan Perubahan' : 'Tambah Relawan'}</span>
@@ -1486,7 +1754,7 @@ export default function DataRelawanSppgPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* ─── DELETE CONFIRMATION MODAL ─────────────────────────────────────── */}
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-center">
