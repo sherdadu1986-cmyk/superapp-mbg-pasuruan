@@ -439,14 +439,16 @@ export interface MenuHarianDB {
   created_at?: string
 }
 
+export * from '@/lib/sppg-identity'
+
 // ─── SPPG Profile Helpers ───
 export async function fetchSppgProfile(): Promise<SppgProfile> {
   const defaultProfile: SppgProfile = {
-    nama_unit: 'SPPG PASURUAN WONOREJO',
-    penanggung_jawab: 'Ahmad Sayyidani Haqiqi, S.Pd.',
-    wilayah: 'JAWA TIMUR · PASURUAN · WONOREJO · WONOREJO',
+    nama_unit: 'SPPG Pasuruan Wonorejo Wonorejo',
+    penanggung_jawab: 'Ahmad Sayyidani Khaqiqi',
+    wilayah: 'Desa Wonorejo, Kecamatan Wonorejo, Kabupaten Pasuruan, Jawa Timur',
     kapasitas_harian: 5000,
-    status_operasional: 'Aktif'
+    status_operasional: 'Beroperasi'
   }
 
   try {
