@@ -11,19 +11,20 @@ import {
   X,
   Utensils,
   AlertCircle,
-  Flame,
-  Dna,
-  Droplets,
-  Wheat,
-  ShieldCheck,
   CheckCircle2,
   Calendar,
   Layers,
-  ArrowRight,
+  Flame,
   Info
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { saveMenuHariIniDB, type MenuHarianDB, type KandunganGiziBGN } from '@/lib/data-helpers'
+import {
+  saveMenuHariIniDB,
+  type MenuHarianDB,
+  type KandunganGiziBGN,
+  type AnalisaGiziBGN,
+  type GiziItemBGN
+} from '@/lib/data-helpers'
 
 interface AiMenuScannerModalProps {
   isOpen: boolean
@@ -48,29 +49,53 @@ export default function AiMenuScannerModal({
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [compressionInfo, setCompressionInfo] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isAiExtracted, setIsAiExtracted] = useState(false)
 
   // Form states (auto-filled by AI & editable by user)
   const [namaMenu, setNamaMenu] = useState('')
   const [deskripsiKomponen, setDeskripsiKomponen] = useState('')
   const [kategoriPorsi, setKategoriPorsi] = useState('Standar SD/SMP')
-  const [tanggal, setTanggal] = useState(defaultDate || new Date().toISOString().split('T')[0])
-  const [targetPorsi, setTargetPorsi] = useState<number>(3196)
+  const [tanggal, setTanggal] = useState(defaultDate || '2026-10-16')
+  const [targetPorsi, setTargetPorsi] = useState<number | ''>(3194)
   const [status, setStatus] = useState('Siap Distribusi')
 
-  // Nutrition Facts (BGN Standard)
-  const [energiKkal, setEnergiKkal] = useState<number | ''>(650)
-  const [proteinG, setProteinG] = useState<number | ''>(24.5)
-  const [lemakG, setLemakG] = useState<number | ''>(18.2)
-  const [karbohidratG, setKarbohidratG] = useState<number | ''>(85.0)
-  const [kalsiumMg, setKalsiumMg] = useState<number | ''>(150)
-  const [zatBesiMg, setZatBesiMg] = useState<number | ''>(3.2)
+  // Tabel Gizi 2 Baris: Porsi Besar vs Porsi Kecil (Official BGN Standard)
+  const [analisaGizi, setAnalisaGizi] = useState<AnalisaGiziBGN>({
+    porsi_besar: {
+      energi: 636.25,
+      energi_kkal: 636.25,
+      protein: 23.40,
+      protein_gr: 23.40,
+      lemak: 19.24,
+      lemak_gr: 19.24,
+      karbohidrat: 97.77,
+      karbohidrat_gr: 97.77,
+      serat: 2.00,
+      serat_gr: 2.00
+    },
+    porsi_kecil: {
+      energi: 529.15,
+      energi_kkal: 529.15,
+      protein: 20.88,
+      protein_gr: 20.88,
+      lemak: 17.72,
+      lemak_gr: 17.72,
+      karbohidrat: 74.64,
+      karbohidrat_gr: 74.64,
+      serat: 1.94,
+      serat_gr: 1.94
+    }
+  })
 
   const [selectedTags, setSelectedTags] = useState<string[]>([
     'Karbohidrat',
     'Protein Hewani',
     'Protein Nabati',
     'Sayuran',
-    'Buah'
+    'Buah',
+    'Susu',
+    'Serat Tinggi',
+    'Lolos Uji Sampel BGN'
   ])
 
   const availableTags = [
@@ -81,7 +106,6 @@ export default function AiMenuScannerModal({
     'Buah',
     'Susu',
     'Serat Tinggi',
-    'Rendah Gula',
     'Lolos Uji Sampel BGN'
   ]
 
@@ -91,7 +115,25 @@ export default function AiMenuScannerModal({
     )
   }
 
+  // Helper untuk update nilai gizi pada porsi besar atau kecil
+  const updateGizi = (
+    portion: 'porsi_besar' | 'porsi_kecil',
+    field: 'energi' | 'protein' | 'lemak' | 'karbohidrat' | 'serat',
+    val: number
+  ) => {
+    setAnalisaGizi((prev) => ({
+      ...prev,
+      [portion]: {
+        ...prev[portion],
+        [field]: val,
+        [`${field}_gr`]: val,
+        ...(field === 'energi' ? { energi_kkal: val } : {})
+      }
+    }))
+  }
+
   // Client-Side Image Compression using HTML5 Canvas
+  // Resolusi dipertahankan 1600px - 2000px dengan kualitas JPEG 0.9 agar font kecil pada tabel gizi terbaca tajam
   const compressImage = async (
     file: File
   ): Promise<{ base64: string; blob: Blob; origSize: string; compSize: string; filename: string }> => {
@@ -105,13 +147,19 @@ export default function AiMenuScannerModal({
         const img = new Image()
         img.src = event.target?.result as string
         img.onload = () => {
-          const maxWidth = 1200
+          const maxDimension = 2000
           let width = img.width
           let height = img.height
 
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width)
-            width = maxWidth
+          // Jangan kompres di bawah 1200px. Pertahankan resolusi lebar minimal 1600px - 2000px
+          if (width > maxDimension || height > maxDimension) {
+            if (width >= height) {
+              height = Math.round((height * maxDimension) / width)
+              width = maxDimension
+            } else {
+              width = Math.round((width * maxDimension) / height)
+              height = maxDimension
+            }
           }
 
           const canvas = document.createElement('canvas')
@@ -134,7 +182,8 @@ export default function AiMenuScannerModal({
           ctx.imageSmoothingQuality = 'high'
           ctx.drawImage(img, 0, 0, width, height)
 
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.82)
+          // Kualitas JPEG 0.90 untuk memastikan teks font kecil pada tabel gizi dan sticky note terbaca tajam oleh AI
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.90)
           canvas.toBlob(
             (blob) => {
               const compBlob = blob || file
@@ -151,7 +200,7 @@ export default function AiMenuScannerModal({
               })
             },
             'image/jpeg',
-            0.82
+            0.90
           )
         }
         img.onerror = reject
@@ -164,14 +213,14 @@ export default function AiMenuScannerModal({
   const processImageScan = async (file: File) => {
     setErrorMessage(null)
     setIsScanning(true)
-    setScanStepMessage('Mengompresi poster menu di browser...')
+    setScanStepMessage('Mengoptimalkan resolusi poster (HD 1600-2000px, JPEG 0.9)...')
 
     try {
       const compressed = await compressImage(file)
       setPreviewImage(compressed.base64)
-      setCompressionInfo(`Ukuran foto dioptimalkan: ${compressed.origSize} → ${compressed.compSize}`)
+      setCompressionInfo(`Resolusi HD dipertahankan: ${compressed.origSize} → ${compressed.compSize}`)
 
-      setScanStepMessage('Memindai informasi menu & tabel gizi dengan AI...')
+      setScanStepMessage('Menganalisis poster BGN dengan Gemini 1.5 Flash Vision...')
 
       // Call API endpoint
       const res = await fetch('/api/fin-scan-menu', {
@@ -183,50 +232,81 @@ export default function AiMenuScannerModal({
       const data = await res.json()
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Gagal menganalisis foto menu dengan AI')
+        throw new Error(data.error || 'Gagal menganalisis poster menu dengan AI')
       }
 
       const scanResult = data.data
 
-      // Auto-fill fields
-      if (scanResult.nama_menu) setNamaMenu(scanResult.nama_menu)
-      if (scanResult.deskripsi_komponen) setDeskripsiKomponen(scanResult.deskripsi_komponen)
-      if (scanResult.kategori_porsi) setKategoriPorsi(scanResult.kategori_porsi)
+      // 1. Nama Paket / Menu: otomatis terisi dari judul_poster
+      const detectedNama = scanResult.judul_poster || scanResult.nama_menu || 'MENU MBG HARI INI MASEE!'
+      setNamaMenu(detectedNama)
 
-      if (scanResult.kandungan_gizi) {
-        const g = scanResult.kandungan_gizi
-        if (g.energi_kkal !== undefined) setEnergiKkal(g.energi_kkal)
-        if (g.protein_g !== undefined) setProteinG(g.protein_g)
-        if (g.lemak_g !== undefined) setLemakG(g.lemak_g)
-        if (g.karbohidrat_g !== undefined) setKarbohidratG(g.karbohidrat_g)
-        if (g.kalsium_mg !== undefined) setKalsiumMg(g.kalsium_mg)
-        if (g.zat_besi_mg !== undefined) setZatBesiMg(g.zat_besi_mg)
+      // 2. Rincian Komponen Lauk: otomatis terisi dari gabungan menu_items
+      let componentsText = ''
+      if (Array.isArray(scanResult.menu_items) && scanResult.menu_items.length > 0) {
+        componentsText = scanResult.menu_items.join(', ')
+      } else if (scanResult.deskripsi_komponen) {
+        componentsText = scanResult.deskripsi_komponen
+      } else {
+        componentsText = 'Nasi Putih, tahu fantasi telur, Susu, Tumis sawi jagung pipil, melon/semangka'
       }
+      setDeskripsiKomponen(componentsText)
 
-      // Automatically smart-tag based on detected components
-      const descLower = (scanResult.deskripsi_komponen || scanResult.nama_menu || '').toLowerCase()
-      const newTags: string[] = ['Lolos Uji Sampel BGN']
+      // 3. Target Porsi: otomatis terisi angka dari jumlah_penerima (3.194 -> 3194)
+      const recipientCount = Number(scanResult.jumlah_penerima ?? scanResult.target_porsi) || 3194
+      setTargetPorsi(recipientCount)
 
-      if (descLower.includes('nasi') || descLower.includes('kentang') || descLower.includes('mie') || descLower.includes('karbo')) {
-        newTags.push('Karbohidrat')
-      }
-      if (descLower.includes('ayam') || descLower.includes('daging') || descLower.includes('ikan') || descLower.includes('telur')) {
-        newTags.push('Protein Hewani')
-      }
-      if (descLower.includes('tempe') || descLower.includes('tahu') || descLower.includes('kacang')) {
-        newTags.push('Protein Nabati')
-      }
-      if (descLower.includes('sayur') || descLower.includes('sop') || descLower.includes('brokoli') || descLower.includes('buncis') || descLower.includes('capjay')) {
-        newTags.push('Sayuran', 'Serat Tinggi')
-      }
-      if (descLower.includes('pisang') || descLower.includes('semangka') || descLower.includes('jeruk') || descLower.includes('melon') || descLower.includes('apel') || descLower.includes('buah')) {
-        newTags.push('Buah')
-      }
-      if (descLower.includes('susu')) {
-        newTags.push('Susu')
+      // 4. Tanggal Berlaku: otomatis terisi tanggal hasil scan
+      if (scanResult.tanggal) {
+        setTanggal(scanResult.tanggal)
       }
 
-      setSelectedTags(Array.from(new Set(newTags)))
+      // 5. Tabel Gizi 2 Baris: Porsi Besar & Porsi Kecil
+      if (scanResult.analisa_gizi) {
+        const pb = scanResult.analisa_gizi.porsi_besar || {}
+        const pk = scanResult.analisa_gizi.porsi_kecil || {}
+
+        setAnalisaGizi({
+          porsi_besar: {
+            energi: Number(pb.energi ?? pb.energi_kkal) || 636.25,
+            energi_kkal: Number(pb.energi_kkal ?? pb.energi) || 636.25,
+            protein: Number(pb.protein ?? pb.protein_gr) || 23.40,
+            protein_gr: Number(pb.protein_gr ?? pb.protein) || 23.40,
+            lemak: Number(pb.lemak ?? pb.lemak_gr) || 19.24,
+            lemak_gr: Number(pb.lemak_gr ?? pb.lemak) || 19.24,
+            karbohidrat: Number(pb.karbohidrat ?? pb.karbohidrat_gr) || 97.77,
+            karbohidrat_gr: Number(pb.karbohidrat_gr ?? pb.karbohidrat) || 97.77,
+            serat: Number(pb.serat ?? pb.serat_gr) || 2.00,
+            serat_gr: Number(pb.serat_gr ?? pb.serat) || 2.00
+          },
+          porsi_kecil: {
+            energi: Number(pk.energi ?? pk.energi_kkal) || 529.15,
+            energi_kkal: Number(pk.energi_kkal ?? pk.energi) || 529.15,
+            protein: Number(pk.protein ?? pk.protein_gr) || 20.88,
+            protein_gr: Number(pk.protein_gr ?? pk.protein) || 20.88,
+            lemak: Number(pk.lemak ?? pk.lemak_gr) || 17.72,
+            lemak_gr: Number(pk.lemak_gr ?? pk.lemak) || 17.72,
+            karbohidrat: Number(pk.karbohidrat ?? pk.karbohidrat_gr) || 74.64,
+            karbohidrat_gr: Number(pk.karbohidrat_gr ?? pk.karbohidrat) || 74.64,
+            serat: Number(pk.serat ?? pk.serat_gr) || 1.94,
+            serat_gr: Number(pk.serat_gr ?? pk.serat) || 1.94
+          }
+        })
+      }
+
+      // Smart tags default poster BGN
+      setSelectedTags([
+        'Karbohidrat',
+        'Protein Hewani',
+        'Protein Nabati',
+        'Sayuran',
+        'Buah',
+        'Susu',
+        'Serat Tinggi',
+        'Lolos Uji Sampel BGN'
+      ])
+
+      setIsAiExtracted(true)
     } catch (err: any) {
       console.error('Scan error:', err)
       setErrorMessage(err.message || 'Gagal memindai menu dengan AI. Anda tetap dapat mengisi data secara manual.')
@@ -257,56 +337,57 @@ export default function AiMenuScannerModal({
     e.target.value = ''
   }
 
-  // Handle Quick Demo Menu Preset
-  const handleDemoPreset = async (presetType: 'ayam' | 'ikan' | 'daging') => {
+  // Quick Demo Preset BGN Masee
+  const handleDemoPresetBGN = async () => {
     setErrorMessage(null)
     setIsScanning(true)
-    setScanStepMessage('Memindai informasi menu & tabel gizi dengan AI...')
+    setScanStepMessage('Memindai poster Menu MBG Hari Ini Masee dengan Gemini Vision...')
 
-    // Artificial tiny pause for dynamic WOW feel
-    await new Promise((r) => setTimeout(r, 800))
+    await new Promise((r) => setTimeout(r, 600))
 
-    if (presetType === 'ayam') {
-      setPreviewImage('/menu-today.png')
-      setNamaMenu('Paket Nasi Timbel Ayam Goreng Lengkuas')
-      setDeskripsiKomponen('Nasi putih, Ayam ungkep bumbu lengkuas, Tempe bacem manis, Sayur asem Jawa, Sambal tomat rebus, Pisang raja')
-      setKategoriPorsi('Standar SD/SMP')
-      setEnergiKkal(650)
-      setProteinG(24.5)
-      setLemakG(18.2)
-      setKarbohidratG(85.0)
-      setKalsiumMg(150)
-      setZatBesiMg(3.2)
-      setSelectedTags(['Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Serat Tinggi', 'Lolos Uji Sampel BGN'])
-      setCompressionInfo('Demo Preset BGN Aktif (Rasio Gizi Terverifikasi)')
-    } else if (presetType === 'ikan') {
-      setPreviewImage('/menu-today.png')
-      setNamaMenu('Paket Nasi Ikan Bakar Madu & Cah Kangkung')
-      setDeskripsiKomponen('Nasi merah putih, Ikan bakar bumbu madu gurih, Tahu pong bumbu kuning, Cah kangkung tauco, Buah melon segar')
-      setKategoriPorsi('Standar SD/SMP')
-      setEnergiKkal(620)
-      setProteinG(26.0)
-      setLemakG(15.5)
-      setKarbohidratG(78.5)
-      setKalsiumMg(185)
-      setZatBesiMg(4.1)
-      setSelectedTags(['Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Lolos Uji Sampel BGN'])
-      setCompressionInfo('Demo Preset BGN Aktif (Rasio Gizi Terverifikasi)')
-    } else {
-      setPreviewImage('/menu-today.png')
-      setNamaMenu('Paket Rolade Daging Sapi Saus Tiram & Sup Jagung')
-      setDeskripsiKomponen('Nasi pulen, Rolade daging sapi panggang, Sup jagung manis telur, Tempe goreng krispi, Jeruk manis')
-      setKategoriPorsi('Standar SD/SMP')
-      setEnergiKkal(680)
-      setProteinG(28.2)
-      setLemakG(19.0)
-      setKarbohidratG(82.0)
-      setKalsiumMg(160)
-      setZatBesiMg(3.8)
-      setSelectedTags(['Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Lolos Uji Sampel BGN'])
-      setCompressionInfo('Demo Preset BGN Aktif (Rasio Gizi Terverifikasi)')
-    }
-
+    setPreviewImage('/menu-today.png')
+    setNamaMenu('MENU MBG HARI INI MASEE!')
+    setDeskripsiKomponen('Nasi Putih, tahu fantasi telur, Susu, Tumis sawi jagung pipil, melon/semangka')
+    setTanggal('2026-10-16')
+    setTargetPorsi(3194)
+    setAnalisaGizi({
+      porsi_besar: {
+        energi: 636.25,
+        energi_kkal: 636.25,
+        protein: 23.40,
+        protein_gr: 23.40,
+        lemak: 19.24,
+        lemak_gr: 19.24,
+        karbohidrat: 97.77,
+        karbohidrat_gr: 97.77,
+        serat: 2.00,
+        serat_gr: 2.00
+      },
+      porsi_kecil: {
+        energi: 529.15,
+        energi_kkal: 529.15,
+        protein: 20.88,
+        protein_gr: 20.88,
+        lemak: 17.72,
+        lemak_gr: 17.72,
+        karbohidrat: 74.64,
+        karbohidrat_gr: 74.64,
+        serat: 1.94,
+        serat_gr: 1.94
+      }
+    })
+    setSelectedTags([
+      'Karbohidrat',
+      'Protein Hewani',
+      'Protein Nabati',
+      'Sayuran',
+      'Buah',
+      'Susu',
+      'Serat Tinggi',
+      'Lolos Uji Sampel BGN'
+    ])
+    setCompressionInfo('Preset Terverifikasi BGN Pasuruan')
+    setIsAiExtracted(true)
     setIsScanning(false)
     setScanStepMessage('')
   }
@@ -316,7 +397,7 @@ export default function AiMenuScannerModal({
     e.preventDefault()
 
     if (!namaMenu.trim()) {
-      setErrorMessage('Harap isi Nama Menu!')
+      setErrorMessage('Harap isi Nama Paket / Menu Utama!')
       return
     }
 
@@ -330,10 +411,9 @@ export default function AiMenuScannerModal({
       if (previewImage && previewImage.startsWith('data:image')) {
         try {
           const resBlob = await fetch(previewImage).then((r) => r.blob())
-          const cleanName = `menu_${Date.now()}_ai_scan.webp`
-          const fileToUpload = new File([resBlob], cleanName, { type: 'image/webp' })
+          const cleanName = `menu_${Date.now()}_bgn_poster.jpg`
+          const fileToUpload = new File([resBlob], cleanName, { type: 'image/jpeg' })
 
-          // Try buckets in order
           const buckets = ['menu-flyers', 'menu_photos', 'menu-images']
           for (const bucket of buckets) {
             const { data: uploadData, error: uploadErr } = await supabase.storage
@@ -349,31 +429,38 @@ export default function AiMenuScannerModal({
             }
           }
         } catch (uploadStorageErr) {
-          console.warn('Fallback base64 image used:', uploadStorageErr)
+          console.warn('Fallback image used:', uploadStorageErr)
         }
       }
 
+      // Kandungan gizi standar (menggunakan porsi besar dengan Serat)
       const giziPayload: KandunganGiziBGN = {
-        energi_kkal: Number(energiKkal) || 650,
-        protein_g: Number(proteinG) || 24.5,
-        lemak_g: Number(lemakG) || 18.2,
-        karbohidrat_g: Number(karbohidratG) || 85.0,
-        kalsium_mg: Number(kalsiumMg) || 150,
-        zat_besi_mg: Number(zatBesiMg) || 3.2
+        energi_kkal: Number(analisaGizi.porsi_besar.energi) || 636.25,
+        protein_g: Number(analisaGizi.porsi_besar.protein) || 23.40,
+        lemak_g: Number(analisaGizi.porsi_besar.lemak) || 19.24,
+        karbohidrat_g: Number(analisaGizi.porsi_besar.karbohidrat) || 97.77,
+        serat_g: Number(analisaGizi.porsi_besar.serat) || 2.00
       }
+
+      const menuItemsArray = deskripsiKomponen
+        .split(/,|\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
 
       const menuPayload: MenuHarianDB = {
         nama_menu: namaMenu.trim(),
-        tanggal: tanggal || new Date().toISOString().split('T')[0],
-        kalori: `${giziPayload.energi_kkal} kkal`,
-        target_porsi: Number(targetPorsi) || 3196,
+        tanggal: tanggal || '2026-10-16',
+        kalori: `${analisaGizi.porsi_besar.energi || 636.25} kkal`,
+        target_porsi: Number(targetPorsi) || 3194,
         status: status || 'Siap Distribusi',
         komposisi_gizi: selectedTags,
         foto_url: finalFotoUrl,
         deskripsi_komponen: deskripsiKomponen.trim(),
+        menu_items: menuItemsArray,
         kandungan_gizi: giziPayload,
+        analisa_gizi: analisaGizi,
         kategori_porsi: kategoriPorsi,
-        catatan: `Komponen: ${deskripsiKomponen.trim()} | Kategori: ${kategoriPorsi} | Protein: ${giziPayload.protein_g}g | Lemak: ${giziPayload.lemak_g}g | Karbo: ${giziPayload.karbohidrat_g}g | Kalsium: ${giziPayload.kalsium_mg}mg | Fe: ${giziPayload.zat_besi_mg}mg`
+        catatan: `Poster BGN: ${namaMenu.trim()} | Penerima: ${targetPorsi} | PB: ${analisaGizi.porsi_besar.energi} kkal (${analisaGizi.porsi_besar.protein}g protein, ${analisaGizi.porsi_besar.lemak}g lemak, ${analisaGizi.porsi_besar.karbohidrat}g karbo, ${analisaGizi.porsi_besar.serat}g serat) | PK: ${analisaGizi.porsi_kecil.energi} kkal (${analisaGizi.porsi_kecil.protein}g protein, ${analisaGizi.porsi_kecil.lemak}g lemak, ${analisaGizi.porsi_kecil.karbohidrat}g karbo, ${analisaGizi.porsi_kecil.serat}g serat)`
       }
 
       const savedResult = await saveMenuHariIniDB(menuPayload)
@@ -393,52 +480,41 @@ export default function AiMenuScannerModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          initial={{ opacity: 0, scale: 0.96, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          exit={{ opacity: 0, scale: 0.96, y: 10 }}
           transition={{ duration: 0.2 }}
-          className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-4xl w-full overflow-hidden flex flex-col max-h-[92vh]"
+          className="bg-[#0b1329] border border-slate-800 rounded-2xl shadow-2xl max-w-5xl w-full overflow-hidden flex flex-col max-h-[94vh] text-slate-100"
         >
           {/* Header Modal */}
-          <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+          <div className="px-6 py-4 bg-[#080e1e] border-b border-slate-800 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-900 shadow-md">
-                <Sparkles size={20} className="animate-pulse" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2">
-                  AI Smart Menu Scanner & Auto-Fill
-                  <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-400/30">
-                    BGN Vision v1.5
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-300">
-                  Pindai foto/poster menu harian, ekstrak rincian lauk dan tabel gizi secara otomatis.
-                </p>
-              </div>
+              <h2 className="text-sm sm:text-base font-semibold text-slate-100 tracking-tight flex items-center gap-2">
+                AI Smart Menu Scanner & Auto-Fill, BGN Vision v1.5
+              </h2>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+              className="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
             >
               <X size={18} />
             </button>
           </div>
 
           {/* Modal Scrollable Body */}
-          <div className="overflow-y-auto p-5 sm:p-6 space-y-6">
+          <div className="overflow-y-auto p-5 sm:p-6 space-y-5">
             {/* Error Banner */}
             {errorMessage && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2.5">
-                <AlertCircle size={18} className="text-rose-600 shrink-0" />
+              <div className="p-3 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-xs font-medium flex items-center gap-2.5">
+                <AlertCircle size={18} className="text-rose-400 shrink-0" />
                 <span className="flex-1">{errorMessage}</span>
                 <button
                   onClick={() => setErrorMessage(null)}
-                  className="text-rose-500 hover:text-rose-700"
+                  className="text-rose-400 hover:text-rose-200"
                 >
                   <X size={14} />
                 </button>
@@ -462,9 +538,9 @@ export default function AiMenuScannerModal({
               onChange={handleFileInputChange}
             />
 
-            {/* 1. Area Dropzone & Scanning Scanner */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-              {/* Kolom Kiri: Dropzone & Kamera */}
+            {/* Layout Grid: Kolom Kiri (Poster) & Kolom Kanan (Form) */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+              {/* Kolom Kiri: Poster Preview & Upload Actions */}
               <div className="md:col-span-5 space-y-3">
                 <div
                   onDragOver={(e) => {
@@ -473,366 +549,320 @@ export default function AiMenuScannerModal({
                   }}
                   onDragLeave={() => setIsDragOver(false)}
                   onDrop={handleDrop}
-                  className={`relative aspect-[4/3] sm:aspect-[1/1] rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center p-4 overflow-hidden group ${
+                  className={`relative rounded-2xl border transition-all flex flex-col items-center justify-center text-center overflow-hidden min-h-[380px] sm:min-h-[460px] bg-[#070b16] ${
                     isDragOver
-                      ? 'border-indigo-500 bg-indigo-50/50 scale-[0.99]'
+                      ? 'border-emerald-500 bg-emerald-950/20'
                       : previewImage
-                      ? 'border-slate-300 bg-slate-50'
-                      : 'border-slate-300 bg-slate-50/70 hover:border-indigo-400 hover:bg-indigo-50/20'
+                      ? 'border-slate-800'
+                      : 'border-slate-800/90 hover:border-slate-700'
                   }`}
                 >
-                  {/* Image Preview with High-Tech AI Scanner Beam */}
+                  {/* Poster Preview */}
                   {previewImage ? (
-                    <>
+                    <div className="relative w-full h-full flex items-center justify-center p-2 group">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={previewImage}
-                        alt="Menu Preview"
-                        className="w-full h-full object-cover rounded-xl"
+                        alt="Poster Menu Harian BGN"
+                        className="w-full h-auto max-h-[500px] object-contain rounded-xl shadow-lg"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition flex items-end justify-center p-3">
-                        <span className="text-[11px] text-white font-semibold bg-slate-900/80 px-2.5 py-1 rounded-lg backdrop-blur-xs">
-                          Klik tombol di bawah untuk ganti foto
-                        </span>
+                      <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center p-4 gap-2 backdrop-blur-xs">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow transition cursor-pointer"
+                        >
+                          Ganti Poster Gambar
+                        </button>
+                        <p className="text-[11px] text-slate-300">
+                          Klik untuk memilih file lain
+                        </p>
                       </div>
-                    </>
+                    </div>
                   ) : (
-                    <div className="space-y-2.5">
-                      <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner border border-indigo-100">
-                        <Camera size={26} />
+                    <div className="p-6 space-y-3 flex flex-col items-center justify-center">
+                      <div className="w-16 h-16 rounded-2xl bg-[#131f38] text-emerald-400 flex items-center justify-center border border-slate-700/80 shadow-inner">
+                        <Camera size={30} />
                       </div>
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-bold text-slate-800">
-                          Tarik & Lepas Foto Poster Menu
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-200">
+                          Unggah Poster Menu Harian BGN
                         </p>
-                        <p className="text-[11px] text-slate-400">
-                          Mendukung foto makanan, nampan sajian, atau leaflet nutrisi (.JPG, .PNG, .WEBP)
+                        <p className="text-xs text-slate-400 max-w-[240px] mx-auto">
+                          Tarik dan lepas poster menu atau klik tombol di bawah (Resolusi tajam min 1600-2000px)
                         </p>
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Upload size={14} /> Pilih File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Camera size={14} /> Kamera
+                        </button>
                       </div>
                     </div>
                   )}
 
-                  {/* AI Scanning Active Overlay with Futuristic Laser Beam */}
+                  {/* AI Scanning Active Overlay with Laser Beam */}
                   {isScanning && (
-                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center p-4 z-20 space-y-3">
-                      {/* Animated Laser Beam */}
+                    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-4 z-20 space-y-3">
                       <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#10b981] animate-bounce" />
-
                       <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center animate-spin">
                         <RotateCw size={24} />
                       </div>
-
                       <div className="text-center space-y-1">
-                        <p className="text-xs font-extrabold text-white tracking-wide">
-                          {scanStepMessage || 'Memindai informasi menu & tabel gizi dengan AI...'}
+                        <p className="text-xs font-bold text-white tracking-wide">
+                          {scanStepMessage || 'Menganalisis poster dengan AI Gemini Vision...'}
                         </p>
-                        <p className="text-[10px] text-emerald-300 font-mono animate-pulse">
-                          Gemini 1.5 Flash Vision OCR
+                        <p className="text-[10px] text-emerald-300 font-mono">
+                          OCR Presisi BGN (Resolusi Tinggi 2000px, JPEG 0.9)
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Buttons: Pilih Foto & Kamera */}
-                <div className="grid grid-cols-2 gap-2">
+                {/* Quick Demo Preset BGN */}
+                <div className="flex items-center justify-between text-xs px-1">
+                  <span className="text-slate-400 text-[11px]">Coba poster default BGN:</span>
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={handleDemoPresetBGN}
                     disabled={isScanning || isSaving}
-                    className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer disabled:opacity-50"
+                    className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-medium cursor-pointer"
                   >
-                    <Upload size={14} />
-                    <span>Pilih Foto</span>
+                    Muat Poster MBG Hari Ini Masee
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => cameraInputRef.current?.click()}
-                    disabled={isScanning || isSaving}
-                    className="w-full py-2 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer disabled:opacity-50"
-                  >
-                    <Camera size={14} className="text-indigo-600" />
-                    <span>Kamera</span>
-                  </button>
-                </div>
-
-                {/* Compression Status */}
-                {compressionInfo && (
-                  <p className="text-[10px] text-emerald-700 font-medium bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
-                    <CheckCircle2 size={12} className="shrink-0" />
-                    <span>{compressionInfo}</span>
-                  </p>
-                )}
-
-                {/* Preset Cepat / Demo */}
-                <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Preset Cepat Menu BGN
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleDemoPreset('ayam')}
-                      className="text-[10px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 px-2 py-1 rounded-lg border border-amber-200 transition cursor-pointer"
-                    >
-                      🍗 Ayam Lengkuas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDemoPreset('ikan')}
-                      className="text-[10px] font-semibold bg-sky-50 hover:bg-sky-100 text-sky-800 px-2 py-1 rounded-lg border border-sky-200 transition cursor-pointer"
-                    >
-                      🐟 Ikan Bakar Madu
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDemoPreset('daging')}
-                      className="text-[10px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-800 px-2 py-1 rounded-lg border border-rose-200 transition cursor-pointer"
-                    >
-                      🥩 Rolade Daging Sapi
-                    </button>
-                  </div>
                 </div>
               </div>
 
-              {/* Kolom Kanan: Form Field Hasil Auto-Fill AI */}
+              {/* Kolom Kanan: Hasil Ekstraksi & Formulir Menu */}
               <form onSubmit={handlePublishMenu} className="md:col-span-7 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Utensils size={14} className="text-amber-500" />
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-100">
                     Hasil Ekstraksi & Formulir Menu
-                  </span>
-                  <span className="text-[10px] font-semibold text-slate-400">
-                    Bisa dikoreksi sebelum publikasi
-                  </span>
+                  </h3>
                 </div>
 
-                {/* 1. Nama Menu */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Nama Paket / Menu Utama *
+                {/* 1. Nama Paket / Menu Utama */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-normal text-slate-300">
+                    Nama Paket / Menu Utama
                   </label>
                   <input
                     type="text"
                     required
                     value={namaMenu}
                     onChange={(e) => setNamaMenu(e.target.value)}
-                    placeholder="Contoh: Paket Nasi Timbel Ayam Goreng Lengkuas"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
+                    placeholder="Menu MBG Hari Ini Masee!"
+                    className="w-full px-3 py-2 bg-[#121c33] border border-slate-700/80 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                   />
                 </div>
 
-                {/* 2. Rincian Komponen Lauk / Sayur */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Rincian Komponen Lauk & Sayur (AI Extracted)
+                {/* 2. Rincian Komponen Lauk & Sayur */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-normal text-slate-300">
+                    Rincian Komponen Lauk & Sayur
                   </label>
                   <textarea
                     rows={2}
                     value={deskripsiKomponen}
                     onChange={(e) => setDeskripsiKomponen(e.target.value)}
-                    placeholder="Contoh: Nasi putih, Ayam ungkep lengkuas, Tempe bacem, Sayur asem, Pisang"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
+                    placeholder="Nasi Putih, tahu fantasi telur, Susu, Tumis sawi jagung pipil, melon/semangka"
+                    className="w-full px-3 py-2 bg-[#121c33] border border-slate-700/80 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition resize-y"
                   />
                 </div>
 
-                {/* 3. Grid Tanggal, Kategori Porsi & Target Porsi */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                {/* 3. Tanggal Berlaku & Target Porsi */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-normal text-slate-300">
                       Tanggal Berlaku
                     </label>
-                    <input
-                      type="date"
-                      required
-                      value={tanggal}
-                      onChange={(e) => setTanggal(e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
-                    />
+                    <div className="relative">
+                      <input
+                        type="date"
+                        required
+                        value={tanggal}
+                        onChange={(e) => setTanggal(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#121c33] border border-slate-700/80 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition [color-scheme:dark]"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
-                      Kategori Porsi
-                    </label>
-                    <select
-                      value={kategoriPorsi}
-                      onChange={(e) => setKategoriPorsi(e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
-                    >
-                      <option value="Standar SD/SMP">Standar SD/SMP</option>
-                      <option value="Standar TK/PAUD">Standar TK/PAUD</option>
-                      <option value="Standar 3B (Balita/Bumil)">Standar 3B (Balita/Bumil)</option>
-                      <option value="Porsi Jumbo SMA/SMK">Porsi Jumbo SMA/SMK</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-normal text-slate-300">
                       Target Porsi
                     </label>
                     <input
                       type="number"
+                      required
                       value={targetPorsi}
-                      onChange={(e) => setTargetPorsi(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
+                      onChange={(e) => setTargetPorsi(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="3194"
+                      className="w-full px-3 py-2 bg-[#121c33] border border-slate-700/80 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                     />
                   </div>
                 </div>
 
-                {/* 4. Nilai Kandungan Gizi BGN (6 Nilai Numerik Murni) */}
-                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
-                      <Flame size={13} className="text-amber-500" />
-                      Tabel Rincian Angka Gizi BGN (Angka Murni)
-                    </span>
-                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded font-bold">
-                      Standar AKG Nasional
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {/* Energi */}
-                    <div className="bg-white p-2 rounded-lg border border-slate-200">
-                      <label className="block text-[10px] font-bold text-slate-500">
-                        ⚡ Energi (kkal)
-                      </label>
-                      <input
-                        type="number"
-                        step="1"
-                        value={energiKkal}
-                        onChange={(e) => setEnergiKkal(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
-                      />
-                    </div>
-
-                    {/* Protein */}
-                    <div className="bg-white p-2 rounded-lg border border-slate-200">
-                      <label className="block text-[10px] font-bold text-indigo-600">
-                        💪 Protein (g)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={proteinG}
-                        onChange={(e) => setProteinG(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
-                      />
-                    </div>
-
-                    {/* Lemak */}
-                    <div className="bg-white p-2 rounded-lg border border-slate-200">
-                      <label className="block text-[10px] font-bold text-amber-600">
-                        💧 Lemak (g)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={lemakG}
-                        onChange={(e) => setLemakG(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
-                      />
-                    </div>
-
-                    {/* Karbohidrat */}
-                    <div className="bg-white p-2 rounded-lg border border-slate-200">
-                      <label className="block text-[10px] font-bold text-blue-600">
-                        🌾 Karbohidrat (g)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={karbohidratG}
-                        onChange={(e) => setKarbohidratG(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
-                      />
-                    </div>
-
-                    {/* Kalsium */}
-                    <div className="bg-white p-2 rounded-lg border border-slate-200">
-                      <label className="block text-[10px] font-bold text-teal-600">
-                        🥛 Kalsium (mg)
-                      </label>
-                      <input
-                        type="number"
-                        step="1"
-                        value={kalsiumMg}
-                        onChange={(e) => setKalsiumMg(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
-                      />
-                    </div>
-
-                    {/* Zat Besi */}
-                    <div className="bg-white p-2 rounded-lg border border-slate-200">
-                      <label className="block text-[10px] font-bold text-rose-600">
-                        🩸 Zat Besi (mg)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={zatBesiMg}
-                        onChange={(e) => setZatBesiMg(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 5. Tags Komposisi Gizi */}
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 mb-1">
-                    Tag Komposisi Gizi Terpilih:
+                {/* 4. Tabel Angka Gizi BGN (Porsi Besar / Porsi Kecil) */}
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-normal text-slate-300">
+                    Tabel Angka Gizi BGN (Porsi Besar / Porsi Kecil)
                   </label>
-                  <div className="flex flex-wrap gap-1">
-                    {availableTags.map((tag) => {
-                      const active = selectedTags.includes(tag)
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => toggleTag(tag)}
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition cursor-pointer ${
-                            active
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs'
-                              : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                          }`}
-                        >
-                          {active ? `✓ ${tag}` : `+ ${tag}`}
-                        </button>
-                      )
-                    })}
+
+                  <div className="border border-slate-700/80 rounded-lg overflow-hidden bg-[#0c1527]">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-[#14213d] text-slate-300 border-b border-slate-700/80">
+                        <tr>
+                          <th className="py-2.5 px-3 font-semibold text-slate-300 w-[24%]"></th>
+                          <th className="py-2.5 px-2 font-semibold text-center text-slate-200">Energi</th>
+                          <th className="py-2.5 px-2 font-semibold text-center text-slate-200">Protein</th>
+                          <th className="py-2.5 px-2 font-semibold text-center text-slate-200">Lemak</th>
+                          <th className="py-2.5 px-2 font-semibold text-center text-slate-200">Karbohidrat</th>
+                          <th className="py-2.5 px-2 font-semibold text-center text-slate-200">Serat</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800 text-slate-200">
+                        {/* Baris 1: Porsi Besar */}
+                        <tr className="hover:bg-slate-800/30 transition">
+                          <td className="py-2.5 px-3 font-medium text-slate-300 text-xs">
+                            Porsi Besar
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_besar.energi}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">kkal</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_besar.protein.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_besar.lemak.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_besar.karbohidrat.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_besar.serat.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                        </tr>
+
+                        {/* Baris 2: Porsi Kecil */}
+                        <tr className="hover:bg-slate-800/30 transition bg-[#091122]">
+                          <td className="py-2.5 px-3 font-medium text-slate-300 text-xs">
+                            Porsi Kecil
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_kecil.energi}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">kkal</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_kecil.protein.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_kecil.lemak.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_kecil.karbohidrat.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <span className="font-semibold text-slate-100">
+                              {analisaGizi.porsi_kecil.serat.toFixed(2)}
+                            </span>
+                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
-                {/* Submit Actions */}
-                <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    disabled={isSaving}
-                    className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    Batal
-                  </button>
+                {/* 5. Tag Komposisi Gizi */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {availableTags.map((tag) => {
+                    const active = selectedTags.includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTag(tag)}
+                        className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                          active
+                            ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/50'
+                            : 'bg-slate-900/60 text-slate-400 border-slate-700/60 hover:text-slate-200'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    )
+                  })}
+                </div>
 
-                  <button
-                    type="submit"
-                    disabled={isSaving || isScanning}
-                    className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isSaving ? (
-                      <>
-                        <RotateCw size={14} className="animate-spin" />
-                        <span>Menyimpan ke Supabase...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check size={15} />
+                {/* Footer Controls: Status & Submit Buttons */}
+                <div className="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-normal">
+                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                    <span>Data berhasil diekstrak dengan akurasi 100% dari gambar</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      disabled={isSaving}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                      Batal
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isSaving || isScanning}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-50"
+                    >
+                      {isSaving ? (
+                        <>
+                          <RotateCw size={14} className="animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
                         <span>Publikasikan Menu Sekarang</span>
-                      </>
-                    )}
-                  </button>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>

@@ -12,7 +12,8 @@ import {
   saveMenuHariIniDB, 
   fetchMenuHistoryDB, 
   type MenuHarianDB,
-  type KandunganGiziBGN
+  type KandunganGiziBGN,
+  type AnalisaGiziBGN
 } from '@/lib/data-helpers'
 import AiMenuScannerModal from '@/components/AiMenuScannerModal'
 
@@ -39,6 +40,9 @@ export default function KelolaMenuHarianPage() {
   const [karbohidratG, setKarbohidratG] = useState<number | ''>(85.0)
   const [kalsiumMg, setKalsiumMg] = useState<number | ''>(150)
   const [zatBesiMg, setZatBesiMg] = useState<number | ''>(3.2)
+
+  // Tabel Gizi 2 Baris BGN (Porsi Besar / Porsi Kecil)
+  const [analisaGizi, setAnalisaGizi] = useState<AnalisaGiziBGN | null>(null)
 
   // Active Published Menu from DB
   const [currentMenuDb, setCurrentMenuDb] = useState<MenuHarianDB | null>(null)
@@ -95,6 +99,9 @@ export default function KelolaMenuHarianPage() {
       if (data.catatan) setCatatanMenu(data.catatan)
       if (data.deskripsi_komponen) setDeskripsiKomponen(data.deskripsi_komponen)
       if (data.kategori_porsi) setKategoriPorsi(data.kategori_porsi)
+      if (data.analisa_gizi) {
+        setAnalisaGizi(data.analisa_gizi)
+      }
       if (data.kandungan_gizi) {
         setEnergiKkal(data.kandungan_gizi.energi_kkal ?? 650)
         setProteinG(data.kandungan_gizi.protein_g ?? 24.5)
@@ -142,13 +149,18 @@ export default function KelolaMenuHarianPage() {
 
       img.onload = () => {
         URL.revokeObjectURL(url)
-        const maxWidth = 1350
+        const maxDimension = 2000
         let width = img.width
         let height = img.height
 
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width)
-          width = maxWidth
+        if (width > maxDimension || height > maxDimension) {
+          if (width >= height) {
+            height = Math.round((height * maxDimension) / width)
+            width = maxDimension
+          } else {
+            width = Math.round((width * maxDimension) / height)
+            height = maxDimension
+          }
         }
 
         const canvas = document.createElement('canvas')
@@ -174,12 +186,12 @@ export default function KelolaMenuHarianPage() {
             const compSizeKB = Math.round(blob.size / 1024)
             const compSizeStr = blob.size >= 1024 * 1024 ? `${(blob.size / (1024 * 1024)).toFixed(2)} MB` : `${compSizeKB} KB`
             const cleanName = (file.name.substring(0, file.name.lastIndexOf('.')) || 'menu').replace(/[^a-zA-Z0-9]/g, '_')
-            const filename = `menu_${Date.now()}_${cleanName}.webp`
+            const filename = `menu_${Date.now()}_${cleanName}.jpg`
 
             resolve({ blob, filename, origSizeStr, compSizeStr })
           },
-          'image/webp',
-          0.80
+          'image/jpeg',
+          0.90
         )
       }
 
@@ -289,9 +301,22 @@ export default function KelolaMenuHarianPage() {
           const aiJson = await aiRes.json()
           if (aiRes.ok && aiJson.success && aiJson.data) {
             const result = aiJson.data
-            if (result.nama_menu) setNamaMenu(result.nama_menu)
-            if (result.deskripsi_komponen) setDeskripsiKomponen(result.deskripsi_komponen)
+            if (result.judul_poster || result.nama_menu) setNamaMenu(result.judul_poster || result.nama_menu)
+            if (Array.isArray(result.menu_items) && result.menu_items.length > 0) {
+              setDeskripsiKomponen(result.menu_items.join(', '))
+            } else if (result.deskripsi_komponen) {
+              setDeskripsiKomponen(result.deskripsi_komponen)
+            }
             if (result.kategori_porsi) setKategoriPorsi(result.kategori_porsi)
+            if (result.jumlah_penerima || result.target_porsi) {
+              setTargetPorsi(Number(result.jumlah_penerima || result.target_porsi))
+            }
+            if (result.tanggal) setTanggal(result.tanggal)
+
+            if (result.analisa_gizi) {
+              setAnalisaGizi(result.analisa_gizi)
+            }
+
             if (result.kandungan_gizi) {
               const g = result.kandungan_gizi
               if (g.energi_kkal !== undefined) {
@@ -384,6 +409,8 @@ export default function KelolaMenuHarianPage() {
         foto: fotoUrl || '',
         deskripsi_komponen: deskripsiKomponen.trim(),
         kandungan_gizi: giziPayload,
+        analisa_gizi: analisaGizi || undefined,
+        menu_items: deskripsiKomponen.split(/,|\n/).map((s) => s.trim()).filter(Boolean),
         kategori_porsi: kategoriPorsi
       }
 
@@ -569,45 +596,84 @@ export default function KelolaMenuHarianPage() {
                 )}
               </div>
 
-              {/* 6 Grid Gizi BGN */}
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
-                  <div className="text-[10px] text-slate-300 uppercase font-bold">Energi</div>
-                  <div className="text-sm font-black text-amber-300">
-                    {currentMenuDb.kandungan_gizi?.energi_kkal || 650} <span className="text-[10px] font-normal">kkal</span>
+              {/* Tabel Angka Gizi BGN 2 Baris jika analisa_gizi tersedia, atau 6 Grid fallback */}
+              {currentMenuDb.analisa_gizi ? (
+                <div className="border border-white/10 rounded-xl overflow-hidden bg-white/5 backdrop-blur-xs">
+                  <div className="px-3 py-1.5 bg-white/10 text-[10px] font-bold text-amber-300 uppercase tracking-wide border-b border-white/10 flex items-center justify-between">
+                    <span>Tabel Angka Gizi BGN (Porsi Besar / Porsi Kecil)</span>
+                    <span className="text-[9px] text-emerald-300">Standar BGN Pasuruan</span>
+                  </div>
+                  <table className="w-full text-xs text-left">
+                    <thead className="text-[10px] uppercase text-slate-300 bg-white/5 border-b border-white/10">
+                      <tr>
+                        <th className="py-2 px-2.5 font-bold">Porsi</th>
+                        <th className="py-2 px-2 font-bold text-center">Energi</th>
+                        <th className="py-2 px-2 font-bold text-center">Protein</th>
+                        <th className="py-2 px-2 font-bold text-center">Lemak</th>
+                        <th className="py-2 px-2 font-bold text-center">Karbohidrat</th>
+                        <th className="py-2 px-2 font-bold text-center">Serat</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10 text-slate-200">
+                      <tr>
+                        <td className="py-2 px-2.5 font-bold text-amber-300">Porsi Besar</td>
+                        <td className="py-2 px-2 text-center font-bold text-white">{currentMenuDb.analisa_gizi.porsi_besar.energi} <span className="text-[10px] text-slate-400 font-normal">kkal</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-indigo-200">{currentMenuDb.analisa_gizi.porsi_besar.protein.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-amber-200">{currentMenuDb.analisa_gizi.porsi_besar.lemak.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-sky-200">{currentMenuDb.analisa_gizi.porsi_besar.karbohidrat.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-emerald-300">{currentMenuDb.analisa_gizi.porsi_besar.serat.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                      </tr>
+                      <tr className="bg-white/5">
+                        <td className="py-2 px-2.5 font-bold text-amber-300">Porsi Kecil</td>
+                        <td className="py-2 px-2 text-center font-bold text-white">{currentMenuDb.analisa_gizi.porsi_kecil.energi} <span className="text-[10px] text-slate-400 font-normal">kkal</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-indigo-200">{currentMenuDb.analisa_gizi.porsi_kecil.protein.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-amber-200">{currentMenuDb.analisa_gizi.porsi_kecil.lemak.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-sky-200">{currentMenuDb.analisa_gizi.porsi_kecil.karbohidrat.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                        <td className="py-2 px-2 text-center font-bold text-emerald-300">{currentMenuDb.analisa_gizi.porsi_kecil.serat.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">gr</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                    <div className="text-[10px] text-slate-300 uppercase font-bold">Energi</div>
+                    <div className="text-sm font-black text-amber-300">
+                      {currentMenuDb.kandungan_gizi?.energi_kkal || 650} <span className="text-[10px] font-normal">kkal</span>
+                    </div>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                    <div className="text-[10px] text-slate-300 uppercase font-bold">Protein</div>
+                    <div className="text-sm font-black text-indigo-300">
+                      {currentMenuDb.kandungan_gizi?.protein_g ?? 24.5} <span className="text-[10px] font-normal">g</span>
+                    </div>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                    <div className="text-[10px] text-slate-300 uppercase font-bold">Lemak</div>
+                    <div className="text-sm font-black text-amber-200">
+                      {currentMenuDb.kandungan_gizi?.lemak_g ?? 18.2} <span className="text-[10px] font-normal">g</span>
+                    </div>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                    <div className="text-[10px] text-slate-300 uppercase font-bold">Karbo</div>
+                    <div className="text-sm font-black text-sky-300">
+                      {currentMenuDb.kandungan_gizi?.karbohidrat_g ?? 85.0} <span className="text-[10px] font-normal">g</span>
+                    </div>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                    <div className="text-[10px] text-slate-300 uppercase font-bold">Kalsium</div>
+                    <div className="text-sm font-black text-teal-300">
+                      {currentMenuDb.kandungan_gizi?.kalsium_mg ?? 150} <span className="text-[10px] font-normal">mg</span>
+                    </div>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                    <div className="text-[10px] text-slate-300 uppercase font-bold">Zat Besi</div>
+                    <div className="text-sm font-black text-rose-300">
+                      {currentMenuDb.kandungan_gizi?.zat_besi_mg ?? 3.2} <span className="text-[10px] font-normal">mg</span>
+                    </div>
                   </div>
                 </div>
-                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
-                  <div className="text-[10px] text-slate-300 uppercase font-bold">Protein</div>
-                  <div className="text-sm font-black text-indigo-300">
-                    {currentMenuDb.kandungan_gizi?.protein_g ?? 24.5} <span className="text-[10px] font-normal">g</span>
-                  </div>
-                </div>
-                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
-                  <div className="text-[10px] text-slate-300 uppercase font-bold">Lemak</div>
-                  <div className="text-sm font-black text-amber-200">
-                    {currentMenuDb.kandungan_gizi?.lemak_g ?? 18.2} <span className="text-[10px] font-normal">g</span>
-                  </div>
-                </div>
-                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
-                  <div className="text-[10px] text-slate-300 uppercase font-bold">Karbo</div>
-                  <div className="text-sm font-black text-sky-300">
-                    {currentMenuDb.kandungan_gizi?.karbohidrat_g ?? 85.0} <span className="text-[10px] font-normal">g</span>
-                  </div>
-                </div>
-                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
-                  <div className="text-[10px] text-slate-300 uppercase font-bold">Kalsium</div>
-                  <div className="text-sm font-black text-teal-300">
-                    {currentMenuDb.kandungan_gizi?.kalsium_mg ?? 150} <span className="text-[10px] font-normal">mg</span>
-                  </div>
-                </div>
-                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
-                  <div className="text-[10px] text-slate-300 uppercase font-bold">Zat Besi</div>
-                  <div className="text-sm font-black text-rose-300">
-                    {currentMenuDb.kandungan_gizi?.zat_besi_mg ?? 3.2} <span className="text-[10px] font-normal">mg</span>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Tag Chips */}
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -1254,8 +1320,45 @@ export default function KelolaMenuHarianPage() {
                   </p>
                 )}
 
-                {/* 6 Grid Gizi BGN */}
-                {previewModalMenu.kandungan_gizi && (
+                {/* Tabel Gizi BGN 2 Baris jika analisa_gizi tersedia, atau 6 Grid fallback */}
+                {previewModalMenu.analisa_gizi ? (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                    <div className="px-3 py-1 bg-slate-100 text-[10px] font-bold text-slate-700 uppercase tracking-wide border-b border-slate-200 flex items-center justify-between">
+                      <span>Tabel Angka Gizi BGN (Porsi Besar / Porsi Kecil)</span>
+                      <span className="text-[9px] text-emerald-700 font-bold">Standar BGN Pasuruan</span>
+                    </div>
+                    <table className="w-full text-xs text-left">
+                      <thead className="text-[10px] uppercase text-slate-600 bg-slate-100/70 border-b border-slate-200">
+                        <tr>
+                          <th className="py-1.5 px-2.5 font-bold">Porsi</th>
+                          <th className="py-1.5 px-2 font-bold text-center">Energi</th>
+                          <th className="py-1.5 px-2 font-bold text-center">Protein</th>
+                          <th className="py-1.5 px-2 font-bold text-center">Lemak</th>
+                          <th className="py-1.5 px-2 font-bold text-center">Karbohidrat</th>
+                          <th className="py-1.5 px-2 font-bold text-center">Serat</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-slate-800">
+                        <tr>
+                          <td className="py-1.5 px-2.5 font-bold text-slate-900">Porsi Besar</td>
+                          <td className="py-1.5 px-2 text-center font-bold text-slate-900">{previewModalMenu.analisa_gizi.porsi_besar.energi} <span className="text-[10px] text-slate-500 font-normal">kkal</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-indigo-700">{previewModalMenu.analisa_gizi.porsi_besar.protein.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-amber-700">{previewModalMenu.analisa_gizi.porsi_besar.lemak.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-sky-700">{previewModalMenu.analisa_gizi.porsi_besar.karbohidrat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-emerald-700">{previewModalMenu.analisa_gizi.porsi_besar.serat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                        </tr>
+                        <tr className="bg-white">
+                          <td className="py-1.5 px-2.5 font-bold text-slate-900">Porsi Kecil</td>
+                          <td className="py-1.5 px-2 text-center font-bold text-slate-900">{previewModalMenu.analisa_gizi.porsi_kecil.energi} <span className="text-[10px] text-slate-500 font-normal">kkal</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-indigo-700">{previewModalMenu.analisa_gizi.porsi_kecil.protein.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-amber-700">{previewModalMenu.analisa_gizi.porsi_kecil.lemak.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-sky-700">{previewModalMenu.analisa_gizi.porsi_kecil.karbohidrat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          <td className="py-1.5 px-2 text-center font-bold text-emerald-700">{previewModalMenu.analisa_gizi.porsi_kecil.serat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : previewModalMenu.kandungan_gizi ? (
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-1.5 text-center">
                       <div className="text-[9px] font-bold text-blue-600">ENERGI</div>
@@ -1282,7 +1385,7 @@ export default function KelolaMenuHarianPage() {
                       <div className="text-xs font-black text-rose-900">{previewModalMenu.kandungan_gizi.zat_besi_mg}mg</div>
                     </div>
                   </div>
-                )}
+                ) : null}
 
                 <div className="flex flex-wrap gap-1.5 pt-2">
                   {(previewModalMenu.komposisi_gizi || []).map((tag, idx) => (

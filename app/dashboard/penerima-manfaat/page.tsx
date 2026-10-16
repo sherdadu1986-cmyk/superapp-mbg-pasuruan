@@ -1384,45 +1384,84 @@ export default function BerandaOperasionalPage() {
                     </div>
                   )}
 
-                  {/* Rincian Angka Nilai Gizi BGN (6 Nilai Numerik) */}
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
-                    <div className="bg-blue-50/80 border border-blue-200/80 rounded-lg p-1.5 text-center shadow-2xs">
-                      <div className="text-[9px] font-bold text-blue-600 uppercase">Energi</div>
-                      <div className="text-xs font-black text-blue-900">
-                        {menuDb.kandungan_gizi?.energi_kkal || 650} <span className="text-[9px] font-normal">kkal</span>
+                  {/* Tabel Angka Nilai Gizi BGN (Porsi Besar / Porsi Kecil) atau 6 Grid fallback */}
+                  {menuDb.analisa_gizi ? (
+                    <div className="border border-emerald-100 rounded-xl overflow-hidden bg-emerald-50/30">
+                      <div className="px-3 py-1 bg-emerald-100/60 text-[10px] font-bold text-emerald-900 uppercase tracking-wide border-b border-emerald-200/60 flex items-center justify-between">
+                        <span>Tabel Angka Gizi BGN (Porsi Besar / Porsi Kecil)</span>
+                        <span className="text-[9px] text-emerald-700 font-bold">Standar BGN Pasuruan</span>
+                      </div>
+                      <table className="w-full text-xs text-left">
+                        <thead className="text-[10px] uppercase text-slate-600 bg-emerald-50/50 border-b border-emerald-100">
+                          <tr>
+                            <th className="py-1.5 px-2.5 font-bold">Porsi</th>
+                            <th className="py-1.5 px-2 font-bold text-center">Energi</th>
+                            <th className="py-1.5 px-2 font-bold text-center">Protein</th>
+                            <th className="py-1.5 px-2 font-bold text-center">Lemak</th>
+                            <th className="py-1.5 px-2 font-bold text-center">Karbohidrat</th>
+                            <th className="py-1.5 px-2 font-bold text-center">Serat</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-emerald-100/70 text-slate-800">
+                          <tr>
+                            <td className="py-1.5 px-2.5 font-bold text-slate-900">Porsi Besar</td>
+                            <td className="py-1.5 px-2 text-center font-bold text-slate-900">{menuDb.analisa_gizi.porsi_besar.energi} <span className="text-[10px] text-slate-500 font-normal">kkal</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-indigo-700">{menuDb.analisa_gizi.porsi_besar.protein.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-amber-700">{menuDb.analisa_gizi.porsi_besar.lemak.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-sky-700">{menuDb.analisa_gizi.porsi_besar.karbohidrat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-emerald-700">{menuDb.analisa_gizi.porsi_besar.serat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          </tr>
+                          <tr className="bg-white/70">
+                            <td className="py-1.5 px-2.5 font-bold text-slate-900">Porsi Kecil</td>
+                            <td className="py-1.5 px-2 text-center font-bold text-slate-900">{menuDb.analisa_gizi.porsi_kecil.energi} <span className="text-[10px] text-slate-500 font-normal">kkal</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-indigo-700">{menuDb.analisa_gizi.porsi_kecil.protein.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-amber-700">{menuDb.analisa_gizi.porsi_kecil.lemak.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-sky-700">{menuDb.analisa_gizi.porsi_kecil.karbohidrat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                            <td className="py-1.5 px-2 text-center font-bold text-emerald-700">{menuDb.analisa_gizi.porsi_kecil.serat.toFixed(2)} <span className="text-[10px] text-slate-500 font-normal">gr</span></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+                      <div className="bg-blue-50/80 border border-blue-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                        <div className="text-[9px] font-bold text-blue-600 uppercase">Energi</div>
+                        <div className="text-xs font-black text-blue-900">
+                          {menuDb.kandungan_gizi?.energi_kkal || 650} <span className="text-[9px] font-normal">kkal</span>
+                        </div>
+                      </div>
+                      <div className="bg-indigo-50/80 border border-indigo-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                        <div className="text-[9px] font-bold text-indigo-600 uppercase">Protein</div>
+                        <div className="text-xs font-black text-indigo-900">
+                          {menuDb.kandungan_gizi?.protein_g ?? 24.5} <span className="text-[9px] font-normal">g</span>
+                        </div>
+                      </div>
+                      <div className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                        <div className="text-[9px] font-bold text-amber-600 uppercase">Lemak</div>
+                        <div className="text-xs font-black text-amber-900">
+                          {menuDb.kandungan_gizi?.lemak_g ?? 18.2} <span className="text-[9px] font-normal">g</span>
+                        </div>
+                      </div>
+                      <div className="bg-cyan-50/80 border border-cyan-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                        <div className="text-[9px] font-bold text-cyan-600 uppercase">Karbo</div>
+                        <div className="text-xs font-black text-cyan-900">
+                          {menuDb.kandungan_gizi?.karbohidrat_g ?? 85.0} <span className="text-[9px] font-normal">g</span>
+                        </div>
+                      </div>
+                      <div className="bg-teal-50/80 border border-teal-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                        <div className="text-[9px] font-bold text-teal-600 uppercase">Kalsium</div>
+                        <div className="text-xs font-black text-teal-900">
+                          {menuDb.kandungan_gizi?.kalsium_mg ?? 150} <span className="text-[9px] font-normal">mg</span>
+                        </div>
+                      </div>
+                      <div className="bg-rose-50/80 border border-rose-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                        <div className="text-[9px] font-bold text-rose-600 uppercase">Zat Besi</div>
+                        <div className="text-xs font-black text-rose-900">
+                          {menuDb.kandungan_gizi?.zat_besi_mg ?? 3.2} <span className="text-[9px] font-normal">mg</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="bg-indigo-50/80 border border-indigo-200/80 rounded-lg p-1.5 text-center shadow-2xs">
-                      <div className="text-[9px] font-bold text-indigo-600 uppercase">Protein</div>
-                      <div className="text-xs font-black text-indigo-900">
-                        {menuDb.kandungan_gizi?.protein_g ?? 24.5} <span className="text-[9px] font-normal">g</span>
-                      </div>
-                    </div>
-                    <div className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-1.5 text-center shadow-2xs">
-                      <div className="text-[9px] font-bold text-amber-600 uppercase">Lemak</div>
-                      <div className="text-xs font-black text-amber-900">
-                        {menuDb.kandungan_gizi?.lemak_g ?? 18.2} <span className="text-[9px] font-normal">g</span>
-                      </div>
-                    </div>
-                    <div className="bg-cyan-50/80 border border-cyan-200/80 rounded-lg p-1.5 text-center shadow-2xs">
-                      <div className="text-[9px] font-bold text-cyan-600 uppercase">Karbo</div>
-                      <div className="text-xs font-black text-cyan-900">
-                        {menuDb.kandungan_gizi?.karbohidrat_g ?? 85.0} <span className="text-[9px] font-normal">g</span>
-                      </div>
-                    </div>
-                    <div className="bg-teal-50/80 border border-teal-200/80 rounded-lg p-1.5 text-center shadow-2xs">
-                      <div className="text-[9px] font-bold text-teal-600 uppercase">Kalsium</div>
-                      <div className="text-xs font-black text-teal-900">
-                        {menuDb.kandungan_gizi?.kalsium_mg ?? 150} <span className="text-[9px] font-normal">mg</span>
-                      </div>
-                    </div>
-                    <div className="bg-rose-50/80 border border-rose-200/80 rounded-lg p-1.5 text-center shadow-2xs">
-                      <div className="text-[9px] font-bold text-rose-600 uppercase">Zat Besi</div>
-                      <div className="text-xs font-black text-rose-900">
-                        {menuDb.kandungan_gizi?.zat_besi_mg ?? 3.2} <span className="text-[9px] font-normal">mg</span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Nutrisi Glass Chips */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
