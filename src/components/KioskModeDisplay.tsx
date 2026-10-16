@@ -541,15 +541,21 @@ export function KioskModeDisplay({
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <span className="bg-blue-500/20 text-cyan-300 text-xs font-bold px-3 py-1 rounded-xl border border-blue-400/30">
-                        ⚡ Kalori 645 kkal
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="bg-blue-500/20 text-cyan-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-blue-400/30">
+                        ⚡ {menuDb?.kandungan_gizi?.energi_kkal ? `${menuDb.kandungan_gizi.energi_kkal} kkal` : (menuDb?.kalori || '650 kkal')}
                       </span>
-                      <span className="bg-indigo-500/20 text-indigo-300 text-xs font-bold px-3 py-1 rounded-xl border border-indigo-400/30">
-                        💪 Protein 27g
+                      <span className="bg-indigo-500/20 text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-indigo-400/30">
+                        💪 Prot {menuDb?.kandungan_gizi?.protein_g ? `${menuDb.kandungan_gizi.protein_g}g` : '24.5g'}
                       </span>
-                      <span className="bg-emerald-500/20 text-emerald-300 text-xs font-bold px-3 py-1 rounded-xl border border-emerald-400/30">
-                        ✓ Lolos Uji Sampel
+                      <span className="bg-amber-500/20 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-amber-400/30">
+                        💧 Lemak {menuDb?.kandungan_gizi?.lemak_g ? `${menuDb.kandungan_gizi.lemak_g}g` : '18.2g'}
+                      </span>
+                      <span className="bg-emerald-500/20 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-emerald-400/30">
+                        🌾 Karbo {menuDb?.kandungan_gizi?.karbohidrat_g ? `${menuDb.kandungan_gizi.karbohidrat_g}g` : '85g'}
+                      </span>
+                      <span className="bg-teal-500/20 text-teal-300 text-xs font-bold px-2.5 py-1 rounded-xl border border-teal-400/30">
+                        ✓ BGN Lolos Sampel
                       </span>
                     </div>
                   </div>

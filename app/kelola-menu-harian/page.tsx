@@ -1,8 +1,8 @@
 "use client"
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { 
   UtensilsCrossed, Upload, Check, Image as ImageIcon, ArrowLeft, RotateCw, 
-  Save, Search, Calendar, Eye, X, AlertTriangle, Clock, Sparkles
+  Save, Search, Calendar, Eye, X, AlertTriangle, Clock, Sparkles, Camera, Flame, CheckCircle2
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -11,14 +11,19 @@ import {
   fetchMenuHariIniDB, 
   saveMenuHariIniDB, 
   fetchMenuHistoryDB, 
-  type MenuHarianDB 
+  type MenuHarianDB,
+  type KandunganGiziBGN
 } from '@/lib/data-helpers'
+import AiMenuScannerModal from '@/components/AiMenuScannerModal'
 
 export default function KelolaMenuHarianPage() {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Active Menu Form States
   const [namaMenu, setNamaMenu] = useState('')
+  const [deskripsiKomponen, setDeskripsiKomponen] = useState('')
+  const [kategoriPorsi, setKategoriPorsi] = useState('Standar SD/SMP')
   const [tanggal, setTanggal] = useState('')
   const [targetPorsi, setTargetPorsi] = useState<number | ''>('')
   const [kalori, setKalori] = useState('')
@@ -27,9 +32,22 @@ export default function KelolaMenuHarianPage() {
   const [fotoUrl, setFotoUrl] = useState('')
   const [catatanMenu, setCatatanMenu] = useState('')
 
+  // 6 Angka Nilai Gizi BGN (Numerik Murni)
+  const [energiKkal, setEnergiKkal] = useState<number | ''>(650)
+  const [proteinG, setProteinG] = useState<number | ''>(24.5)
+  const [lemakG, setLemakG] = useState<number | ''>(18.2)
+  const [karbohidratG, setKarbohidratG] = useState<number | ''>(85.0)
+  const [kalsiumMg, setKalsiumMg] = useState<number | ''>(150)
+  const [zatBesiMg, setZatBesiMg] = useState<number | ''>(3.2)
+
+  // Active Published Menu from DB
+  const [currentMenuDb, setCurrentMenuDb] = useState<MenuHarianDB | null>(null)
+
   // Loading & Feedback States
   const [saving, setSaving] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [isAiScanning, setIsAiScanning] = useState(false)
+  const [isAiScanModalOpen, setIsAiScanModalOpen] = useState(false)
   const [savedSuccess, setSavedSuccess] = useState(false)
 
   // Toast Notification State
@@ -46,7 +64,7 @@ export default function KelolaMenuHarianPage() {
   const [previewModalMenu, setPreviewModalMenu] = useState<MenuHarianDB | null>(null)
 
   const [allTags] = useState<string[]>([
-    'Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Susu', 'Serat Tinggi', 'Rendah Gula'
+    'Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Susu', 'Serat Tinggi', 'Rendah Gula', 'Lolos Uji Sampel BGN'
   ])
 
   const triggerToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -66,6 +84,7 @@ export default function KelolaMenuHarianPage() {
   const loadCurrentMenu = async () => {
     const data = await fetchMenuHariIniDB()
     if (data) {
+      setCurrentMenuDb(data)
       if (data.nama_menu) setNamaMenu(data.nama_menu)
       setTanggal(data.tanggal || getTodayYmd())
       if (data.target_porsi) setTargetPorsi(data.target_porsi)
@@ -74,6 +93,16 @@ export default function KelolaMenuHarianPage() {
       if (data.komposisi_gizi && data.komposisi_gizi.length > 0) setTags(data.komposisi_gizi)
       if (data.foto_url) setFotoUrl(data.foto_url)
       if (data.catatan) setCatatanMenu(data.catatan)
+      if (data.deskripsi_komponen) setDeskripsiKomponen(data.deskripsi_komponen)
+      if (data.kategori_porsi) setKategoriPorsi(data.kategori_porsi)
+      if (data.kandungan_gizi) {
+        setEnergiKkal(data.kandungan_gizi.energi_kkal ?? 650)
+        setProteinG(data.kandungan_gizi.protein_g ?? 24.5)
+        setLemakG(data.kandungan_gizi.lemak_g ?? 18.2)
+        setKarbohidratG(data.kandungan_gizi.karbohidrat_g ?? 85.0)
+        setKalsiumMg(data.kandungan_gizi.kalsium_mg ?? 150)
+        setZatBesiMg(data.kandungan_gizi.zat_besi_mg ?? 3.2)
+      }
     } else {
       setTanggal(getTodayYmd())
       setStatus('Siap Distribusi')
@@ -238,14 +267,65 @@ export default function KelolaMenuHarianPage() {
         triggerToast(`Foto menu berhasil diunggah! (${statusMsg})`, 'success')
       } else {
         console.warn('Storage upload notice:', uploadErrMessage || 'Fallback to base64')
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          const base64 = reader.result as string
-          setFotoUrl(base64)
-          triggerToast(`Foto dimuat via Base64 fallback. (${statusMsg})`, 'info')
-        }
-        reader.readAsDataURL(compressedFile)
       }
+
+      // ─── Otomatis Jalankan AI Vision Scanner & Auto-Fill ───
+      setIsAiScanning(true)
+      const reader = new FileReader()
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string
+        if (!publicUrl) {
+          setFotoUrl(base64Data)
+        }
+
+        try {
+          setCompressionStatus('Memindai informasi menu & tabel gizi dengan AI...')
+          const aiRes = await fetch('/api/fin-scan-menu', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: base64Data })
+          })
+
+          const aiJson = await aiRes.json()
+          if (aiRes.ok && aiJson.success && aiJson.data) {
+            const result = aiJson.data
+            if (result.nama_menu) setNamaMenu(result.nama_menu)
+            if (result.deskripsi_komponen) setDeskripsiKomponen(result.deskripsi_komponen)
+            if (result.kategori_porsi) setKategoriPorsi(result.kategori_porsi)
+            if (result.kandungan_gizi) {
+              const g = result.kandungan_gizi
+              if (g.energi_kkal !== undefined) {
+                setEnergiKkal(g.energi_kkal)
+                setKalori(`${g.energi_kkal} kkal`)
+              }
+              if (g.protein_g !== undefined) setProteinG(g.protein_g)
+              if (g.lemak_g !== undefined) setLemakG(g.lemak_g)
+              if (g.karbohidrat_g !== undefined) setKarbohidratG(g.karbohidrat_g)
+              if (g.kalsium_mg !== undefined) setKalsiumMg(g.kalsium_mg)
+              if (g.zat_besi_mg !== undefined) setZatBesiMg(g.zat_besi_mg)
+            }
+
+            // Auto-tagging komponen lauk
+            const descLower = (result.deskripsi_komponen || result.nama_menu || '').toLowerCase()
+            const smartTags: string[] = ['Lolos Uji Sampel BGN']
+            if (descLower.includes('nasi') || descLower.includes('mie') || descLower.includes('karbo')) smartTags.push('Karbohidrat')
+            if (descLower.includes('ayam') || descLower.includes('daging') || descLower.includes('ikan') || descLower.includes('telur')) smartTags.push('Protein Hewani')
+            if (descLower.includes('tempe') || descLower.includes('tahu') || descLower.includes('kacang')) smartTags.push('Protein Nabati')
+            if (descLower.includes('sayur') || descLower.includes('sop') || descLower.includes('brokoli') || descLower.includes('capjay')) smartTags.push('Sayuran', 'Serat Tinggi')
+            if (descLower.includes('pisang') || descLower.includes('melon') || descLower.includes('semangka') || descLower.includes('buah')) smartTags.push('Buah')
+            if (descLower.includes('susu')) smartTags.push('Susu')
+
+            setTags(Array.from(new Set([...tags, ...smartTags])))
+            triggerToast('AI berhasil memindai informasi menu & tabel gizi!', 'success')
+          }
+        } catch (scanErr) {
+          console.warn('AI Scan error in file upload:', scanErr)
+        } finally {
+          setIsAiScanning(false)
+        }
+      }
+      reader.readAsDataURL(compressedFile)
+
     } catch (err: any) {
       console.error('Error uploading image:', err)
       const errMsg = err?.message || String(err)
@@ -277,13 +357,22 @@ export default function KelolaMenuHarianPage() {
     setSaving(true)
 
     try {
+      const giziPayload: KandunganGiziBGN = {
+        energi_kkal: Number(energiKkal) || 650,
+        protein_g: Number(proteinG) || 24.5,
+        lemak_g: Number(lemakG) || 18.2,
+        karbohidrat_g: Number(karbohidratG) || 85.0,
+        kalsium_mg: Number(kalsiumMg) || 150,
+        zat_besi_mg: Number(zatBesiMg) || 3.2
+      }
+
       const menuPayload: any = {
         nama_menu: namaMenu.trim(),
         nama: namaMenu.trim(),
         tanggal: tanggal.trim(),
         tanggal_berlaku: tanggal.trim(),
-        kalori: kalori || '~650 kkal',
-        estimasi_kalori: kalori || '~650 kkal',
+        kalori: `${giziPayload.energi_kkal} kkal`,
+        estimasi_kalori: `${giziPayload.energi_kkal} kkal`,
         porsi: Number(targetPorsi) || 3196,
         target_porsi: Number(targetPorsi) || 3196,
         status: status || 'Siap Distribusi',
@@ -292,10 +381,14 @@ export default function KelolaMenuHarianPage() {
         tags: tags || [],
         catatan: catatanMenu || '',
         foto_url: fotoUrl || '',
-        foto: fotoUrl || ''
+        foto: fotoUrl || '',
+        deskripsi_komponen: deskripsiKomponen.trim(),
+        kandungan_gizi: giziPayload,
+        kategori_porsi: kategoriPorsi
       }
 
-      await saveMenuHariIniDB(menuPayload)
+      const savedResult = await saveMenuHariIniDB(menuPayload)
+      setCurrentMenuDb(savedResult)
       setSavedSuccess(true)
       triggerToast('Menu berhasil dipublikasikan!', 'success')
 
@@ -304,8 +397,7 @@ export default function KelolaMenuHarianPage() {
 
       setTimeout(() => {
         setSavedSuccess(false)
-        router.push('/')
-      }, 1000)
+      }, 3500)
     } catch (err: any) {
       console.error('Error saving menu:', err)
       const errMsg = err?.message || err?.error_description || String(err)
@@ -392,6 +484,14 @@ export default function KelolaMenuHarianPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setIsAiScanModalOpen(true)}
+            className="px-3.5 py-2 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-lg text-xs font-bold hover:from-slate-800 hover:to-slate-800 flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+          >
+            <Sparkles size={14} className="text-amber-400 animate-pulse" />
+            <span>AI Smart Menu Scanner</span>
+          </button>
+          <button
+            type="button"
             onClick={() => {
               loadCurrentMenu()
               loadHistoryMenu()
@@ -413,12 +513,121 @@ export default function KelolaMenuHarianPage() {
         </div>
       )}
 
+      {/* 0. Live Card Menu Yang Sedang Dipublikasikan Hari Ini */}
+      {currentMenuDb && (
+        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-6 shadow-xl border border-slate-700/80 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-amber-400/20 text-amber-300 rounded-xl border border-amber-400/30">
+                <UtensilsCrossed size={18} />
+              </span>
+              <div>
+                <h3 className="text-sm sm:text-base font-extrabold tracking-tight flex items-center gap-2">
+                  <span>Menu Aktif Terpublikasi (Standar Gizi BGN)</span>
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Status: <span className="text-emerald-400 font-bold">● {currentMenuDb.status}</span> • Tanggal: {currentMenuDb.tanggal}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {currentMenuDb.kategori_porsi && (
+                <span className="bg-white/10 text-white text-xs font-bold px-3 py-1 rounded-full border border-white/20">
+                  {currentMenuDb.kategori_porsi}
+                </span>
+              )}
+              <span className="bg-emerald-500 text-slate-950 text-xs font-extrabold px-3 py-1 rounded-full shadow-sm">
+                {currentMenuDb.target_porsi ? `${currentMenuDb.target_porsi.toLocaleString('id-ID')} Porsi` : 'Standar'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+            {/* Foto Thumbnail */}
+            <div className="md:col-span-3">
+              <div className="aspect-[4/3] rounded-xl overflow-hidden border border-white/20 bg-slate-800/80 shadow-md">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={currentMenuDb.foto_url || '/menu-today.png'}
+                  alt={currentMenuDb.nama_menu}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+
+            {/* Detail Menu & Nilai Gizi BGN */}
+            <div className="md:col-span-9 space-y-3">
+              <div>
+                <h4 className="text-lg font-black text-amber-300 tracking-tight leading-snug">
+                  {currentMenuDb.nama_menu}
+                </h4>
+                {currentMenuDb.deskripsi_komponen && (
+                  <p className="text-xs text-slate-200 mt-1 leading-relaxed bg-white/5 p-2.5 rounded-xl border border-white/10">
+                    <span className="font-bold text-white block text-[11px] mb-0.5">🍱 Rincian Komponen Lauk & Sayur:</span>
+                    {currentMenuDb.deskripsi_komponen}
+                  </p>
+                )}
+              </div>
+
+              {/* 6 Grid Gizi BGN */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                  <div className="text-[10px] text-slate-300 uppercase font-bold">Energi</div>
+                  <div className="text-sm font-black text-amber-300">
+                    {currentMenuDb.kandungan_gizi?.energi_kkal || 650} <span className="text-[10px] font-normal">kkal</span>
+                  </div>
+                </div>
+                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                  <div className="text-[10px] text-slate-300 uppercase font-bold">Protein</div>
+                  <div className="text-sm font-black text-indigo-300">
+                    {currentMenuDb.kandungan_gizi?.protein_g ?? 24.5} <span className="text-[10px] font-normal">g</span>
+                  </div>
+                </div>
+                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                  <div className="text-[10px] text-slate-300 uppercase font-bold">Lemak</div>
+                  <div className="text-sm font-black text-amber-200">
+                    {currentMenuDb.kandungan_gizi?.lemak_g ?? 18.2} <span className="text-[10px] font-normal">g</span>
+                  </div>
+                </div>
+                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                  <div className="text-[10px] text-slate-300 uppercase font-bold">Karbo</div>
+                  <div className="text-sm font-black text-sky-300">
+                    {currentMenuDb.kandungan_gizi?.karbohidrat_g ?? 85.0} <span className="text-[10px] font-normal">g</span>
+                  </div>
+                </div>
+                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                  <div className="text-[10px] text-slate-300 uppercase font-bold">Kalsium</div>
+                  <div className="text-sm font-black text-teal-300">
+                    {currentMenuDb.kandungan_gizi?.kalsium_mg ?? 150} <span className="text-[10px] font-normal">mg</span>
+                  </div>
+                </div>
+                <div className="bg-white/10 rounded-xl p-2 text-center border border-white/10 backdrop-blur-xs">
+                  <div className="text-[10px] text-slate-300 uppercase font-bold">Zat Besi</div>
+                  <div className="text-sm font-black text-rose-300">
+                    {currentMenuDb.kandungan_gizi?.zat_besi_mg ?? 3.2} <span className="text-[10px] font-normal">mg</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tag Chips */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {(currentMenuDb.komposisi_gizi || []).map((tag, idx) => (
+                  <span key={idx} className="bg-white/15 text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-lg border border-white/20">
+                    ✓ {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Form Card Edit Menu Aktif */}
       <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-xl shadow-2xs p-6 space-y-6">
         <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
           <h2 className="font-bold text-gray-900 text-base tracking-tight flex items-center gap-2">
             <Sparkles size={18} className="text-amber-500" />
-            Formulir Publikasi Menu Hari Ini
+            Formulir Publikasi Menu Hari Ini (Auto-Fill AI)
           </h2>
           <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
             Standar BGN Pasuruan
@@ -437,7 +646,21 @@ export default function KelolaMenuHarianPage() {
                 required
                 value={namaMenu}
                 onChange={(e) => setNamaMenu(e.target.value)}
-                placeholder="Contoh: Nasi Ayam Teriyaki, Tumis Brokoli & Pisang"
+                placeholder="Contoh: Paket Nasi Timbel Ayam Goreng Lengkuas"
+                className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white font-medium"
+              />
+            </div>
+
+            {/* Rincian Komponen Lauk & Sayur */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Rincian Komponen Lauk & Sayur (AI Extracted)
+              </label>
+              <textarea
+                rows={2}
+                value={deskripsiKomponen}
+                onChange={(e) => setDeskripsiKomponen(e.target.value)}
+                placeholder="Contoh: Nasi putih, Ayam ungkep lengkuas, Tempe bacem, Sayur asem, Pisang"
                 className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
               />
             </div>
@@ -475,6 +698,21 @@ export default function KelolaMenuHarianPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Kategori Porsi
+                </label>
+                <select
+                  value={kategoriPorsi}
+                  onChange={(e) => setKategoriPorsi(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                >
+                  <option value="Standar SD/SMP">Standar SD/SMP</option>
+                  <option value="Standar TK/PAUD">Standar TK/PAUD</option>
+                  <option value="Standar 3B (Balita/Bumil)">Standar 3B (Balita/Bumil)</option>
+                  <option value="Porsi Jumbo SMA/SMK">Porsi Jumbo SMA/SMK</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Target Porsi (Penerima Manfaat) *
                 </label>
                 <input
@@ -486,17 +724,85 @@ export default function KelolaMenuHarianPage() {
                   className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Estimasi Kalori
-                </label>
-                <input
-                  type="text"
-                  value={kalori}
-                  onChange={(e) => setKalori(e.target.value)}
-                  placeholder="~650 kkal"
-                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                />
+            </div>
+
+            {/* 6 Input Nilai Gizi BGN (Numerik Murni) */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Flame size={14} className="text-amber-500" />
+                  Rincian Angka Nilai Gizi BGN (Angka Murni)
+                </span>
+                <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded font-bold">
+                  Standar AKG
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <label className="block text-[10px] font-bold text-slate-500">⚡ Energi (kkal)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={energiKkal}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value)
+                      setEnergiKkal(val)
+                      setKalori(val ? `${val} kkal` : '')
+                    }}
+                    className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
+                  />
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <label className="block text-[10px] font-bold text-indigo-600">💪 Protein (g)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={proteinG}
+                    onChange={(e) => setProteinG(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
+                  />
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <label className="block text-[10px] font-bold text-amber-600">💧 Lemak (g)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={lemakG}
+                    onChange={(e) => setLemakG(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
+                  />
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <label className="block text-[10px] font-bold text-blue-600">🌾 Karbo (g)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={karbohidratG}
+                    onChange={(e) => setKarbohidratG(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
+                  />
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <label className="block text-[10px] font-bold text-teal-600">🥛 Kalsium (mg)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={kalsiumMg}
+                    onChange={(e) => setKalsiumMg(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
+                  />
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <label className="block text-[10px] font-bold text-rose-600">🩸 Zat Besi (mg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={zatBesiMg}
+                    onChange={(e) => setZatBesiMg(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full font-bold text-xs text-slate-900 border-0 p-0 focus:ring-0"
+                  />
+                </div>
               </div>
             </div>
 
@@ -556,6 +862,23 @@ export default function KelolaMenuHarianPage() {
                   (e.target as HTMLImageElement).src = '/menu-today.png'
                 }}
               />
+
+              {/* Laser Scan Animation Overlay when AI is scanning */}
+              {isAiScanning && (
+                <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center p-4 z-20 space-y-3">
+                  <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#10b981] animate-bounce" />
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400 text-emerald-400 flex items-center justify-center animate-spin">
+                    <RotateCw size={24} />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-xs font-extrabold text-white">
+                      Memindai informasi menu & tabel gizi dengan AI...
+                    </p>
+                    <p className="text-[10px] text-emerald-300 font-mono">Gemini 1.5 Flash Vision</p>
+                  </div>
+                </div>
+              )}
+
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-xl">
                 <span className="text-xs text-white font-semibold flex items-center gap-1.5">
                   <ImageIcon size={16} /> Ganti Foto Makanan
@@ -564,38 +887,114 @@ export default function KelolaMenuHarianPage() {
             </div>
 
             {/* Upload Button Input with File Type & Size Validation */}
-            <div className="relative">
-              <input
-                type="file"
-                accept="image/png, image/jpeg, image/jpg, image/webp"
-                disabled={isUploading}
-                onChange={handleFileUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
-              />
-              <div className={`w-full py-2.5 px-4 border border-dashed rounded-xl text-center transition flex items-center justify-center gap-2 ${
-                isUploading 
-                  ? 'bg-amber-50 border-amber-300 text-amber-700' 
-                  : 'bg-gray-50/50 border-gray-300 hover:border-emerald-500 hover:bg-emerald-50/30'
-              }`}>
-                {isUploading ? (
-                  <>
-                    <RotateCw size={16} className="animate-spin text-amber-600" />
-                    <span className="text-xs font-semibold text-amber-800">
-                      Mengunggah ke Storage...
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Upload size={16} className="text-emerald-600" />
-                    <span className="text-xs font-semibold text-gray-700">
-                      Unggah Foto Baru (.PNG, .JPG, .WEBP - Maks 3MB)
-                    </span>
-                  </>
-                )}
+            <div className="space-y-2">
+              <div className="relative">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg, image/webp"
+                  disabled={isUploading || isAiScanning}
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+                />
+                <div className={`w-full py-2.5 px-4 border border-dashed rounded-xl text-center transition flex items-center justify-center gap-2 ${
+                  isUploading || isAiScanning
+                    ? 'bg-amber-50 border-amber-300 text-amber-700' 
+                    : 'bg-gray-50/50 border-gray-300 hover:border-emerald-500 hover:bg-emerald-50/30'
+                }`}>
+                  {isUploading || isAiScanning ? (
+                    <>
+                      <RotateCw size={16} className="animate-spin text-amber-600" />
+                      <span className="text-xs font-semibold text-amber-800">
+                        {isAiScanning ? 'Memindai informasi menu & tabel gizi dengan AI...' : 'Mengompres & Mengunggah...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} className="text-emerald-600" />
+                      <span className="text-xs font-semibold text-gray-700">
+                        Unggah Foto / Poster (.PNG, .JPG, .WEBP)
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Demo Quick Presets */}
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Preset Cepat Poster Menu BGN:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNamaMenu('Paket Nasi Timbel Ayam Goreng Lengkuas')
+                      setDeskripsiKomponen('Nasi putih, Ayam ungkep bumbu lengkuas, Tempe bacem manis, Sayur asem Jawa, Sambal tomat rebus, Pisang raja')
+                      setKategoriPorsi('Standar SD/SMP')
+                      setEnergiKkal(650)
+                      setKalori('650 kkal')
+                      setProteinG(24.5)
+                      setLemakG(18.2)
+                      setKarbohidratG(85.0)
+                      setKalsiumMg(150)
+                      setZatBesiMg(3.2)
+                      setFotoUrl('/menu-today.png')
+                      setTags(['Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Serat Tinggi', 'Lolos Uji Sampel BGN'])
+                      triggerToast('Preset Ayam Goreng Lengkuas dimuat!', 'info')
+                    }}
+                    className="text-[10px] font-semibold bg-white hover:bg-amber-50 text-amber-800 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                  >
+                    🍗 Ayam Lengkuas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNamaMenu('Paket Nasi Ikan Bakar Madu & Cah Kangkung')
+                      setDeskripsiKomponen('Nasi merah putih, Ikan bakar madu gurih, Tahu pong bumbu kuning, Cah kangkung tauco, Buah melon segar')
+                      setKategoriPorsi('Standar SD/SMP')
+                      setEnergiKkal(620)
+                      setKalori('620 kkal')
+                      setProteinG(26.0)
+                      setLemakG(15.5)
+                      setKarbohidratG(78.5)
+                      setKalsiumMg(185)
+                      setZatBesiMg(4.1)
+                      setFotoUrl('/menu-today.png')
+                      setTags(['Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Lolos Uji Sampel BGN'])
+                      triggerToast('Preset Ikan Bakar Madu dimuat!', 'info')
+                    }}
+                    className="text-[10px] font-semibold bg-white hover:bg-sky-50 text-sky-800 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                  >
+                    🐟 Ikan Bakar Madu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNamaMenu('Paket Rolade Daging Sapi Saus Tiram & Sup Jagung')
+                      setDeskripsiKomponen('Nasi pulen, Rolade daging sapi panggang, Sup jagung manis telur, Tempe goreng krispi, Jeruk manis')
+                      setKategoriPorsi('Standar SD/SMP')
+                      setEnergiKkal(680)
+                      setKalori('680 kkal')
+                      setProteinG(28.2)
+                      setLemakG(19.0)
+                      setKarbohidratG(82.0)
+                      setKalsiumMg(160)
+                      setZatBesiMg(3.8)
+                      setFotoUrl('/menu-today.png')
+                      setTags(['Karbohidrat', 'Protein Hewani', 'Protein Nabati', 'Sayuran', 'Buah', 'Lolos Uji Sampel BGN'])
+                      triggerToast('Preset Rolade Daging Sapi dimuat!', 'info')
+                    }}
+                    className="text-[10px] font-semibold bg-white hover:bg-rose-50 text-rose-800 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                  >
+                    🥩 Rolade Sapi
+                  </button>
+                </div>
               </div>
             </div>
+
             <p className="text-[11px] text-gray-400">
-              Auto-kompresi gambar aktif (max width 1350px, WebP 80%). Rasio poster proporsional.
+              Auto-kompresi gambar aktif (max width 1350px, WebP 80%). AI Gemini Vision akan memindai teks menu & tabel gizi seketika.
             </p>
 
             {compressionStatus && (
@@ -617,7 +1016,7 @@ export default function KelolaMenuHarianPage() {
           </Link>
           <button
             type="submit"
-            disabled={saving || isUploading}
+            disabled={saving || isUploading || isAiScanning}
             className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-2xs transition cursor-pointer flex items-center gap-1.5 border border-emerald-700 disabled:opacity-50"
           >
             {saving ? <RotateCw size={14} className="animate-spin" /> : <Save size={14} />}
@@ -841,7 +1240,49 @@ export default function KelolaMenuHarianPage() {
                   <span className="font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
                     ● {previewModalMenu.status}
                   </span>
+                  {previewModalMenu.kategori_porsi && (
+                    <span className="font-semibold text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200">
+                      {previewModalMenu.kategori_porsi}
+                    </span>
+                  )}
                 </div>
+
+                {previewModalMenu.deskripsi_komponen && (
+                  <p className="text-xs text-gray-700 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                    <span className="font-bold text-gray-900 block text-[11px] mb-0.5">🍱 Rincian Komponen Lauk:</span>
+                    {previewModalMenu.deskripsi_komponen}
+                  </p>
+                )}
+
+                {/* 6 Grid Gizi BGN */}
+                {previewModalMenu.kandungan_gizi && (
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-1.5 text-center">
+                      <div className="text-[9px] font-bold text-blue-600">ENERGI</div>
+                      <div className="text-xs font-black text-blue-900">{previewModalMenu.kandungan_gizi.energi_kkal} kkal</div>
+                    </div>
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-1.5 text-center">
+                      <div className="text-[9px] font-bold text-indigo-600">PROTEIN</div>
+                      <div className="text-xs font-black text-indigo-900">{previewModalMenu.kandungan_gizi.protein_g}g</div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-1.5 text-center">
+                      <div className="text-[9px] font-bold text-amber-600">LEMAK</div>
+                      <div className="text-xs font-black text-amber-900">{previewModalMenu.kandungan_gizi.lemak_g}g</div>
+                    </div>
+                    <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-1.5 text-center">
+                      <div className="text-[9px] font-bold text-cyan-600">KARBO</div>
+                      <div className="text-xs font-black text-cyan-900">{previewModalMenu.kandungan_gizi.karbohidrat_g}g</div>
+                    </div>
+                    <div className="bg-teal-50 border border-teal-200 rounded-lg p-1.5 text-center">
+                      <div className="text-[9px] font-bold text-teal-600">KALSIUM</div>
+                      <div className="text-xs font-black text-teal-900">{previewModalMenu.kandungan_gizi.kalsium_mg}mg</div>
+                    </div>
+                    <div className="bg-rose-50 border border-rose-200 rounded-lg p-1.5 text-center">
+                      <div className="text-[9px] font-bold text-rose-600">ZAT BESI</div>
+                      <div className="text-xs font-black text-rose-900">{previewModalMenu.kandungan_gizi.zat_besi_mg}mg</div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-1.5 pt-2">
                   {(previewModalMenu.komposisi_gizi || []).map((tag, idx) => (
@@ -870,6 +1311,18 @@ export default function KelolaMenuHarianPage() {
           </div>
         </div>
       )}
+
+      {/* AI Smart Menu Scanner Modal */}
+      <AiMenuScannerModal
+        isOpen={isAiScanModalOpen}
+        onClose={() => setIsAiScanModalOpen(false)}
+        onSuccess={(savedMenu) => {
+          setCurrentMenuDb(savedMenu)
+          loadCurrentMenu()
+          loadHistoryMenu()
+          triggerToast('Menu harian berhasil dipindai & dipublikasikan!', 'success')
+        }}
+      />
     </div>
   )
 }

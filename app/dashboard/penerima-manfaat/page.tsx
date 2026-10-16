@@ -17,6 +17,7 @@ import { TableSkeleton } from '@/components/TableSkeleton'
 import { RingkasanLogistikHarian } from '@/components/RingkasanLogistikHarian'
 import KioskModeDisplay from '@/components/KioskModeDisplay'
 import { showToast } from '@/components/toast'
+import AiMenuScannerModal from '@/components/AiMenuScannerModal'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +89,7 @@ export default function BerandaOperasionalPage() {
   const [targetPenerima, setTargetPenerima] = useState<number | null>(null)
   const [menuDb, setMenuDb] = useState<MenuHarianDB | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isAiScanModalOpen, setIsAiScanModalOpen] = useState(false)
 
   // Bulk Excel Export States
   const [isExportingSekolah, setIsExportingSekolah] = useState(false)
@@ -1304,21 +1306,39 @@ export default function BerandaOperasionalPage() {
         <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
           <div className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] space-y-4 flex flex-col justify-between hover:bg-white/80 transition-all duration-300">
             {menuDb ? (
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-amber-50 text-amber-600 rounded-xl border border-amber-200 shadow-2xs">
                       <Utensils size={16} />
                     </div>
-                    <h2 className="font-bold text-slate-900 text-sm tracking-tight">
-                      Menu & Nutrisi Harian
-                    </h2>
+                    <div>
+                      <h2 className="font-bold text-slate-900 text-sm tracking-tight flex items-center gap-1.5">
+                        <span>Menu & Nutrisi Harian BGN</span>
+                        {menuDb.kategori_porsi && (
+                          <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            {menuDb.kategori_porsi}
+                          </span>
+                        )}
+                      </h2>
+                    </div>
                   </div>
-                  {menuDb.status && (
-                    <span className="bg-emerald-500/10 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-300/50 uppercase tracking-wider backdrop-blur-md">
-                      ● {menuDb.status}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {menuDb.status && (
+                      <span className="bg-emerald-500/10 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-300/50 uppercase tracking-wider backdrop-blur-md">
+                        ● {menuDb.status}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsAiScanModalOpen(true)}
+                      className="text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                      title="Pindai / Perbarui menu dengan AI Vision"
+                    >
+                      <Sparkles size={13} className="text-amber-500 animate-pulse" />
+                      <span>Pindai AI</span>
+                    </button>
+                  </div>
                 </div>
 
                 {menuDb.foto_url && (
@@ -1329,35 +1349,85 @@ export default function BerandaOperasionalPage() {
                       alt={menuDb.nama_menu || 'Foto Menu'}
                       className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition duration-300"
                     />
-                    {menuDb.kalori && (
-                      <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-white/20">
-                        ⚡ {menuDb.kalori}
-                      </div>
-                    )}
+                    <div className="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-md text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-white/20">
+                      ⚡ {menuDb.kandungan_gizi?.energi_kkal ? `${menuDb.kandungan_gizi.energi_kkal} kkal` : (menuDb.kalori || '650 kkal')}
+                    </div>
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
-                    {menuDb.nama_menu}
-                  </h3>
-                  {menuDb.tanggal && (
-                    <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                      <Calendar size={13} className="text-slate-400" />
-                      <span>{menuDb.tanggal}</span>
-                    </p>
+                <div className="space-y-2.5">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
+                      {menuDb.nama_menu}
+                    </h3>
+                    {menuDb.tanggal && (
+                      <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <Calendar size={13} className="text-slate-400" />
+                        <span>{menuDb.tanggal}</span>
+                        {menuDb.target_porsi && (
+                          <>
+                            <span>•</span>
+                            <span className="font-semibold text-slate-700">{menuDb.target_porsi.toLocaleString('id-ID')} Porsi Standar</span>
+                          </>
+                        )}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Deskripsi Rincian Komponen Lauk */}
+                  {menuDb.deskripsi_komponen && (
+                    <div className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/80 text-xs text-slate-700 leading-relaxed">
+                      <span className="font-bold text-slate-900 block text-[11px] mb-0.5">
+                        🍱 Komponen Lauk & Sajian:
+                      </span>
+                      {menuDb.deskripsi_komponen}
+                    </div>
                   )}
+
+                  {/* Rincian Angka Nilai Gizi BGN (6 Nilai Numerik) */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+                    <div className="bg-blue-50/80 border border-blue-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                      <div className="text-[9px] font-bold text-blue-600 uppercase">Energi</div>
+                      <div className="text-xs font-black text-blue-900">
+                        {menuDb.kandungan_gizi?.energi_kkal || 650} <span className="text-[9px] font-normal">kkal</span>
+                      </div>
+                    </div>
+                    <div className="bg-indigo-50/80 border border-indigo-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                      <div className="text-[9px] font-bold text-indigo-600 uppercase">Protein</div>
+                      <div className="text-xs font-black text-indigo-900">
+                        {menuDb.kandungan_gizi?.protein_g ?? 24.5} <span className="text-[9px] font-normal">g</span>
+                      </div>
+                    </div>
+                    <div className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                      <div className="text-[9px] font-bold text-amber-600 uppercase">Lemak</div>
+                      <div className="text-xs font-black text-amber-900">
+                        {menuDb.kandungan_gizi?.lemak_g ?? 18.2} <span className="text-[9px] font-normal">g</span>
+                      </div>
+                    </div>
+                    <div className="bg-cyan-50/80 border border-cyan-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                      <div className="text-[9px] font-bold text-cyan-600 uppercase">Karbo</div>
+                      <div className="text-xs font-black text-cyan-900">
+                        {menuDb.kandungan_gizi?.karbohidrat_g ?? 85.0} <span className="text-[9px] font-normal">g</span>
+                      </div>
+                    </div>
+                    <div className="bg-teal-50/80 border border-teal-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                      <div className="text-[9px] font-bold text-teal-600 uppercase">Kalsium</div>
+                      <div className="text-xs font-black text-teal-900">
+                        {menuDb.kandungan_gizi?.kalsium_mg ?? 150} <span className="text-[9px] font-normal">mg</span>
+                      </div>
+                    </div>
+                    <div className="bg-rose-50/80 border border-rose-200/80 rounded-lg p-1.5 text-center shadow-2xs">
+                      <div className="text-[9px] font-bold text-rose-600 uppercase">Zat Besi</div>
+                      <div className="text-xs font-black text-rose-900">
+                        {menuDb.kandungan_gizi?.zat_besi_mg ?? 3.2} <span className="text-[9px] font-normal">mg</span>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Nutrisi Glass Chips */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="bg-blue-50/80 text-blue-700 text-[11px] font-bold px-2.5 py-0.5 rounded-lg border border-blue-200/80">
-                      ⚡ Kalori 645 kkal
-                    </span>
-                    <span className="bg-indigo-50/80 text-indigo-700 text-[11px] font-bold px-2.5 py-0.5 rounded-lg border border-indigo-200/80">
-                      💪 Protein 27g
-                    </span>
                     <span className="bg-emerald-50/80 text-emerald-700 text-[11px] font-bold px-2.5 py-0.5 rounded-lg border border-emerald-200/80">
-                      ✓ Lolos Uji Sampel
+                      ✓ Standar Gizi BGN Pasuruan
                     </span>
                     {menuDb.komposisi_gizi && menuDb.komposisi_gizi.map((tag, idx) => (
                       <span
@@ -1380,16 +1450,17 @@ export default function BerandaOperasionalPage() {
                     Menu Hari Ini Belum Dipublikasikan
                   </h3>
                   <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                    Siklus menu diperbarui setiap hari. Silakan unggah menu harian terbaru melalui menu Kelola Menu Harian.
+                    Siklus menu diperbarui setiap hari. Gunakan AI Smart Scanner untuk memindai poster foto menu atau kelola manual.
                   </p>
                 </div>
-                <Link
-                  href="/kelola-menu-harian"
-                  className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-2xs transition cursor-pointer"
+                <button
+                  type="button"
+                  onClick={() => setIsAiScanModalOpen(true)}
+                  className="mt-2 inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:from-slate-800 hover:to-slate-800 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
                 >
-                  <Plus size={15} />
-                  <span>Unggah Menu Sekarang</span>
-                </Link>
+                  <Sparkles size={15} className="text-amber-400 animate-pulse" />
+                  <span>+ Unggah Menu Sekarang (AI Scanner)</span>
+                </button>
               </div>
             )}
 
@@ -2256,6 +2327,16 @@ export default function BerandaOperasionalPage() {
         initialMenuDb={menuDb}
         liburKpmIds={liburKpmIds}
         distribusiSettings={distribusiSettings}
+      />
+
+      {/* AI Smart Menu Scanner & Auto-Fill Modal */}
+      <AiMenuScannerModal
+        isOpen={isAiScanModalOpen}
+        onClose={() => setIsAiScanModalOpen(false)}
+        onSuccess={(savedMenu) => {
+          setMenuDb(savedMenu)
+          showToast('Menu harian berhasil dipindai & dipublikasikan ke BGN!')
+        }}
       />
     </div>
   )

@@ -424,6 +424,15 @@ export interface KelompokPenerimaManfaat {
   mou_url?: string
 }
 
+export interface KandunganGiziBGN {
+  energi_kkal: number
+  protein_g: number
+  lemak_g: number
+  karbohidrat_g: number
+  kalsium_mg: number
+  zat_besi_mg: number
+}
+
 export interface MenuHarianDB {
   id?: string
   tanggal: string
@@ -437,6 +446,9 @@ export interface MenuHarianDB {
   catatan?: string
   status: string
   created_at?: string
+  deskripsi_komponen?: string
+  kandungan_gizi?: KandunganGiziBGN
+  kategori_porsi?: string
 }
 
 export * from '@/lib/sppg-identity'
@@ -828,7 +840,27 @@ export async function fetchMenuHariIniDB(): Promise<MenuHarianDB | null> {
       .eq('tanggal', todayDateStr)
       .order('created_at', { ascending: false })
       .limit(1)
-    if (!error && data && data.length > 0) return data[0]
+    if (!error && data && data.length > 0) {
+      const record = { ...data[0] }
+      if (typeof window !== 'undefined') {
+        const localRaw = localStorage.getItem('sppg_menu_hari_ini')
+        if (localRaw) {
+          try {
+            const localObj = JSON.parse(localRaw)
+            if (localObj.kandunganGizi && !record.kandungan_gizi) {
+              record.kandungan_gizi = localObj.kandunganGizi
+            }
+            if (localObj.deskripsiKomponen && !record.deskripsi_komponen) {
+              record.deskripsi_komponen = localObj.deskripsiKomponen
+            }
+            if (localObj.kategoriPorsi && !record.kategori_porsi) {
+              record.kategori_porsi = localObj.kategoriPorsi
+            }
+          } catch {}
+        }
+      }
+      return record
+    }
   } catch (err) {
     console.warn('fetchMenuHariIniDB notice:', err)
   }
@@ -870,6 +902,10 @@ export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianD
   const cleanCatatan = menu.catatan || ''
   const cleanFoto = menu.foto_url || (menu as any).foto || (menu as any).publicUploadedUrl || ''
 
+  const cleanDeskripsiKomponen = menu.deskripsi_komponen || (menu as any).deskripsi || ''
+  const cleanKandunganGizi = menu.kandungan_gizi || (menu as any).nutrisi || null
+  const cleanKategoriPorsi = menu.kategori_porsi || 'Standar SD/SMP'
+
   // Standardized Dual-Key Payload Object
   const menuPayload: Record<string, any> = {
     nama_menu: cleanNama,
@@ -886,7 +922,10 @@ export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianD
     tags: cleanTags,
     catatan: cleanCatatan,
     foto_url: cleanFoto,
-    foto: cleanFoto
+    foto: cleanFoto,
+    deskripsi_komponen: cleanDeskripsiKomponen,
+    kandungan_gizi: cleanKandunganGizi,
+    kategori_porsi: cleanKategoriPorsi
   }
 
   if (isValidUuid(menu.id)) {
@@ -905,6 +944,9 @@ export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianD
     komposisi_gizi: cleanTags,
     catatan: cleanCatatan,
     foto_url: cleanFoto,
+    deskripsi_komponen: cleanDeskripsiKomponen,
+    kandungan_gizi: cleanKandunganGizi,
+    kategori_porsi: cleanKategoriPorsi,
     created_at: menu.created_at || new Date().toISOString()
   }
 
@@ -916,7 +958,10 @@ export async function saveMenuHariIniDB(menu: MenuHarianDB): Promise<MenuHarianD
       kalori: cleanKalori,
       status: cleanStatus,
       tags: cleanTags,
-      fotoUrl: cleanFoto
+      fotoUrl: cleanFoto,
+      deskripsiKomponen: cleanDeskripsiKomponen,
+      kandunganGizi: cleanKandunganGizi,
+      kategoriPorsi: cleanKategoriPorsi
     }
     localStorage.setItem('sppg_menu_hari_ini', JSON.stringify(localFormat))
     
