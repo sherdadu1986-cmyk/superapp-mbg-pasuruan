@@ -301,23 +301,35 @@ export default function KelolaMenuHarianPage() {
           const aiJson = await aiRes.json()
           if (aiRes.ok && aiJson.success && aiJson.data) {
             const result = aiJson.data
-            if (result.judul_poster || result.nama_menu) setNamaMenu(result.judul_poster || result.nama_menu)
-            if (Array.isArray(result.menu_items) && result.menu_items.length > 0) {
+            const detectedJudul = result.judul || result.judul_poster || result.nama_menu || ''
+            if (detectedJudul) setNamaMenu(detectedJudul)
+
+            if (typeof result.menu_items === 'string') {
+              setDeskripsiKomponen(result.menu_items)
+            } else if (Array.isArray(result.menu_items) && result.menu_items.length > 0) {
               setDeskripsiKomponen(result.menu_items.join(', '))
             } else if (result.deskripsi_komponen) {
               setDeskripsiKomponen(result.deskripsi_komponen)
             }
             if (result.kategori_porsi) setKategoriPorsi(result.kategori_porsi)
-            if (result.jumlah_penerima || result.target_porsi) {
-              setTargetPorsi(Number(result.jumlah_penerima || result.target_porsi))
+
+            const porsiNum = result.jumlah_penerima ?? result.target_porsi
+            if (porsiNum !== undefined && porsiNum !== null) {
+              setTargetPorsi(Number(porsiNum) || '')
             }
             if (result.tanggal) setTanggal(result.tanggal)
 
-            if (result.analisa_gizi) {
-              setAnalisaGizi(result.analisa_gizi)
-            }
-
-            if (result.kandungan_gizi) {
+            const giziSrc = result.gizi || result.analisa_gizi
+            if (giziSrc) {
+              setAnalisaGizi(giziSrc)
+              if (giziSrc.porsi_besar?.energi) {
+                setEnergiKkal(giziSrc.porsi_besar.energi)
+                setKalori(`${giziSrc.porsi_besar.energi} kkal`)
+              }
+              if (giziSrc.porsi_besar?.protein) setProteinG(giziSrc.porsi_besar.protein)
+              if (giziSrc.porsi_besar?.lemak) setLemakG(giziSrc.porsi_besar.lemak)
+              if (giziSrc.porsi_besar?.karbohidrat) setKarbohidratG(giziSrc.porsi_besar.karbohidrat)
+            } else if (result.kandungan_gizi) {
               const g = result.kandungan_gizi
               if (g.energi_kkal !== undefined) {
                 setEnergiKkal(g.energi_kkal)

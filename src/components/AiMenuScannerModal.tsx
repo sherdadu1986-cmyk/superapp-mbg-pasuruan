@@ -3,27 +3,19 @@
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Sparkles,
   Upload,
   Camera,
-  Check,
   RotateCw,
   X,
-  Utensils,
   AlertCircle,
-  CheckCircle2,
-  Calendar,
-  Layers,
-  Flame,
-  Info
+  CheckCircle2
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import {
   saveMenuHariIniDB,
   type MenuHarianDB,
   type KandunganGiziBGN,
-  type AnalisaGiziBGN,
-  type GiziItemBGN
+  type AnalisaGiziBGN
 } from '@/lib/data-helpers'
 
 interface AiMenuScannerModalProps {
@@ -51,52 +43,43 @@ export default function AiMenuScannerModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isAiExtracted, setIsAiExtracted] = useState(false)
 
-  // Form states (auto-filled by AI & editable by user)
+  // Form states - MURNI DINAMIS (KOSONG DI AWAL, TIDAK ADA STATIC MOCK)
   const [namaMenu, setNamaMenu] = useState('')
   const [deskripsiKomponen, setDeskripsiKomponen] = useState('')
   const [kategoriPorsi, setKategoriPorsi] = useState('Standar SD/SMP')
-  const [tanggal, setTanggal] = useState(defaultDate || '2026-10-16')
-  const [targetPorsi, setTargetPorsi] = useState<number | ''>(3194)
+  const [tanggal, setTanggal] = useState(defaultDate || new Date().toISOString().split('T')[0])
+  const [targetPorsi, setTargetPorsi] = useState<number | ''>('')
   const [status, setStatus] = useState('Siap Distribusi')
 
-  // Tabel Gizi 2 Baris: Porsi Besar vs Porsi Kecil (Official BGN Standard)
+  // Tabel Gizi 2 Baris: Porsi Besar vs Porsi Kecil (0 di awal sebelum scan real-time)
   const [analisaGizi, setAnalisaGizi] = useState<AnalisaGiziBGN>({
     porsi_besar: {
-      energi: 636.25,
-      energi_kkal: 636.25,
-      protein: 23.40,
-      protein_gr: 23.40,
-      lemak: 19.24,
-      lemak_gr: 19.24,
-      karbohidrat: 97.77,
-      karbohidrat_gr: 97.77,
-      serat: 2.00,
-      serat_gr: 2.00
+      energi: 0,
+      energi_kkal: 0,
+      protein: 0,
+      protein_gr: 0,
+      lemak: 0,
+      lemak_gr: 0,
+      karbohidrat: 0,
+      karbohidrat_gr: 0,
+      serat: 0,
+      serat_gr: 0
     },
     porsi_kecil: {
-      energi: 529.15,
-      energi_kkal: 529.15,
-      protein: 20.88,
-      protein_gr: 20.88,
-      lemak: 17.72,
-      lemak_gr: 17.72,
-      karbohidrat: 74.64,
-      karbohidrat_gr: 74.64,
-      serat: 1.94,
-      serat_gr: 1.94
+      energi: 0,
+      energi_kkal: 0,
+      protein: 0,
+      protein_gr: 0,
+      lemak: 0,
+      lemak_gr: 0,
+      karbohidrat: 0,
+      karbohidrat_gr: 0,
+      serat: 0,
+      serat_gr: 0
     }
   })
 
-  const [selectedTags, setSelectedTags] = useState<string[]>([
-    'Karbohidrat',
-    'Protein Hewani',
-    'Protein Nabati',
-    'Sayuran',
-    'Buah',
-    'Susu',
-    'Serat Tinggi',
-    'Lolos Uji Sampel BGN'
-  ])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
 
   const availableTags = [
     'Karbohidrat',
@@ -115,7 +98,7 @@ export default function AiMenuScannerModal({
     )
   }
 
-  // Helper untuk update nilai gizi pada porsi besar atau kecil
+  // Helper untuk update nilai gizi porsi besar atau kecil
   const updateGizi = (
     portion: 'porsi_besar' | 'porsi_kecil',
     field: 'energi' | 'protein' | 'lemak' | 'karbohidrat' | 'serat',
@@ -151,7 +134,6 @@ export default function AiMenuScannerModal({
           let width = img.width
           let height = img.height
 
-          // Jangan kompres di bawah 1200px. Pertahankan resolusi lebar minimal 1600px - 2000px
           if (width > maxDimension || height > maxDimension) {
             if (width >= height) {
               height = Math.round((height * maxDimension) / width)
@@ -182,7 +164,6 @@ export default function AiMenuScannerModal({
           ctx.imageSmoothingQuality = 'high'
           ctx.drawImage(img, 0, 0, width, height)
 
-          // Kualitas JPEG 0.90 untuk memastikan teks font kecil pada tabel gizi dan sticky note terbaca tajam oleh AI
           const compressedBase64 = canvas.toDataURL('image/jpeg', 0.90)
           canvas.toBlob(
             (blob) => {
@@ -209,18 +190,18 @@ export default function AiMenuScannerModal({
     })
   }
 
-  // AI Scan Execution
+  // AI Scan Execution Real-time
   const processImageScan = async (file: File) => {
     setErrorMessage(null)
     setIsScanning(true)
-    setScanStepMessage('Mengoptimalkan resolusi poster (HD 1600-2000px, JPEG 0.9)...')
+    setScanStepMessage('Mengoptimalkan resolusi gambar (HD 1600-2000px, JPEG 0.9)...')
 
     try {
       const compressed = await compressImage(file)
       setPreviewImage(compressed.base64)
-      setCompressionInfo(`Resolusi HD dipertahankan: ${compressed.origSize} → ${compressed.compSize}`)
+      setCompressionInfo(`Resolusi HD: ${compressed.origSize} → ${compressed.compSize}`)
 
-      setScanStepMessage('Menganalisis poster BGN dengan Gemini 1.5 Flash Vision...')
+      setScanStepMessage('Menganalisis teks & tabel poster dengan Gemini 1.5 Flash Vision...')
 
       // Call API endpoint
       const res = await fetch('/api/fin-scan-menu', {
@@ -229,87 +210,124 @@ export default function AiMenuScannerModal({
         body: JSON.stringify({ imageBase64: compressed.base64 })
       })
 
-      const data = await res.json()
+      const json = await res.json()
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Gagal menganalisis poster menu dengan AI')
+      if (!res.ok || !json.success || !json.data) {
+        throw new Error(json.error || 'Gagal menganalisis gambar poster dengan AI')
       }
 
-      const scanResult = data.data
+      const scanResult = json.data
 
-      // 1. Nama Paket / Menu: otomatis terisi dari judul_poster
-      const detectedNama = scanResult.judul_poster || scanResult.nama_menu || 'MENU MBG HARI INI MASEE!'
-      setNamaMenu(detectedNama)
+      // UPDATE FORM STATE SECARA REAL-TIME DARI DATA LIVE AI
+      // 1. Nama Paket / Menu Utama
+      const detectedJudul = scanResult.judul || scanResult.judul_poster || scanResult.nama_menu || ''
+      setNamaMenu(detectedJudul)
 
-      // 2. Rincian Komponen Lauk: otomatis terisi dari gabungan menu_items
+      // 2. Rincian Komponen Lauk & Sayur
       let componentsText = ''
-      if (Array.isArray(scanResult.menu_items) && scanResult.menu_items.length > 0) {
+      if (typeof scanResult.menu_items === 'string') {
+        componentsText = scanResult.menu_items.trim()
+      } else if (Array.isArray(scanResult.menu_items)) {
         componentsText = scanResult.menu_items.join(', ')
       } else if (scanResult.deskripsi_komponen) {
-        componentsText = scanResult.deskripsi_komponen
-      } else {
-        componentsText = 'Nasi Putih, tahu fantasi telur, Susu, Tumis sawi jagung pipil, melon/semangka'
+        componentsText = String(scanResult.deskripsi_komponen).trim()
       }
       setDeskripsiKomponen(componentsText)
 
-      // 3. Target Porsi: otomatis terisi angka dari jumlah_penerima (3.194 -> 3194)
-      const recipientCount = Number(scanResult.jumlah_penerima ?? scanResult.target_porsi) || 3194
-      setTargetPorsi(recipientCount)
+      // 3. Target Porsi / Jumlah Penerima
+      const recipientCount = scanResult.jumlah_penerima ?? scanResult.target_porsi
+      if (recipientCount !== undefined && recipientCount !== null) {
+        setTargetPorsi(Number(recipientCount) || '')
+      }
 
-      // 4. Tanggal Berlaku: otomatis terisi tanggal hasil scan
+      // 4. Tanggal Berlaku
       if (scanResult.tanggal) {
         setTanggal(scanResult.tanggal)
       }
 
       // 5. Tabel Gizi 2 Baris: Porsi Besar & Porsi Kecil
-      if (scanResult.analisa_gizi) {
-        const pb = scanResult.analisa_gizi.porsi_besar || {}
-        const pk = scanResult.analisa_gizi.porsi_kecil || {}
+      const giziSource = scanResult.gizi || scanResult.analisa_gizi
+      if (giziSource) {
+        const pb = giziSource.porsi_besar || {}
+        const pk = giziSource.porsi_kecil || {}
 
         setAnalisaGizi({
           porsi_besar: {
-            energi: Number(pb.energi ?? pb.energi_kkal) || 636.25,
-            energi_kkal: Number(pb.energi_kkal ?? pb.energi) || 636.25,
-            protein: Number(pb.protein ?? pb.protein_gr) || 23.40,
-            protein_gr: Number(pb.protein_gr ?? pb.protein) || 23.40,
-            lemak: Number(pb.lemak ?? pb.lemak_gr) || 19.24,
-            lemak_gr: Number(pb.lemak_gr ?? pb.lemak) || 19.24,
-            karbohidrat: Number(pb.karbohidrat ?? pb.karbohidrat_gr) || 97.77,
-            karbohidrat_gr: Number(pb.karbohidrat_gr ?? pb.karbohidrat) || 97.77,
-            serat: Number(pb.serat ?? pb.serat_gr) || 2.00,
-            serat_gr: Number(pb.serat_gr ?? pb.serat) || 2.00
+            energi: Number(pb.energi ?? pb.energi_kkal) || 0,
+            energi_kkal: Number(pb.energi_kkal ?? pb.energi) || 0,
+            protein: Number(pb.protein ?? pb.protein_gr) || 0,
+            protein_gr: Number(pb.protein_gr ?? pb.protein) || 0,
+            lemak: Number(pb.lemak ?? pb.lemak_gr) || 0,
+            lemak_gr: Number(pb.lemak_gr ?? pb.lemak) || 0,
+            karbohidrat: Number(pb.karbohidrat ?? pb.karbohidrat_gr) || 0,
+            karbohidrat_gr: Number(pb.karbohidrat_gr ?? pb.karbohidrat) || 0,
+            serat: Number(pb.serat ?? pb.serat_gr) || 0,
+            serat_gr: Number(pb.serat_gr ?? pb.serat) || 0
           },
           porsi_kecil: {
-            energi: Number(pk.energi ?? pk.energi_kkal) || 529.15,
-            energi_kkal: Number(pk.energi_kkal ?? pk.energi) || 529.15,
-            protein: Number(pk.protein ?? pk.protein_gr) || 20.88,
-            protein_gr: Number(pk.protein_gr ?? pk.protein) || 20.88,
-            lemak: Number(pk.lemak ?? pk.lemak_gr) || 17.72,
-            lemak_gr: Number(pk.lemak_gr ?? pk.lemak) || 17.72,
-            karbohidrat: Number(pk.karbohidrat ?? pk.karbohidrat_gr) || 74.64,
-            karbohidrat_gr: Number(pk.karbohidrat_gr ?? pk.karbohidrat) || 74.64,
-            serat: Number(pk.serat ?? pk.serat_gr) || 1.94,
-            serat_gr: Number(pk.serat_gr ?? pk.serat) || 1.94
+            energi: Number(pk.energi ?? pk.energi_kkal) || 0,
+            energi_kkal: Number(pk.energi_kkal ?? pk.energi) || 0,
+            protein: Number(pk.protein ?? pk.protein_gr) || 0,
+            protein_gr: Number(pk.protein_gr ?? pk.protein) || 0,
+            lemak: Number(pk.lemak ?? pk.lemak_gr) || 0,
+            lemak_gr: Number(pk.lemak_gr ?? pk.lemak) || 0,
+            karbohidrat: Number(pk.karbohidrat ?? pk.karbohidrat_gr) || 0,
+            karbohidrat_gr: Number(pk.karbohidrat_gr ?? pk.karbohidrat) || 0,
+            serat: Number(pk.serat ?? pk.serat_gr) || 0,
+            serat_gr: Number(pk.serat_gr ?? pk.serat) || 0
           }
         })
       }
 
-      // Smart tags default poster BGN
-      setSelectedTags([
-        'Karbohidrat',
-        'Protein Hewani',
-        'Protein Nabati',
-        'Sayuran',
-        'Buah',
-        'Susu',
-        'Serat Tinggi',
-        'Lolos Uji Sampel BGN'
-      ])
+      // Smart dynamic tagging berdasarkan komponen yang terdeteksi
+      const descLower = `${componentsText} ${detectedJudul}`.toLowerCase()
+      const dynamicTags: string[] = ['Lolos Uji Sampel BGN']
 
+      if (descLower.includes('nasi') || descLower.includes('mie') || descLower.includes('karbo')) {
+        dynamicTags.push('Karbohidrat')
+      }
+      if (
+        descLower.includes('ayam') ||
+        descLower.includes('ikan') ||
+        descLower.includes('nila') ||
+        descLower.includes('lele') ||
+        descLower.includes('daging') ||
+        descLower.includes('telur')
+      ) {
+        dynamicTags.push('Protein Hewani')
+      }
+      if (descLower.includes('tempe') || descLower.includes('tahu') || descLower.includes('kacang')) {
+        dynamicTags.push('Protein Nabati')
+      }
+      if (
+        descLower.includes('sayur') ||
+        descLower.includes('tumis') ||
+        descLower.includes('sop') ||
+        descLower.includes('jagung') ||
+        descLower.includes('wortel') ||
+        descLower.includes('sawi')
+      ) {
+        dynamicTags.push('Sayuran', 'Serat Tinggi')
+      }
+      if (
+        descLower.includes('semangka') ||
+        descLower.includes('anggur') ||
+        descLower.includes('pisang') ||
+        descLower.includes('melon') ||
+        descLower.includes('jeruk') ||
+        descLower.includes('buah')
+      ) {
+        dynamicTags.push('Buah')
+      }
+      if (descLower.includes('susu')) {
+        dynamicTags.push('Susu')
+      }
+
+      setSelectedTags(Array.from(new Set(dynamicTags)))
       setIsAiExtracted(true)
     } catch (err: any) {
       console.error('Scan error:', err)
-      setErrorMessage(err.message || 'Gagal memindai menu dengan AI. Anda tetap dapat mengisi data secara manual.')
+      setErrorMessage(err.message || 'Gagal memindai poster dengan AI. Periksa koneksi atau API Key.')
     } finally {
       setIsScanning(false)
       setScanStepMessage('')
@@ -335,61 +353,6 @@ export default function AiMenuScannerModal({
       processImageScan(file)
     }
     e.target.value = ''
-  }
-
-  // Quick Demo Preset BGN Masee
-  const handleDemoPresetBGN = async () => {
-    setErrorMessage(null)
-    setIsScanning(true)
-    setScanStepMessage('Memindai poster Menu MBG Hari Ini Masee dengan Gemini Vision...')
-
-    await new Promise((r) => setTimeout(r, 600))
-
-    setPreviewImage('/menu-today.png')
-    setNamaMenu('MENU MBG HARI INI MASEE!')
-    setDeskripsiKomponen('Nasi Putih, tahu fantasi telur, Susu, Tumis sawi jagung pipil, melon/semangka')
-    setTanggal('2026-10-16')
-    setTargetPorsi(3194)
-    setAnalisaGizi({
-      porsi_besar: {
-        energi: 636.25,
-        energi_kkal: 636.25,
-        protein: 23.40,
-        protein_gr: 23.40,
-        lemak: 19.24,
-        lemak_gr: 19.24,
-        karbohidrat: 97.77,
-        karbohidrat_gr: 97.77,
-        serat: 2.00,
-        serat_gr: 2.00
-      },
-      porsi_kecil: {
-        energi: 529.15,
-        energi_kkal: 529.15,
-        protein: 20.88,
-        protein_gr: 20.88,
-        lemak: 17.72,
-        lemak_gr: 17.72,
-        karbohidrat: 74.64,
-        karbohidrat_gr: 74.64,
-        serat: 1.94,
-        serat_gr: 1.94
-      }
-    })
-    setSelectedTags([
-      'Karbohidrat',
-      'Protein Hewani',
-      'Protein Nabati',
-      'Sayuran',
-      'Buah',
-      'Susu',
-      'Serat Tinggi',
-      'Lolos Uji Sampel BGN'
-    ])
-    setCompressionInfo('Preset Terverifikasi BGN Pasuruan')
-    setIsAiExtracted(true)
-    setIsScanning(false)
-    setScanStepMessage('')
   }
 
   // Handle Save & Publish Menu
@@ -435,11 +398,11 @@ export default function AiMenuScannerModal({
 
       // Kandungan gizi standar (menggunakan porsi besar dengan Serat)
       const giziPayload: KandunganGiziBGN = {
-        energi_kkal: Number(analisaGizi.porsi_besar.energi) || 636.25,
-        protein_g: Number(analisaGizi.porsi_besar.protein) || 23.40,
-        lemak_g: Number(analisaGizi.porsi_besar.lemak) || 19.24,
-        karbohidrat_g: Number(analisaGizi.porsi_besar.karbohidrat) || 97.77,
-        serat_g: Number(analisaGizi.porsi_besar.serat) || 2.00
+        energi_kkal: Number(analisaGizi.porsi_besar.energi) || 0,
+        protein_g: Number(analisaGizi.porsi_besar.protein) || 0,
+        lemak_g: Number(analisaGizi.porsi_besar.lemak) || 0,
+        karbohidrat_g: Number(analisaGizi.porsi_besar.karbohidrat) || 0,
+        serat_g: Number(analisaGizi.porsi_besar.serat) || 0
       }
 
       const menuItemsArray = deskripsiKomponen
@@ -449,9 +412,9 @@ export default function AiMenuScannerModal({
 
       const menuPayload: MenuHarianDB = {
         nama_menu: namaMenu.trim(),
-        tanggal: tanggal || '2026-10-16',
-        kalori: `${analisaGizi.porsi_besar.energi || 636.25} kkal`,
-        target_porsi: Number(targetPorsi) || 3194,
+        tanggal: tanggal || new Date().toISOString().split('T')[0],
+        kalori: `${analisaGizi.porsi_besar.energi || 0} kkal`,
+        target_porsi: Number(targetPorsi) || 0,
         status: status || 'Siap Distribusi',
         komposisi_gizi: selectedTags,
         foto_url: finalFotoUrl,
@@ -460,12 +423,11 @@ export default function AiMenuScannerModal({
         kandungan_gizi: giziPayload,
         analisa_gizi: analisaGizi,
         kategori_porsi: kategoriPorsi,
-        catatan: `Poster BGN: ${namaMenu.trim()} | Penerima: ${targetPorsi} | PB: ${analisaGizi.porsi_besar.energi} kkal (${analisaGizi.porsi_besar.protein}g protein, ${analisaGizi.porsi_besar.lemak}g lemak, ${analisaGizi.porsi_besar.karbohidrat}g karbo, ${analisaGizi.porsi_besar.serat}g serat) | PK: ${analisaGizi.porsi_kecil.energi} kkal (${analisaGizi.porsi_kecil.protein}g protein, ${analisaGizi.porsi_kecil.lemak}g lemak, ${analisaGizi.porsi_kecil.karbohidrat}g karbo, ${analisaGizi.porsi_kecil.serat}g serat)`
+        catatan: `Poster: ${namaMenu.trim()} | Target: ${targetPorsi} | PB: ${analisaGizi.porsi_besar.energi} kkal (${analisaGizi.porsi_besar.protein}g P, ${analisaGizi.porsi_besar.lemak}g L, ${analisaGizi.porsi_besar.karbohidrat}g K, ${analisaGizi.porsi_besar.serat}g S) | PK: ${analisaGizi.porsi_kecil.energi} kkal (${analisaGizi.porsi_kecil.protein}g P, ${analisaGizi.porsi_kecil.lemak}g L, ${analisaGizi.porsi_kecil.karbohidrat}g K, ${analisaGizi.porsi_kecil.serat}g S)`
       }
 
       const savedResult = await saveMenuHariIniDB(menuPayload)
 
-      // Notify parent & close modal
       onSuccess(savedResult)
       onClose()
     } catch (err: any) {
@@ -589,7 +551,7 @@ export default function AiMenuScannerModal({
                           Unggah Poster Menu Harian BGN
                         </p>
                         <p className="text-xs text-slate-400 max-w-[240px] mx-auto">
-                          Tarik dan lepas poster menu atau klik tombol di bawah (Resolusi tajam min 1600-2000px)
+                          Tarik & lepas file poster atau klik tombol di bawah untuk membaca teks & angka secara real-time
                         </p>
                       </div>
                       <div className="flex gap-2 pt-2">
@@ -623,25 +585,16 @@ export default function AiMenuScannerModal({
                           {scanStepMessage || 'Menganalisis poster dengan AI Gemini Vision...'}
                         </p>
                         <p className="text-[10px] text-emerald-300 font-mono">
-                          OCR Presisi BGN (Resolusi Tinggi 2000px, JPEG 0.9)
+                          Live OCR Real-time (Resolusi HD 2000px, JPEG 0.9)
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Quick Demo Preset BGN */}
-                <div className="flex items-center justify-between text-xs px-1">
-                  <span className="text-slate-400 text-[11px]">Coba poster default BGN:</span>
-                  <button
-                    type="button"
-                    onClick={handleDemoPresetBGN}
-                    disabled={isScanning || isSaving}
-                    className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-medium cursor-pointer"
-                  >
-                    Muat Poster MBG Hari Ini Masee
-                  </button>
-                </div>
+                {compressionInfo && (
+                  <p className="text-[11px] text-slate-400 px-1">{compressionInfo}</p>
+                )}
               </div>
 
               {/* Kolom Kanan: Hasil Ekstraksi & Formulir Menu */}
@@ -662,7 +615,7 @@ export default function AiMenuScannerModal({
                     required
                     value={namaMenu}
                     onChange={(e) => setNamaMenu(e.target.value)}
-                    placeholder="Menu MBG Hari Ini Masee!"
+                    placeholder="Menunggu pemindaian poster..."
                     className="w-full px-3 py-2 bg-[#121c33] border border-slate-700/80 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                   />
                 </div>
@@ -676,7 +629,7 @@ export default function AiMenuScannerModal({
                     rows={2}
                     value={deskripsiKomponen}
                     onChange={(e) => setDeskripsiKomponen(e.target.value)}
-                    placeholder="Nasi Putih, tahu fantasi telur, Susu, Tumis sawi jagung pipil, melon/semangka"
+                    placeholder="Menunggu daftar lauk diekstrak dari gambar..."
                     className="w-full px-3 py-2 bg-[#121c33] border border-slate-700/80 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition resize-y"
                   />
                 </div>
@@ -707,7 +660,7 @@ export default function AiMenuScannerModal({
                       required
                       value={targetPorsi}
                       onChange={(e) => setTargetPorsi(e.target.value === '' ? '' : Number(e.target.value))}
-                      placeholder="3194"
+                      placeholder="Contoh: 2843"
                       className="w-full px-3 py-2 bg-[#121c33] border border-slate-700/80 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                     />
                   </div>
@@ -739,33 +692,43 @@ export default function AiMenuScannerModal({
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_besar.energi}
+                              {analisaGizi.porsi_besar.energi > 0 ? analisaGizi.porsi_besar.energi : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">kkal</span>
+                            {analisaGizi.porsi_besar.energi > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">kkal</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_besar.protein.toFixed(2)}
+                              {analisaGizi.porsi_besar.protein > 0 ? analisaGizi.porsi_besar.protein.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_besar.protein > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_besar.lemak.toFixed(2)}
+                              {analisaGizi.porsi_besar.lemak > 0 ? analisaGizi.porsi_besar.lemak.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_besar.lemak > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_besar.karbohidrat.toFixed(2)}
+                              {analisaGizi.porsi_besar.karbohidrat > 0 ? analisaGizi.porsi_besar.karbohidrat.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_besar.karbohidrat > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_besar.serat.toFixed(2)}
+                              {analisaGizi.porsi_besar.serat > 0 ? analisaGizi.porsi_besar.serat.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_besar.serat > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                         </tr>
 
@@ -776,33 +739,43 @@ export default function AiMenuScannerModal({
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_kecil.energi}
+                              {analisaGizi.porsi_kecil.energi > 0 ? analisaGizi.porsi_kecil.energi : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">kkal</span>
+                            {analisaGizi.porsi_kecil.energi > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">kkal</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_kecil.protein.toFixed(2)}
+                              {analisaGizi.porsi_kecil.protein > 0 ? analisaGizi.porsi_kecil.protein.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_kecil.protein > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_kecil.lemak.toFixed(2)}
+                              {analisaGizi.porsi_kecil.lemak > 0 ? analisaGizi.porsi_kecil.lemak.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_kecil.lemak > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_kecil.karbohidrat.toFixed(2)}
+                              {analisaGizi.porsi_kecil.karbohidrat > 0 ? analisaGizi.porsi_kecil.karbohidrat.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_kecil.karbohidrat > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                           <td className="py-2.5 px-2 text-center">
                             <span className="font-semibold text-slate-100">
-                              {analisaGizi.porsi_kecil.serat.toFixed(2)}
+                              {analisaGizi.porsi_kecil.serat > 0 ? analisaGizi.porsi_kecil.serat.toFixed(2) : '-'}
                             </span>
-                            <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            {analisaGizi.porsi_kecil.serat > 0 && (
+                              <span className="text-slate-400 text-[11px] ml-1">gr</span>
+                            )}
                           </td>
                         </tr>
                       </tbody>
@@ -833,9 +806,15 @@ export default function AiMenuScannerModal({
 
                 {/* Footer Controls: Status & Submit Buttons */}
                 <div className="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-normal">
-                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                    <span>Data berhasil diekstrak dengan akurasi 100% dari gambar</span>
+                  <div className="flex items-center gap-2 text-xs font-normal">
+                    {isAiExtracted ? (
+                      <>
+                        <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                        <span className="text-emerald-400">Data berhasil diekstrak dengan akurasi 100% dari gambar</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">Unggah poster untuk mengisi formulir secara otomatis</span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-auto">
