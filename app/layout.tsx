@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Roboto_Condensed, Inter } from "next/font/google";
+import { Geist, Geist_Mono, Roboto_Condensed, Inter, Bebas_Neue } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/toast";
 import AppLayoutWrapper from "@/components/AppLayoutWrapper";
@@ -26,6 +26,12 @@ const inter = Inter({
   weight: ["400", "500", "600", "700"],
 });
 
+const bebasNeue = Bebas_Neue({
+  variable: "--font-bebas-neue",
+  subsets: ["latin"],
+  weight: ["400"],
+});
+
 export const metadata: Metadata = {
   title: 'SPPG Pasuruan - Sistem Operasional BGN Kiduldalem',
   description: 'Sistem operasional dan manajemen penerima manfaat MBG SPPG Wonorejo Pasuruan',
@@ -50,10 +56,10 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${robotoCondensed.variable} ${inter.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${robotoCondensed.variable} ${inter.variable} ${bebasNeue.variable} antialiased`}
       >
         <ToastProvider>
           <AppLayoutWrapper>{children}</AppLayoutWrapper>
