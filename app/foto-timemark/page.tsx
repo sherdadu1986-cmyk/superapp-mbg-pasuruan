@@ -110,7 +110,7 @@ export function drawTimemarkWatermark(ctx: CanvasRenderingContext2D, options: Ti
   const {
     width,
     height,
-    scale = width / 1200,
+    scale: propScale,
     bgImg,
     zoom = 1,
     offset = { x: 0, y: 0 },
@@ -129,226 +129,251 @@ export function drawTimemarkWatermark(ctx: CanvasRenderingContext2D, options: Ti
     dynamicMapTileImg
   } = options
 
+  // Base canvas dimensions & scale factor (960px width base)
+  const W = width
+  const H = height
+  const s = propScale || (W / 960)
+
   // Clear Canvas
-  ctx.clearRect(0, 0, width, height)
+  ctx.clearRect(0, 0, W, H)
 
   // 1. Draw Background Image (Cover mode + Pan Offset) or Sleek Gradient
   if (bgImg) {
     const imgRatio = bgImg.width / bgImg.height
-    const canvasRatio = width / height
+    const canvasRatio = W / H
     let drawW: number, drawH: number
 
     if (imgRatio > canvasRatio) {
-      drawH = height * zoom
+      drawH = H * zoom
       drawW = drawH * imgRatio
     } else {
-      drawW = width * zoom
+      drawW = W * zoom
       drawH = drawW / imgRatio
     }
 
-    const posX = (width - drawW) / 2 + offset.x
-    const posY = (height - drawH) / 2 + offset.y
+    const posX = (W - drawW) / 2 + offset.x
+    const posY = (H - drawH) / 2 + offset.y
 
     ctx.drawImage(bgImg, posX, posY, drawW, drawH)
   } else {
-    const grad = ctx.createLinearGradient(0, 0, width, height)
+    const grad = ctx.createLinearGradient(0, 0, W, H)
     grad.addColorStop(0, '#1e293b')
     grad.addColorStop(0.5, '#0f172a')
     grad.addColorStop(1, '#020617')
     ctx.fillStyle = grad
-    ctx.fillRect(0, 0, width, height)
+    ctx.fillRect(0, 0, W, H)
 
     // Subtle grid pattern
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'
-    ctx.lineWidth = 2 * scale
-    const step = 60 * scale
-    for (let x = 0; x < width; x += step) {
+    ctx.lineWidth = 2 * s
+    const step = 60 * s
+    for (let x = 0; x < W; x += step) {
       ctx.beginPath()
       ctx.moveTo(x, 0)
-      ctx.lineTo(x, height)
+      ctx.lineTo(x, H)
       ctx.stroke()
     }
-    for (let y = 0; y < height; y += step) {
+    for (let y = 0; y < H; y += step) {
       ctx.beginPath()
       ctx.moveTo(0, y)
-      ctx.lineTo(width, y)
+      ctx.lineTo(W, y)
       ctx.stroke()
     }
   }
 
-  // Ultra-soft gentle gradient at the bottom edge (0 to 16% opacity) to guarantee text legibility on pure white photos
-  const softGrad = ctx.createLinearGradient(0, height - (240 * scale), 0, height)
+  // Ultra-soft gentle gradient at the bottom edge (0 to 18% opacity) to guarantee text legibility on white photos
+  const softGrad = ctx.createLinearGradient(0, H - (0.28 * H), 0, H)
   softGrad.addColorStop(0, 'rgba(0, 0, 0, 0)')
-  softGrad.addColorStop(1, 'rgba(0, 0, 0, 0.16)')
+  softGrad.addColorStop(1, 'rgba(0, 0, 0, 0.18)')
   ctx.fillStyle = softGrad
-  ctx.fillRect(0, height - (240 * scale), width, 240 * scale)
+  ctx.fillRect(0, H - (0.28 * H), W, 0.28 * H)
 
   // -------------------------------------------------------------
-  // SPESIFIKASI 1: POSISI WATERMARK TIMEMARK (KANAN ATAS)
+  // SPESIFIKASI 2: PETA MINI (KIRI ATAS)
+  // Ukuran: lebar = 0.26 * W, tinggi = 0.26 * W
+  // Posisi: x = 0.045 * W, y = 0.035 * W
+  // Border radius: 14px. Border tipis putih/abu-abu transparan.
+  // Titik pin lokasi biru muda berlingkaran putih di tengah dengan jangkauan sektor hijau toska transparan.
+  // Di pojok kiri bawah peta: label teks "📍 Peta" dan teks jalan miring "Wonorejo / Pasuruan".
   // -------------------------------------------------------------
-  const rightMargin = 24 * scale
-  const topMargin = 24 * scale
-  const tmX = width - rightMargin
-  let tmY = topMargin
+  const mapW = 0.26 * W
+  const mapH = 0.26 * W
+  const mapX = 0.045 * W
+  const mapY = 0.035 * W
+  const mapRadius = 14 * s
 
+  // Card shadow & background container
   ctx.save()
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)'
-  ctx.shadowBlur = 3 * scale
-  ctx.shadowOffsetX = 1 * scale
-  ctx.shadowOffsetY = 1 * scale
-  ctx.textAlign = 'right'
-  ctx.textBaseline = 'top'
-
-  // Baris 1: Teks "Timemark" warna kuning keemasan (#fbbf24), tebal
-  ctx.font = `700 ${22 * scale}px "Inter", sans-serif`
-  ctx.fillStyle = '#fbbf24'
-  ctx.fillText('Timemark', tmX, tmY)
-
-  // Baris 2: Teks "Foto 100% akurat" warna putih tipis (#ffffff)
-  tmY += 26 * scale
-  ctx.font = `400 ${12.5 * scale}px "Inter", sans-serif`
-  ctx.fillStyle = '#ffffff'
-  ctx.fillText('Foto 100% akurat', tmX, tmY)
-  ctx.restore()
-
-  // -------------------------------------------------------------
-  // SPESIFIKASI 2: PETA GPS MINI (KIRI ATAS)
-  // -------------------------------------------------------------
-  const mapX = 24 * scale
-  const mapY = 24 * scale
-  const mapSize = 136 * scale
-
-  // Kotak rounded (radius 12px), background putih, border tipis abu-abu (#e2e8f0), shadow halus
-  ctx.save()
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.12)'
-  ctx.shadowBlur = 8 * scale
-  ctx.shadowOffsetY = 3 * scale
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.16)'
+  ctx.shadowBlur = 8 * s
+  ctx.shadowOffsetY = 2 * s
 
   ctx.fillStyle = '#ffffff'
   ctx.beginPath()
-  ctx.roundRect(mapX, mapY, mapSize, mapSize, 12 * scale)
+  ctx.roundRect(mapX, mapY, mapW, mapH, mapRadius)
   ctx.fill()
-  ctx.strokeStyle = '#e2e8f0'
-  ctx.lineWidth = 1.5 * scale
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+  ctx.lineWidth = 1.5 * s
   ctx.stroke()
   ctx.restore()
 
   // Inset map content clipped inside
   ctx.save()
   ctx.beginPath()
-  ctx.roundRect(mapX + 4 * scale, mapY + 4 * scale, mapSize - (8 * scale), mapSize - (8 * scale), 9 * scale)
+  ctx.roundRect(mapX, mapY, mapW, mapH, mapRadius)
   ctx.clip()
 
   if (dynamicMapTileImg) {
-    ctx.drawImage(dynamicMapTileImg, mapX + 4 * scale, mapY + 4 * scale, mapSize - (8 * scale), mapSize - (8 * scale))
+    ctx.drawImage(dynamicMapTileImg, mapX, mapY, mapW, mapH)
   } else if (mapImg) {
-    ctx.drawImage(mapImg, mapX + 4 * scale, mapY + 4 * scale, mapSize - (8 * scale), mapSize - (8 * scale))
+    ctx.drawImage(mapImg, mapX, mapY, mapW, mapH)
   } else {
     // Vector road illustration with subtle grey/yellow roads
     ctx.fillStyle = '#f8fafc'
-    ctx.fillRect(mapX + 4 * scale, mapY + 4 * scale, mapSize - (8 * scale), mapSize - (8 * scale))
+    ctx.fillRect(mapX, mapY, mapW, mapH)
 
     // Grey base road
     ctx.strokeStyle = '#cbd5e1'
-    ctx.lineWidth = 7 * scale
+    ctx.lineWidth = 7.5 * s
     ctx.beginPath()
-    ctx.moveTo(mapX, mapY + (50 * scale))
-    ctx.lineTo(mapX + mapSize, mapY + (100 * scale))
+    ctx.moveTo(mapX, mapY + (mapH * 0.36))
+    ctx.lineTo(mapX + mapW, mapY + (mapH * 0.74))
     ctx.stroke()
 
-    // Thin yellow highway overlay
+    // Yellow highway overlay
     ctx.strokeStyle = '#fde68a'
-    ctx.lineWidth = 4 * scale
+    ctx.lineWidth = 4.2 * s
     ctx.beginPath()
-    ctx.moveTo(mapX, mapY + (50 * scale))
-    ctx.lineTo(mapX + mapSize, mapY + (100 * scale))
+    ctx.moveTo(mapX, mapY + (mapH * 0.36))
+    ctx.lineTo(mapX + mapW, mapY + (mapH * 0.74))
     ctx.stroke()
 
     // Cross street
     ctx.strokeStyle = '#e2e8f0'
-    ctx.lineWidth = 4 * scale
+    ctx.lineWidth = 4 * s
     ctx.beginPath()
-    ctx.moveTo(mapX + (60 * scale), mapY)
-    ctx.lineTo(mapX + (85 * scale), mapY + mapSize)
+    ctx.moveTo(mapX + (mapW * 0.42), mapY)
+    ctx.lineTo(mapX + (mapW * 0.62), mapY + mapH)
     ctx.stroke()
   }
 
-  const pinX = mapX + (mapSize / 2)
-  const pinY = mapY + (mapSize / 2) - (2 * scale)
+  const pinX = mapX + (mapW / 2)
+  const pinY = mapY + (mapH / 2)
 
-  // Radar Cone (Jangkauan arah kamera warna hijau toska transparan)
+  // Radar Cone (Jangkauan sektor hijau toska transparan)
   ctx.save()
   ctx.fillStyle = 'rgba(45, 212, 191, 0.45)'
   ctx.beginPath()
   ctx.moveTo(pinX, pinY)
-  ctx.arc(pinX, pinY, 52 * scale, (25 * Math.PI) / 180, (75 * Math.PI) / 180, false)
+  ctx.arc(pinX, pinY, mapW * 0.38, (25 * Math.PI) / 180, (75 * Math.PI) / 180, false)
   ctx.closePath()
   ctx.fill()
   ctx.restore()
 
-  // Titik pin lokasi biru muda dengan lingkaran putih di tengah
+  // Titik pin lokasi biru muda berlingkaran putih di tengah
   ctx.fillStyle = '#0ea5e9'
   ctx.beginPath()
-  ctx.arc(pinX, pinY, 9 * scale, 0, Math.PI * 2)
+  ctx.arc(pinX, pinY, 7.5 * s, 0, Math.PI * 2)
   ctx.fill()
   ctx.strokeStyle = '#ffffff'
-  ctx.lineWidth = 2 * scale
+  ctx.lineWidth = 2 * s
   ctx.stroke()
 
   ctx.fillStyle = '#ffffff'
   ctx.beginPath()
-  ctx.arc(pinX, pinY, 3 * scale, 0, Math.PI * 2)
+  ctx.arc(pinX, pinY, 2.5 * s, 0, Math.PI * 2)
   ctx.fill()
 
-  // Teks jalan "Wonorejo / Pasuruan" miring mengikuti jalur jalan
+  // Teks jalan miring "Wonorejo / Pasuruan"
   ctx.save()
-  ctx.translate(mapX + mapSize - (32 * scale), mapY + (36 * scale))
+  ctx.translate(mapX + mapW - (26 * s), mapY + (30 * s))
   ctx.rotate((-35 * Math.PI) / 180)
-  ctx.font = `700 ${9.5 * scale}px "Inter", sans-serif`
+  ctx.font = `700 ${9.5 * s}px "Inter", sans-serif`
   ctx.fillStyle = '#64748b'
   ctx.fillText('Wonorejo / Pasuruan', 0, 0)
   ctx.restore()
 
-  // Label teks di pojok kiri bawah peta: "📍 Peta"
-  ctx.font = `700 ${10 * scale}px "Inter", sans-serif`
-  ctx.fillStyle = '#334155'
+  // Di pojok kiri bawah peta: label teks "📍 Peta"
+  ctx.font = `700 ${9.5 * s}px "Inter", sans-serif`
+  ctx.fillStyle = '#1e293b'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillText('📍 Peta', mapX + (8 * scale), mapY + mapSize - (8 * scale))
+  ctx.fillText('📍 Peta', mapX + (8 * s), mapY + mapH - (8 * s))
+
+  // Border tipis transparan pembungkus peta
+  ctx.strokeStyle = 'rgba(226, 232, 240, 0.7)'
+  ctx.lineWidth = 1 * s
+  ctx.stroke()
 
   ctx.restore() // End map clipping
 
   // -------------------------------------------------------------
-  // SPESIFIKASI 3: KARTU IDENTITAS AKTIVITAS & JAM (KIRI BAWAH)
-  // Jarak dari dasar bawah foto: sekitar 140px
+  // SPESIFIKASI 3: WATERMARK TIMEMARK (KANAN ATAS)
+  // Posisi: kanan atas (x = W - 0.045 * W, y = 0.045 * W, text-align: right)
+  // Teks "Timemark": font sans-serif bold, warna #f59e0b (kuning keemasan), ukuran ~20px
+  // Teks "Foto 100% akurat": font sans-serif regular, warna #ffffff (putih transparan ~90%), ukuran ~12px, tepat di bawah teks Timemark
   // -------------------------------------------------------------
-  const cardBottomOffset = 140 * scale
-  const cardY = height - cardBottomOffset
-  const cardX = 24 * scale
-  const cardHeight = 44 * scale
-  const cardRadius = 8 * scale
+  const tmX = W - (0.045 * W)
+  let tmY = 0.045 * W
 
-  const timeFontSize = 28 * scale
-  ctx.font = `700 ${timeFontSize}px "Roboto Condensed", "Inter", sans-serif`
-  const timeWidth = ctx.measureText(timeStr).width
+  ctx.save()
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)'
+  ctx.shadowBlur = 2.5 * s
+  ctx.shadowOffsetX = 1 * s
+  ctx.shadowOffsetY = 1 * s
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'top'
 
-  const hasActivity = Boolean(activity && activity.trim())
-  let activityBadgeWidth = 0
-  if (hasActivity) {
-    ctx.font = `800 ${15 * scale}px "Inter", sans-serif`
-    activityBadgeWidth = ctx.measureText(activity.toUpperCase()).width + (20 * scale)
-  }
+  // Baris 1: Teks "Timemark"
+  ctx.font = `700 ${20 * s}px "Inter", sans-serif`
+  ctx.fillStyle = '#f59e0b'
+  ctx.fillText('Timemark', tmX, tmY)
 
-  // Dua Logo (Kanan): Logo BGN dan Logo Pasuruan berdampingan (~26-30px)
-  interface LogoEntry {
+  // Baris 2: Teks "Foto 100% akurat"
+  tmY += 24 * s
+  ctx.font = `400 ${12 * s}px "Inter", sans-serif`
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.92)'
+  ctx.fillText('Foto 100% akurat', tmX, tmY)
+  ctx.restore()
+
+  // -------------------------------------------------------------
+  // SPESIFIKASI 4: KARTU HEADER JAM & IDENTITAS (KIRI BAWAH)
+  // Posisi: x = 0.045 * W, y = H - 0.22 * H
+  // Background: rounded card putih murni (#ffffff), radius 8px, border tipis (#e2e8f0)
+  // Susunan Horizontal:
+  // - Blok Kuning (#fbbf24): padding horizontal ketat, teks hitam pekat sans-serif bold: "Apel Ka SPPG"
+  // - Jam: angka jam "23:41" warna biru dongker gelap (#1e3a8a), font sans-serif bold besar sejajar dengan blok kuning
+  // - Divider vertikal tipis (#cbd5e1)
+  // - Dua Logo: Logo BGN (bulat) dan Logo Pemkab Pasuruan (perisai hijau) berdampingan dalam proporsi rapi (tinggi ~26px)
+  // -------------------------------------------------------------
+  const cardX = 0.045 * W
+  const cardY = H - (0.22 * H)
+  const cardHeight = 36 * s
+  const cardRadius = 8 * s
+
+  // 1. Teks Jam
+  const timeFontSize = 24 * s
+  ctx.font = `700 ${timeFontSize}px "Inter", "Roboto Condensed", sans-serif`
+  const timeDisplay = timeStr || '23:41'
+  const timeWidth = ctx.measureText(timeDisplay).width
+
+  // 2. Blok Kuning (Aktivitas)
+  const actText = (activity && activity.trim()) ? activity.trim() : 'Apel Ka SPPG'
+  ctx.font = `800 ${13 * s}px "Inter", sans-serif`
+  const actTextWidth = ctx.measureText(actText).width
+  const actBadgePadX = 8 * s
+  const actBadgeWidth = actTextWidth + (actBadgePadX * 2)
+
+  // 3. Dua Logo (Tinggi ~26px)
+  const logoH = 26 * s
+  const logoSpacing = 6 * s
+  interface ActiveLogoItem {
     img: HTMLImageElement
     width: number
     height: number
   }
-
-  const logoH = 28 * scale // Tinggi serasi ~28px
-  const logoSpacing = 6 * scale
-  const activeLogos: LogoEntry[] = []
+  const activeLogos: ActiveLogoItem[] = []
 
   if (showBgnLogo && bgnLogo) {
     const nw = bgnLogo.naturalWidth || bgnLogo.width || 1
@@ -386,21 +411,24 @@ export function drawTimemarkWatermark(ctx: CanvasRenderingContext2D, options: Ti
     if (i < activeLogos.length - 1) logosTotalWidth += logoSpacing
   }
 
-  const dividerWidth = 1.2 * scale
-  const padLeft = 4 * scale
-  const padRight = 8 * scale
+  const dividerWidth = 1 * s
+  const padLeft = 4 * s
+  const padRight = 8 * s
+  const itemGap = 8 * s
 
-  const cardWidth = padLeft +
-    (hasActivity ? activityBadgeWidth + (10 * scale) : 0) +
-    timeWidth +
-    (activeLogos.length > 0 ? (10 * scale) + dividerWidth + (10 * scale) + logosTotalWidth : 0) +
-    padRight
+  // Hitung total lebar kartu secara dinamis
+  let innerWidth = padLeft + actBadgeWidth + itemGap + timeWidth
+  if (activeLogos.length > 0) {
+    innerWidth += itemGap + dividerWidth + itemGap + logosTotalWidth
+  }
+  innerWidth += padRight
+  const cardWidth = innerWidth
 
-  // Background kartu: Persegi panjang warna putih solid (#ffffff) border-radius: 8px, border tipis #e2e8f0, shadow rgba(0,0,0,0.08)
+  // Render Background Kartu Putih Murni
   ctx.save()
   ctx.shadowColor = 'rgba(0, 0, 0, 0.08)'
-  ctx.shadowBlur = 6 * scale
-  ctx.shadowOffsetY = 2 * scale
+  ctx.shadowBlur = 6 * s
+  ctx.shadowOffsetY = 2 * s
 
   ctx.fillStyle = '#ffffff'
   ctx.beginPath()
@@ -408,59 +436,48 @@ export function drawTimemarkWatermark(ctx: CanvasRenderingContext2D, options: Ti
   ctx.fill()
 
   ctx.strokeStyle = '#e2e8f0'
-  ctx.lineWidth = 1 * scale
+  ctx.lineWidth = 1 * s
   ctx.stroke()
   ctx.restore()
 
   let currX = cardX + padLeft
 
-  // Blok Kuning (Kiri): Warna kuning cerah (#fbbf24), teks hitam tebal bold: "Apel Ka SPPG"
-  if (hasActivity) {
-    const badgeY = cardY + (4 * scale)
-    const badgeH = cardHeight - (8 * scale)
+  // Render Blok Kuning (#fbbf24)
+  const badgeY = cardY + (4 * s)
+  const badgeH = cardHeight - (8 * s)
 
-    ctx.fillStyle = '#fbbf24'
-    ctx.beginPath()
-    ctx.roundRect(currX, badgeY, activityBadgeWidth, badgeH, 5 * scale)
-    ctx.fill()
+  ctx.fillStyle = '#fbbf24'
+  ctx.beginPath()
+  ctx.roundRect(currX, badgeY, actBadgeWidth, badgeH, 5 * s)
+  ctx.fill()
 
-    ctx.fillStyle = '#0f172a'
-    ctx.font = `800 ${15 * scale}px "Inter", sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(activity.toUpperCase(), currX + (activityBadgeWidth / 2), badgeY + (badgeH / 2))
+  ctx.fillStyle = '#0f172a'
+  ctx.font = `800 ${13 * s}px "Inter", sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(actText, currX + (actBadgeWidth / 2), badgeY + (badgeH / 2))
 
-    currX += activityBadgeWidth + (10 * scale)
-  }
+  currX += actBadgeWidth + itemGap
 
-  // Jam (Tengah): Teks jam besar tebal warna biru gelap (#1e3a8a / #172554)
-  ctx.save()
-  ctx.strokeStyle = 'rgba(30, 58, 138, 0.07)'
-  ctx.lineWidth = 1.5 * scale
-  for (let stripeX = currX; stripeX < currX + timeWidth; stripeX += 6 * scale) {
-    ctx.beginPath()
-    ctx.moveTo(stripeX, cardY + (6 * scale))
-    ctx.lineTo(stripeX + (6 * scale), cardY + cardHeight - (6 * scale))
-    ctx.stroke()
-  }
-  ctx.restore()
-
-  ctx.fillStyle = '#172554'
-  ctx.font = `700 ${timeFontSize}px "Roboto Condensed", "Inter", sans-serif`
+  // Render Jam: angka jam warna biru dongker gelap (#1e3a8a)
+  ctx.fillStyle = '#1e3a8a'
+  ctx.font = `700 ${timeFontSize}px "Inter", "Roboto Condensed", sans-serif`
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText(timeStr, currX, cardY + (cardHeight / 2) + (1 * scale))
+  ctx.fillText(timeDisplay, currX, cardY + (cardHeight / 2))
 
   currX += timeWidth
 
-  // Divider tipis (#e5e7eb) & Dua Logo (Kanan) berdampingan
+  // Render Divider vertikal tipis (#cbd5e1) & Dua Logo
   if (activeLogos.length > 0) {
-    currX += 10 * scale
-    const divY = cardY + (cardHeight - (22 * scale)) / 2
-    ctx.fillStyle = '#e5e7eb'
-    ctx.fillRect(currX, divY, dividerWidth, 22 * scale)
+    currX += itemGap
+    const divH = 20 * s
+    const divY = cardY + (cardHeight - divH) / 2
 
-    currX += dividerWidth + (10 * scale)
+    ctx.fillStyle = '#cbd5e1'
+    ctx.fillRect(currX, divY, dividerWidth, divH)
+
+    currX += dividerWidth + itemGap
 
     for (const logo of activeLogos) {
       const logoY = cardY + (cardHeight - logo.height) / 2
@@ -470,24 +487,40 @@ export function drawTimemarkWatermark(ctx: CanvasRenderingContext2D, options: Ti
   }
 
   // -------------------------------------------------------------
-  // SPESIFIKASI 4: GARIS VERTIKAL ORANYE & TEKS INFORMASI (DI BAWAH KARTU JAM)
+  // SPESIFIKASI 5: TEKS KETERANGAN DI BAWAH KARTU JAM
+  // - Jarak dari kartu jam: ~14px ke bawah
+  // - Garis Aksen Vertikal Oranye:
+  //   * Posisi x = 0.045 * W
+  //   * Lebar: 3.5px, warna #f97316 (oranye cerah), lineCap = 'round'
+  //   * Titik mulai y = sejajar atas teks "Selasa, 27 Oktober 2026"
+  //   * Titik selesai y = sejajar bawah teks koordinat "7.720852°S, 112.797835°E"
+  // - Teks Informasi (Semua warna putih bersih #ffffff, drop shadow sangat tipis: shadowBlur = 2, shadowColor = 'rgba(0,0,0,0.5)'):
+  //   * Jarak teks dari garis oranye: padding-left 10px
+  //   * Baris 1: "Selasa, 27 Oktober 2026" (Font semi-bold, 15px)
+  //   * Spasi antar baris (gap): 4px
+  //   * Baris 2: "Wonorejo, Pasuruan, Jawa Timur, 67173" (Font regular, 13px)
+  //   * Baris 3: "7.720852°S, 112.797835°E" (Font regular, 13px)
+  // - Baris Kode Foto:
+  //   * Diberi jarak 8px di bawah koordinat (tidak terkena garis oranye)
+  //   * Teks: Ikon shield check + "Kode Foto: WLHMYXL4GYPRUE" warna abu-abu terang (#cbd5e1), font 11.5px
   // -------------------------------------------------------------
-  const lineX = 24 * scale
-  const textX = lineX + (12 * scale)
+  const lineX = 0.045 * W
+  const textX = lineX + (10 * s)
 
-  // Layout vertikal baris teks
-  const yDate = cardY + cardHeight + (18 * scale)
-  const yAddr1 = yDate + (20 * scale)
+  const yDate = cardY + cardHeight + (14 * s)
+  const dateFontH = 15 * s
+  const rowGap = 4 * s
+  const addrFontH = 13 * s
+  const coordsFontH = 13 * s
 
-  // Multi-line address wrapping if needed
+  // Address calculation & wrapping if needed
   ctx.save()
-  ctx.font = `400 ${14 * scale}px "Inter", "Roboto", sans-serif`
-  const maxAddrWidth = width - textX - (30 * scale)
-
-  let addrLine1 = address
+  ctx.font = `400 ${addrFontH}px "Inter", sans-serif`
+  const maxAddrWidth = W - textX - (24 * s)
+  let addrLine1 = address || 'Wonorejo, Pasuruan, Jawa Timur, 67173'
   let addrLine2 = ''
-  if (ctx.measureText(address).width > maxAddrWidth) {
-    const words = address.split(' ')
+  if (ctx.measureText(addrLine1).width > maxAddrWidth) {
+    const words = addrLine1.split(' ')
     addrLine1 = ''
     for (let i = 0; i < words.length; i++) {
       const testLine = addrLine1 ? addrLine1 + ' ' + words[i] : words[i]
@@ -501,69 +534,66 @@ export function drawTimemarkWatermark(ctx: CanvasRenderingContext2D, options: Ti
   }
   ctx.restore()
 
-  const hasTwoAddrLines = Boolean(addrLine2 && addrLine2.trim())
-  const yAddr2 = hasTwoAddrLines ? yAddr1 + (18 * scale) : yAddr1
-  const yGps = (hasTwoAddrLines ? yAddr2 : yAddr1) + (20 * scale)
-  const yCode = yGps + (22 * scale)
+  const yAddr1 = yDate + dateFontH + rowGap
+  const hasAddr2 = Boolean(addrLine2 && addrLine2.trim())
+  const yAddr2 = hasAddr2 ? yAddr1 + addrFontH + rowGap : yAddr1
+  const yCoords = (hasAddr2 ? yAddr2 : yAddr1) + addrFontH + rowGap
+  const coordsBottom = yCoords + coordsFontH
 
-  // Garis Aksen Oranye:
-  // Lebar garis 4px, warna #f97316 / #fb923c, lineCap = 'round'
-  // Ditarik dari sejajar baris Tanggal sampai ke baris Koordinat
-  const lineYTop = yDate - (14 * scale)
-  const lineYBottom = yGps + (2 * scale)
-
+  // Garis Aksen Vertikal Oranye
   ctx.save()
   ctx.strokeStyle = '#f97316'
-  ctx.lineWidth = 4 * scale
+  ctx.lineWidth = 3.5 * s
   ctx.lineCap = 'round'
   ctx.beginPath()
-  ctx.moveTo(lineX, lineYTop)
-  ctx.lineTo(lineX, lineYBottom)
+  ctx.moveTo(lineX, yDate + (1.75 * s))
+  ctx.lineTo(lineX, coordsBottom - (1.75 * s))
   ctx.stroke()
   ctx.restore()
 
-  // Teks Informasi:
-  // Semua warna putih bersih murni #ffffff, shadow tipis murni jika latar terang
+  // Teks Informasi (Warna putih murni #ffffff, drop shadow tipis)
   ctx.save()
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)'
-  ctx.shadowBlur = 3 * scale
-  ctx.shadowOffsetX = 1 * scale
-  ctx.shadowOffsetY = 1 * scale
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+  ctx.shadowBlur = 2 * s
+  ctx.shadowOffsetX = 1 * s
+  ctx.shadowOffsetY = 1 * s
   ctx.fillStyle = '#ffffff'
   ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
+  ctx.textBaseline = 'top'
 
-  // Baris 1 (Tanggal): Font semi-bold, ukuran 16px
-  ctx.font = `600 ${16 * scale}px "Inter", "Roboto", sans-serif`
-  ctx.fillText(dateStr, textX, yDate)
+  // Baris 1: Tanggal (Font semi-bold, 15px)
+  ctx.font = `600 ${dateFontH}px "Inter", sans-serif`
+  ctx.fillText(dateStr || 'Selasa, 27 Oktober 2026', textX, yDate)
 
-  // Baris 2 (Alamat): Font regular, ukuran 14px
-  ctx.font = `400 ${14 * scale}px "Inter", "Roboto", sans-serif`
+  // Baris 2: Alamat (Font regular, 13px)
+  ctx.font = `400 ${addrFontH}px "Inter", sans-serif`
   ctx.fillText(addrLine1, textX, yAddr1)
-  if (hasTwoAddrLines) {
+  if (hasAddr2) {
     ctx.fillText(addrLine2, textX, yAddr2)
   }
 
-  // Baris 3 (Koordinat): Font regular, ukuran 14px
-  ctx.font = `400 ${14 * scale}px "Inter", "Roboto", sans-serif`
-  ctx.fillText(gpsCoords, textX, yGps)
+  // Baris 3: Koordinat (Font regular, 13px)
+  ctx.fillText(gpsCoords || '7.720852°S, 112.797835°E', textX, yCoords)
   ctx.restore()
 
-  // Baris 4 (Kode Foto): Ikon perisai centang tipis + teks "Kode Foto: [KODE_FOTO]"
+  // Baris Kode Foto: Diberi jarak 8px di bawah koordinat (tidak terkena garis oranye)
+  const yCode = coordsBottom + (8 * s)
+  const codeFontH = 11.5 * s
+
   ctx.save()
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)'
-  ctx.shadowBlur = 3 * scale
-  ctx.shadowOffsetX = 1 * scale
-  ctx.shadowOffsetY = 1 * scale
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+  ctx.shadowBlur = 2 * s
+  ctx.shadowOffsetX = 1 * s
+  ctx.shadowOffsetY = 1 * s
 
-  const shieldW = 12 * scale
-  const shieldH = 14 * scale
+  const shieldW = 11 * s
+  const shieldH = 13 * s
   const shieldX = textX
-  const shieldY = yCode - (11 * scale)
+  const shieldY = yCode + (1 * s)
 
-  // Outline perisai tipis
+  // Outline perisai tipis (#cbd5e1)
   ctx.strokeStyle = '#cbd5e1'
-  ctx.lineWidth = 1.2 * scale
+  ctx.lineWidth = 1.2 * s
   ctx.beginPath()
   ctx.moveTo(shieldX, shieldY)
   ctx.lineTo(shieldX + shieldW, shieldY)
@@ -572,45 +602,44 @@ export function drawTimemarkWatermark(ctx: CanvasRenderingContext2D, options: Ti
   ctx.closePath()
   ctx.stroke()
 
-  // Centang tipis
+  // Centang tipis di dalam perisai
   ctx.beginPath()
-  ctx.moveTo(shieldX + (2.5 * scale), shieldY + (6 * scale))
-  ctx.lineTo(shieldX + (5 * scale), shieldY + (8.5 * scale))
-  ctx.lineTo(shieldX + (9.5 * scale), shieldY + (4 * scale))
+  ctx.moveTo(shieldX + (2.5 * s), shieldY + (5.5 * s))
+  ctx.lineTo(shieldX + (4.5 * s), shieldY + (8 * s))
+  ctx.lineTo(shieldX + (8.5 * s), shieldY + (4 * s))
   ctx.stroke()
 
-  // Teks "Kode Foto: " + [KODE_FOTO]
+  // Teks "Kode Foto: [KODE_FOTO]" warna abu-abu terang (#cbd5e1), font 11.5px
   ctx.fillStyle = '#cbd5e1'
-  ctx.font = `400 ${12 * scale}px "Inter", sans-serif`
+  ctx.font = `400 ${codeFontH}px "Inter", sans-serif`
   ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  ctx.fillText('Kode Foto: ', shieldX + shieldW + (6 * scale), yCode)
-
-  const codeLabelW = ctx.measureText('Kode Foto: ').width
-  ctx.font = `700 ${12 * scale}px "Inter", sans-serif`
-  ctx.fillText(timemarkCode, shieldX + shieldW + (6 * scale) + codeLabelW, yCode)
+  ctx.textBaseline = 'top'
+  const activeCode = timemarkCode || 'WLHMYXL4GYPRUE'
+  ctx.fillText(`Kode Foto: ${activeCode}`, shieldX + shieldW + (5 * s), yCode)
   ctx.restore()
 
   // -------------------------------------------------------------
-  // SPESIFIKASI 5: TEKS WATERMARK SAMPING KANAN (VERTIKAL)
-  // Posisi: Sangat mepet ke batas tepi kanan (margin 8-12px dari kanan)
-  // Rotasi: -90 derajat, warna putih tipis semi-transparan (opacity ~0.8)
+  // SPESIFIKASI 6: WATERMARK VERTIKAL KANAN
+  // Posisi: menempel rapat di tepi kanan (x = W - 14px, tengah vertikal)
+  // Rotasi: -90 derajat
+  // Teks: "© [KODE_FOTO] Timemark Verified"
+  // Warna putih tipis (#ffffff, opacity 0.75), font sans-serif ramping 11px
   // -------------------------------------------------------------
-  const vertX = width - (10 * scale)
-  const vertY = height / 2
+  const vertX = W - (14 * s)
+  const vertY = H / 2
 
   ctx.save()
   ctx.translate(vertX, vertY)
   ctx.rotate((-90 * Math.PI) / 180)
-  ctx.font = `400 ${11.5 * scale}px "Inter", sans-serif`
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)'
-  ctx.shadowBlur = 3 * scale
-  ctx.shadowOffsetX = 1 * scale
-  ctx.shadowOffsetY = 1 * scale
+  ctx.font = `400 ${11 * s}px "Inter", sans-serif`
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+  ctx.shadowBlur = 2 * s
+  ctx.shadowOffsetX = 1 * s
+  ctx.shadowOffsetY = 1 * s
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(`© ${timemarkCode} Timemark Verified`, 0, 0)
+  ctx.fillText(`© ${activeCode} Timemark Verified`, 0, 0)
   ctx.restore()
 }
 
@@ -620,8 +649,8 @@ export default function FotoTimemarkPage() {
   const [timeStr, setTimeStr] = useState('')
   const [dateStr, setDateStr] = useState('')
   const [address, setAddress] = useState('Wonorejo, Pasuruan, Jawa Timur, 67173')
-  const [gpsCoords, setGpsCoords] = useState('7.720893°S, 112.797827°E')
-  const [timemarkCode, setTimemarkCode] = useState('3MR1PA66P1TC46')
+  const [gpsCoords, setGpsCoords] = useState('7.720852°S, 112.797835°E')
+  const [timemarkCode, setTimemarkCode] = useState('WLHMYXL4GYPRUE')
 
   // Auto initialize real-time current date & time on client mount
   useEffect(() => {
@@ -645,9 +674,9 @@ export default function FotoTimemarkPage() {
   const isDraggingRef = useRef(false)
   const startPosRef = useRef({ x: 0, y: 0 })
 
-  // Canvas Reference
+  // Canvas Reference (Locked to 3:4 Smartphone Portrait Mode)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [canvasAspectRatio, setCanvasAspectRatio] = useState<number>(4 / 3)
+  const [canvasAspectRatio, setCanvasAspectRatio] = useState<number>(3 / 4)
 
   // Loaded Images State to prevent unnecessary redraw flickering
   const bgImgRef = useRef<HTMLImageElement | null>(null)
@@ -756,14 +785,14 @@ export default function FotoTimemarkPage() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Standard High-Resolution 1600x1200 (Landscape 4:3)
-    const CANVAS_WIDTH = 1600
-    const CANVAS_HEIGHT = 1200
+    // Standard High-Resolution 960x1280 (Portrait 3:4 Smartphone Camera Ratio)
+    const CANVAS_WIDTH = 960
+    const CANVAS_HEIGHT = 1280
 
     canvas.width = CANVAS_WIDTH
     canvas.height = CANVAS_HEIGHT
 
-    const scale = CANVAS_WIDTH / 1200
+    const scale = CANVAS_WIDTH / 960
 
     // Load Background Image if available
     let bgImg: HTMLImageElement | null = null
@@ -776,14 +805,18 @@ export default function FotoTimemarkPage() {
       }
     }
 
-    // Wait for Roboto Condensed & Inter webfonts to load
+    // Wait for Inter webfonts to load
     if (typeof document !== 'undefined' && document.fonts) {
       try {
         await Promise.all([
-          document.fonts.load(`bold ${28 * scale}px "Roboto Condensed"`),
-          document.fonts.load(`bold ${22 * scale}px "Inter"`),
-          document.fonts.load(`600 ${16 * scale}px "Inter"`),
-          document.fonts.load(`normal ${14 * scale}px "Inter"`),
+          document.fonts.load(`bold ${24 * scale}px "Inter"`),
+          document.fonts.load(`bold ${20 * scale}px "Inter"`),
+          document.fonts.load(`800 ${13 * scale}px "Inter"`),
+          document.fonts.load(`600 ${15 * scale}px "Inter"`),
+          document.fonts.load(`normal ${13 * scale}px "Inter"`),
+          document.fonts.load(`normal ${12 * scale}px "Inter"`),
+          document.fonts.load(`normal ${11.5 * scale}px "Inter"`),
+          document.fonts.load(`normal ${11 * scale}px "Inter"`),
         ])
       } catch (e) {
         console.warn('Font loading notice:', e)
@@ -1183,10 +1216,10 @@ export default function FotoTimemarkPage() {
             </div>
 
             {/* High-Resolution Live Canvas Display */}
-            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex items-center justify-center">
+            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex items-center justify-center p-2">
               <canvas
                 ref={canvasRef}
-                className="w-full aspect-[4/3] object-contain rounded-2xl shadow-xl touch-none select-none block cursor-grab active:cursor-grabbing"
+                className="w-full aspect-[3/4] max-w-[460px] mx-auto object-contain rounded-xl shadow-xl touch-none select-none block cursor-grab active:cursor-grabbing"
                 onTouchStart={(e) => {
                   if (e.touches.length === 1) {
                     isDraggingRef.current = true
