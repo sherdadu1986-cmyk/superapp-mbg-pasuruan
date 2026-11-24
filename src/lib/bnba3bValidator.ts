@@ -5,12 +5,12 @@ export type SubKategori3B = 'POS - Ibu Hamil' | 'POS - Ibu Menyusui' | 'POS - Ba
 
 export interface NormalizedBnba3B {
   nama_lengkap: string
-  tanggal_lahir: string // YYYY-MM-DD
-  gender: 'L' | 'P'
+  tanggal_lahir: string // YYYY-MM-DD or ''
+  gender: 'L' | 'P' | ''
   type: string
   identity_code: string
   kategori: string
-  sub_kategori: SubKategori3B
+  sub_kategori: SubKategori3B | ''
   hpht: string // YYYY-MM-DD or ''
   nama_anak: string
   type_identity_anak: string
@@ -69,10 +69,11 @@ export function isValidCalendarDate(year: number, month: number, day: number): b
 }
 
 export function formatIsoDateToDDMMYYYY(iso?: string | null): string {
-  if (!iso || iso === '-' || iso === '—') return '—'
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(iso)) return iso
-  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (!match) return iso
+  const str = String(iso ?? '').trim()
+  if (!str || str === '-' || str === '—') return '—'
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return str
   return `${match[3]}/${match[2]}/${match[1]}`
 }
 
@@ -80,9 +81,10 @@ export function formatIsoDateToDDMMYYYY(iso?: string | null): string {
  * Exact completed calendar months from `fromIso` (YYYY-MM-DD) to `refDate`.
  * Returns negative if `fromIso` is in the future.
  */
-export function getCalendarMonthsDiff(fromIso: string, refDate: Date = new Date()): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromIso)) return null
-  const [fy, fm, fd] = fromIso.split('-').map(Number)
+export function getCalendarMonthsDiff(fromIso?: string | null, refDate: Date = new Date()): number | null {
+  const str = String(fromIso ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return null
+  const [fy, fm, fd] = str.split('-').map(Number)
   if (!isValidCalendarDate(fy, fm, fd)) return null
 
   const ty = refDate.getFullYear()
@@ -107,8 +109,8 @@ export function getCalendarMonthsDiff(fromIso: string, refDate: Date = new Date(
  * - Rejects non-16-digit or non-numeric strings.
  * - Flags trailing `0000` as yellow warning (non-blocking).
  */
-export function parseNikStructure3B(rawNik: string, refDate: Date = new Date()): Nik3BParsedInfo {
-  const raw = String(rawNik || '').trim()
+export function parseNikStructure3B(rawNik?: string | null, refDate: Date = new Date()): Nik3BParsedInfo {
+  const raw = String(rawNik ?? '').trim()
   if (!raw) {
     return {
       isFormatValid: false,
@@ -199,22 +201,23 @@ export interface GlobalNikRecordInfo {
  * Build an O(1) lookup map of all existing NIKs across Posyandu & Schools.
  */
 export function buildGlobalNikLookupMap(
-  allRecords: PenerimaManfaatBnba[],
-  kpmList: Array<{ id: string; nama: string; npsnReg?: string }>
+  allRecords: PenerimaManfaatBnba[] = [],
+  kpmList: Array<{ id: string; nama: string; npsnReg?: string }> = []
 ): Map<string, GlobalNikRecordInfo[]> {
   const kpmNameMap = new Map<string, string>()
-  kpmList.forEach(k => {
-    if (k.id) kpmNameMap.set(k.id, k.nama)
-    if (k.npsnReg) kpmNameMap.set(k.npsnReg, k.nama)
+  ;(kpmList || []).forEach(k => {
+    if (k?.id) kpmNameMap.set(k.id, k.nama ?? '')
+    if (k?.npsnReg) kpmNameMap.set(k.npsnReg, k.nama ?? '')
   })
 
   const map = new Map<string, GlobalNikRecordInfo[]>()
-  allRecords.forEach(rec => {
-    const nik = cleanDigits(rec.identity_code || rec.nisn_nik || rec.nik || '')
+  ;(allRecords || []).forEach(rec => {
+    if (!rec) return
+    const nik = cleanDigits(rec?.identity_code ?? rec?.nisn_nik ?? rec?.nik ?? '')
     if (!nik || nik.length < 10) return
-    const nama = (rec.nama_lengkap || rec.nama_penerima || rec.nama || 'Penerima').toUpperCase().trim()
-    const lokasi = kpmNameMap.get(rec.kelompok_id) || (rec as any).nama_sekolah || (rec as any).nama_kelompok || 'Lembaga / Posyandu Terdaftar'
-    const subKat = rec.sub_kategori || rec.posisi || 'Terdaftar'
+    const nama = String(rec?.nama_lengkap ?? rec?.nama_penerima ?? rec?.nama ?? 'Penerima').toUpperCase().trim()
+    const lokasi = kpmNameMap.get(rec?.kelompok_id ?? '') || (rec as any)?.nama_sekolah || (rec as any)?.nama_kelompok || 'Lembaga / Posyandu Terdaftar'
+    const subKat = String(rec?.sub_kategori ?? rec?.posisi ?? 'Terdaftar')
     const existing = map.get(nik) || []
     existing.push({ id: rec.id, nama, lokasi, subKategori: subKat })
     map.set(nik, existing)
@@ -223,121 +226,123 @@ export function buildGlobalNikLookupMap(
 }
 
 export function formatDuplicateMessage(info: GlobalNikRecordInfo): string {
-  return `NIK sudah terdaftar atas nama ${info.nama} di ${info.lokasi} (${info.subKategori})`
+  return `NIK sudah terdaftar atas nama ${info?.nama ?? 'Penerima'} di ${info?.lokasi ?? 'Lembaga Terdaftar'} (${info?.subKategori ?? 'Terdaftar'})`
 }
 
 /**
  * Live Supabase + local fallback duplicate check for single-entry / edit BNBA modal.
  */
 export async function checkDuplicateNik3BLive(
-  nik: string,
+  nik?: string | null,
   currentRecordId?: string,
   localRecords?: PenerimaManfaatBnba[],
   kpmList?: Array<{ id: string; nama: string; npsnReg?: string }>
 ): Promise<Duplicate3BMatch | null> {
-  const cleanNik = cleanDigits(nik)
-  if (cleanNik.length !== 16) return null
-
-  const kpmNameMap = new Map<string, string>()
-  ;(kpmList || []).forEach(k => {
-    if (k.id) kpmNameMap.set(k.id, k.nama)
-    if (k.npsnReg) kpmNameMap.set(k.npsnReg, k.nama)
-  })
-
   try {
-    let query = supabase
-      .from('penerima_manfaat_bnba')
-      .select('id, nisn_nik, nik, nama_lengkap, nama_penerima, nama, kelompok_id, posisi, kelas')
-      .or(`nisn_nik.eq.${cleanNik},nik.eq.${cleanNik}`)
+    const cleanNik = cleanDigits(nik ?? '')
+    if (cleanNik.length !== 16) return null
 
-    if (currentRecordId) {
-      query = query.neq('id', currentRecordId)
-    }
+    const kpmNameMap = new Map<string, string>()
+    ;(kpmList || []).forEach(k => {
+      if (k?.id) kpmNameMap.set(k.id, k.nama ?? '')
+      if (k?.npsnReg) kpmNameMap.set(k.npsnReg, k.nama ?? '')
+    })
 
-    const { data: bnbaRows, error } = await query.limit(1)
-    if (!error && bnbaRows && bnbaRows.length > 0) {
-      const m: any = bnbaRows[0]
-      let lokasi = kpmNameMap.get(m.kelompok_id) || 'Lembaga / Posyandu'
-      if (m.kelompok_id && !kpmNameMap.has(m.kelompok_id)) {
-        const { data: kpmData } = await supabase
-          .from('kelompok_penerima_manfaat')
-          .select('nama')
-          .eq('id', m.kelompok_id)
-          .maybeSingle()
-        if (kpmData?.nama) lokasi = kpmData.nama
-      }
-      let subKat = m.posisi || 'Penerima'
-      if (typeof m.kelas === 'string' && m.kelas.startsWith('__3B__:')) {
-        try {
-          const parsed = JSON.parse(m.kelas.slice(7))
-          if (parsed?.sub_kategori) subKat = parsed.sub_kategori
-        } catch {}
-      }
-      const nama = (m.nama_lengkap || m.nama_penerima || m.nama || 'Penerima').toUpperCase().trim()
-      const info: GlobalNikRecordInfo = { id: m.id, nama, lokasi, subKategori: subKat }
-      return { ...info, message: formatDuplicateMessage(info) }
-    }
-
-    // Also try checking identity_code column if migrated
     try {
-      let idCodeQuery = supabase
+      let query = supabase
         .from('penerima_manfaat_bnba')
-        .select('id, identity_code, nama_lengkap, kelompok_id, posisi, sub_kategori')
-        .eq('identity_code', cleanNik)
-      if (currentRecordId) idCodeQuery = idCodeQuery.neq('id', currentRecordId)
-      const { data: idRows } = await idCodeQuery.limit(1)
-      if (idRows && idRows.length > 0) {
-        const m: any = idRows[0]
-        const lokasi = kpmNameMap.get(m.kelompok_id) || 'Posyandu Terdaftar'
-        const nama = (m.nama_lengkap || 'Penerima').toUpperCase().trim()
-        const subKat = m.sub_kategori || m.posisi || '3B'
-        const info: GlobalNikRecordInfo = { id: m.id, nama, lokasi, subKategori: subKat }
+        .select('id, nisn_nik, nik, nama_lengkap, nama_penerima, nama, kelompok_id, posisi, kelas')
+        .or(`nisn_nik.eq.${cleanNik},nik.eq.${cleanNik}`)
+
+      if (currentRecordId) {
+        query = query.neq('id', currentRecordId)
+      }
+
+      const { data: bnbaRows, error } = await query.limit(1)
+      if (!error && bnbaRows && bnbaRows.length > 0) {
+        const m: any = bnbaRows[0]
+        let lokasi = kpmNameMap.get(m?.kelompok_id ?? '') || 'Lembaga / Posyandu'
+        if (m?.kelompok_id && !kpmNameMap.has(m.kelompok_id)) {
+          const { data: kpmData } = await supabase
+            .from('kelompok_penerima_manfaat')
+            .select('nama')
+            .eq('id', m.kelompok_id)
+            .maybeSingle()
+          if (kpmData?.nama) lokasi = kpmData.nama
+        }
+        let subKat = String(m?.posisi ?? 'Penerima')
+        if (typeof m?.kelas === 'string' && m.kelas.startsWith('__3B__:')) {
+          try {
+            const parsed = JSON.parse(m.kelas.slice(7))
+            if (parsed?.sub_kategori) subKat = String(parsed.sub_kategori)
+          } catch {}
+        }
+        const nama = String(m?.nama_lengkap ?? m?.nama_penerima ?? m?.nama ?? 'Penerima').toUpperCase().trim()
+        const info: GlobalNikRecordInfo = { id: String(m?.id ?? ''), nama, lokasi, subKategori: subKat }
         return { ...info, message: formatDuplicateMessage(info) }
       }
-    } catch {
-      // Ignore if column identity_code hasn't been migrated yet
+
+      try {
+        let idCodeQuery = supabase
+          .from('penerima_manfaat_bnba')
+          .select('id, identity_code, nama_lengkap, kelompok_id, posisi, sub_kategori')
+          .eq('identity_code', cleanNik)
+        if (currentRecordId) idCodeQuery = idCodeQuery.neq('id', currentRecordId)
+        const { data: idRows } = await idCodeQuery.limit(1)
+        if (idRows && idRows.length > 0) {
+          const m: any = idRows[0]
+          const lokasi = kpmNameMap.get(m?.kelompok_id ?? '') || 'Posyandu Terdaftar'
+          const nama = String(m?.nama_lengkap ?? 'Penerima').toUpperCase().trim()
+          const subKat = String(m?.sub_kategori ?? m?.posisi ?? '3B')
+          const info: GlobalNikRecordInfo = { id: String(m?.id ?? ''), nama, lokasi, subKategori: subKat }
+          return { ...info, message: formatDuplicateMessage(info) }
+        }
+      } catch {
+        // Ignore if column identity_code hasn't been migrated yet
+      }
+
+      try {
+        let masterQuery = supabase
+          .from('master_penerima_manfaat')
+          .select('id, nama_lengkap, nama, nama_sekolah, sub_kategori')
+          .or(`identity_code.eq.${cleanNik},nik.eq.${cleanNik}`)
+        if (currentRecordId) masterQuery = masterQuery.neq('id', currentRecordId)
+        const { data: masterRows } = await masterQuery.limit(1)
+        if (masterRows && masterRows.length > 0) {
+          const m: any = masterRows[0]
+          const nama = String(m?.nama_lengkap ?? m?.nama ?? 'Penerima').toUpperCase().trim()
+          const lokasi = String(m?.nama_sekolah ?? 'Posyandu / Sekolah Terdaftar')
+          const subKat = String(m?.sub_kategori ?? 'Terdaftar')
+          const info: GlobalNikRecordInfo = { id: String(m?.id ?? ''), nama, lokasi, subKategori: subKat }
+          return { ...info, message: formatDuplicateMessage(info) }
+        }
+      } catch {
+        // Ignore if master_penerima_manfaat table does not exist
+      }
+    } catch (err) {
+      console.warn('Live duplicate NIK 3B check warning:', err)
     }
 
-    // Fallback check on master_penerima_manfaat table if present
-    try {
-      let masterQuery = supabase
-        .from('master_penerima_manfaat')
-        .select('id, nama_lengkap, nama, nama_sekolah, sub_kategori')
-        .or(`identity_code.eq.${cleanNik},nik.eq.${cleanNik}`)
-      if (currentRecordId) masterQuery = masterQuery.neq('id', currentRecordId)
-      const { data: masterRows } = await masterQuery.limit(1)
-      if (masterRows && masterRows.length > 0) {
-        const m: any = masterRows[0]
-        const nama = (m.nama_lengkap || m.nama || 'Penerima').toUpperCase().trim()
-        const lokasi = m.nama_sekolah || 'Posyandu / Sekolah Terdaftar'
-        const subKat = m.sub_kategori || 'Terdaftar'
-        const info: GlobalNikRecordInfo = { id: m.id, nama, lokasi, subKategori: subKat }
-        return { ...info, message: formatDuplicateMessage(info) }
+    if (localRecords && localRecords.length > 0) {
+      const localMap = buildGlobalNikLookupMap(localRecords, kpmList || [])
+      const matches = (localMap.get(cleanNik) || []).filter(m => m.id !== currentRecordId)
+      if (matches.length > 0) {
+        return { ...matches[0], message: formatDuplicateMessage(matches[0]) }
       }
-    } catch {
-      // Ignore if master_penerima_manfaat table does not exist
     }
+
+    return null
   } catch (err) {
-    console.warn('Live duplicate NIK 3B check warning:', err)
+    console.warn('Unexpected error in checkDuplicateNik3BLive:', err)
+    return null
   }
-
-  // Fallback to local records
-  if (localRecords && localRecords.length > 0) {
-    const localMap = buildGlobalNikLookupMap(localRecords, kpmList || [])
-    const matches = (localMap.get(cleanNik) || []).filter(m => m.id !== currentRecordId)
-    if (matches.length > 0) {
-      return { ...matches[0], message: formatDuplicateMessage(matches[0]) }
-    }
-  }
-
-  return null
 }
 
 /**
  * Centralized Pre-Save Validator shared by Manual Input Form & Excel Import Parser.
  */
 export function validateBnba3BFull(
-  rawRec: NormalizedBnba3B,
+  rawRec?: Partial<NormalizedBnba3B> | null,
   options?: {
     duplicateMatch?: Duplicate3BMatch | null
     internalDuplicateRow?: number | null
@@ -345,18 +350,39 @@ export function validateBnba3BFull(
   }
 ): Bnba3BValidationResult {
   const refDate = options?.refDate || new Date()
+  const safeRaw = rawRec ?? {}
+  const subKatRaw = String(safeRaw?.sub_kategori ?? '').trim()
+  const subKat: SubKategori3B | '' =
+    subKatRaw === 'POS - Ibu Hamil' || subKatRaw === 'POS - Ibu Menyusui' || subKatRaw === 'POS - Balita'
+      ? subKatRaw
+      : ''
+  const genderRaw = String(safeRaw?.gender ?? '').trim().toUpperCase()
+  const safeGender: 'L' | 'P' | '' = genderRaw === 'L' || genderRaw === 'P' ? genderRaw : ''
+
   const rec: NormalizedBnba3B = {
-    ...rawRec,
-    nama_lengkap: String(rawRec.nama_lengkap || '').toUpperCase().trim(),
-    nama_anak: String(rawRec.nama_anak || '').toUpperCase().trim(),
-    nama_ibu: String(rawRec.nama_ibu || '').toUpperCase().trim(),
-    identity_code: cleanDigits(rawRec.identity_code),
-    identity_code_anak: cleanDigits(rawRec.identity_code_anak),
-    identity_code_ibu: cleanDigits(rawRec.identity_code_ibu),
+    nama_lengkap: String(safeRaw?.nama_lengkap ?? '').toUpperCase().trim(),
+    tanggal_lahir: String(safeRaw?.tanggal_lahir ?? '').trim(),
+    gender: safeGender,
+    type: String(safeRaw?.type ?? '').trim().toLowerCase(),
+    identity_code: String(safeRaw?.identity_code ?? '').trim(),
+    kategori: String(safeRaw?.kategori ?? '').trim().toUpperCase(),
+    sub_kategori: subKat,
+    hpht: String(safeRaw?.hpht ?? '').trim(),
+    nama_anak: String(safeRaw?.nama_anak ?? '').toUpperCase().trim(),
+    type_identity_anak: String(safeRaw?.type_identity_anak ?? '').trim().toLowerCase(),
+    identity_code_anak: String(safeRaw?.identity_code_anak ?? '').trim(),
+    tanggal_lahir_anak: String(safeRaw?.tanggal_lahir_anak ?? '').trim(),
+    nama_ibu: String(safeRaw?.nama_ibu ?? '').toUpperCase().trim(),
+    type_identity_ibu: String(safeRaw?.type_identity_ibu ?? '').trim().toLowerCase(),
+    identity_code_ibu: String(safeRaw?.identity_code_ibu ?? '').trim(),
   }
 
   const errors: string[] = []
   const warnings: string[] = []
+
+  if (!rec.sub_kategori) {
+    errors.push('Sub-kategori sasaran 3B wajib dipilih')
+  }
 
   // 1. Common Mandatory Fields
   if (!rec.nama_lengkap) {

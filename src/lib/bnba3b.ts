@@ -58,7 +58,7 @@ export function normalizeSubKategori3B(val?: string | null): SubKategori3B {
   return 'POS - Balita'
 }
 
-export function subKategoriToPosisi(subKat: SubKategori3B): 'Bumil' | 'Busui' | 'Balita' {
+export function subKategoriToPosisi(subKat?: SubKategori3B | '' | null): 'Bumil' | 'Busui' | 'Balita' {
   if (subKat === 'POS - Ibu Hamil') return 'Bumil'
   if (subKat === 'POS - Ibu Menyusui') return 'Busui'
   return 'Balita'
@@ -232,51 +232,56 @@ export function normalizeBnba3BFields(row: Partial<PenerimaManfaatBnba>): Normal
 }
 
 export function buildBnba3BPayloads(kelompokId: string, rec: NormalizedBnba3B) {
-  const posisi = subKategoriToPosisi(rec.sub_kategori)
+  const safeSubKat: SubKategori3B =
+    rec.sub_kategori === 'POS - Ibu Hamil' || rec.sub_kategori === 'POS - Ibu Menyusui' || rec.sub_kategori === 'POS - Balita'
+      ? rec.sub_kategori
+      : 'POS - Balita'
+  const safeGender: 'L' | 'P' = rec.gender === 'P' ? 'P' : 'L'
+  const posisi = subKategoriToPosisi(safeSubKat)
   const namaOrtuMirror =
-    rec.sub_kategori === 'POS - Balita'
+    safeSubKat === 'POS - Balita'
       ? (rec.nama_ibu || '-')
-      : rec.sub_kategori === 'POS - Ibu Menyusui'
+      : safeSubKat === 'POS - Ibu Menyusui'
       ? (rec.nama_anak || '-')
       : '-'
 
   const fullPayload = {
     kelompok_id: kelompokId,
-    nisn_nik: rec.identity_code,
-    nama_lengkap: rec.nama_lengkap.toUpperCase().trim(),
+    nisn_nik: rec.identity_code ?? '',
+    nama_lengkap: String(rec.nama_lengkap ?? '').toUpperCase().trim(),
     tanggal_lahir: rec.tanggal_lahir || '2020-01-01',
-    jenis_kelamin: rec.gender,
+    jenis_kelamin: safeGender,
     nama_ortu: namaOrtuMirror,
     posisi,
     kelas: '-',
-    gender: rec.gender,
+    gender: safeGender,
     type: rec.type || 'nik',
-    identity_code: rec.identity_code,
-    kategori: 'POS',
-    sub_kategori: rec.sub_kategori,
-    hpht: rec.sub_kategori === 'POS - Ibu Hamil' && rec.hpht ? rec.hpht : null,
-    nama_anak: rec.sub_kategori === 'POS - Ibu Menyusui' && rec.nama_anak ? rec.nama_anak.toUpperCase().trim() : null,
-    type_identity_anak: rec.sub_kategori === 'POS - Ibu Menyusui' ? (rec.type_identity_anak || 'nik') : null,
-    identity_code_anak: rec.sub_kategori === 'POS - Ibu Menyusui' && rec.identity_code_anak ? rec.identity_code_anak : null,
-    tanggal_lahir_anak: rec.sub_kategori === 'POS - Ibu Menyusui' && rec.tanggal_lahir_anak ? rec.tanggal_lahir_anak : null,
-    nama_ibu: rec.sub_kategori === 'POS - Balita' && rec.nama_ibu ? rec.nama_ibu.toUpperCase().trim() : null,
-    type_identity_ibu: rec.sub_kategori === 'POS - Balita' ? (rec.type_identity_ibu || 'nik') : null,
-    identity_code_ibu: rec.sub_kategori === 'POS - Balita' && rec.identity_code_ibu ? rec.identity_code_ibu : null,
+    identity_code: rec.identity_code ?? '',
+    kategori: rec.kategori || 'POS',
+    sub_kategori: safeSubKat,
+    hpht: safeSubKat === 'POS - Ibu Hamil' && rec.hpht ? rec.hpht : null,
+    nama_anak: safeSubKat === 'POS - Ibu Menyusui' && rec.nama_anak ? rec.nama_anak.toUpperCase().trim() : null,
+    type_identity_anak: safeSubKat === 'POS - Ibu Menyusui' ? (rec.type_identity_anak || 'nik') : null,
+    identity_code_anak: safeSubKat === 'POS - Ibu Menyusui' && rec.identity_code_anak ? rec.identity_code_anak : null,
+    tanggal_lahir_anak: safeSubKat === 'POS - Ibu Menyusui' && rec.tanggal_lahir_anak ? rec.tanggal_lahir_anak : null,
+    nama_ibu: safeSubKat === 'POS - Balita' && rec.nama_ibu ? rec.nama_ibu.toUpperCase().trim() : null,
+    type_identity_ibu: safeSubKat === 'POS - Balita' ? (rec.type_identity_ibu || 'nik') : null,
+    identity_code_ibu: safeSubKat === 'POS - Balita' && rec.identity_code_ibu ? rec.identity_code_ibu : null,
   }
 
   const metaCompact: Record<string, string> = {
-    sub_kategori: rec.sub_kategori,
-    kategori: 'POS',
+    sub_kategori: safeSubKat,
+    kategori: rec.kategori || 'POS',
     type: rec.type || 'nik',
   }
-  if (rec.sub_kategori === 'POS - Ibu Hamil' && rec.hpht) {
+  if (safeSubKat === 'POS - Ibu Hamil' && rec.hpht) {
     metaCompact.hpht = rec.hpht
-  } else if (rec.sub_kategori === 'POS - Ibu Menyusui') {
+  } else if (safeSubKat === 'POS - Ibu Menyusui') {
     if (rec.nama_anak) metaCompact.nama_anak = rec.nama_anak.toUpperCase().trim()
     if (rec.type_identity_anak) metaCompact.type_identity_anak = rec.type_identity_anak
     if (rec.identity_code_anak) metaCompact.identity_code_anak = rec.identity_code_anak
     if (rec.tanggal_lahir_anak) metaCompact.tanggal_lahir_anak = rec.tanggal_lahir_anak
-  } else if (rec.sub_kategori === 'POS - Balita') {
+  } else if (safeSubKat === 'POS - Balita') {
     if (rec.nama_ibu) metaCompact.nama_ibu = rec.nama_ibu.toUpperCase().trim()
     if (rec.type_identity_ibu) metaCompact.type_identity_ibu = rec.type_identity_ibu
     if (rec.identity_code_ibu) metaCompact.identity_code_ibu = rec.identity_code_ibu
@@ -284,10 +289,10 @@ export function buildBnba3BPayloads(kelompokId: string, rec: NormalizedBnba3B) {
 
   const fallbackPayload = {
     kelompok_id: kelompokId,
-    nisn_nik: rec.identity_code,
-    nama_lengkap: rec.nama_lengkap.toUpperCase().trim(),
+    nisn_nik: rec.identity_code ?? '',
+    nama_lengkap: String(rec.nama_lengkap ?? '').toUpperCase().trim(),
     tanggal_lahir: rec.tanggal_lahir || '2020-01-01',
-    jenis_kelamin: rec.gender,
+    jenis_kelamin: safeGender,
     nama_ortu: namaOrtuMirror,
     posisi,
     kelas: `${META_PREFIX}${JSON.stringify(metaCompact)}`,

@@ -504,22 +504,22 @@ function KelompokPenerimaManfaatContent() {
   const [bnbaNisnNik, setBnbaNisnNik] = useState('')
   const [bnbaNama, setBnbaNama] = useState('')
   const [bnbaTglLahir, setBnbaTglLahir] = useState('')
-  const [bnbaJk, setBnbaJk] = useState<'L' | 'P'>('L')
+  const [bnbaJk, setBnbaJk] = useState<'L' | 'P' | ''>('')
   const [bnbaOrtu, setBnbaOrtu] = useState('')
   const [bnbaPosisi, setBnbaPosisi] = useState<'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'>('Siswa')
   const [bnbaKelas, setBnbaKelas] = useState('')
 
-  // 15-Column Posyandu 3B Extended BNBA Form Fields
-  const [bnba3bSubKategori, setBnba3bSubKategori] = useState<SubKategori3B>('POS - Balita')
-  const [bnba3bType, setBnba3bType] = useState('nik')
-  const [bnba3bKategori, setBnba3bKategori] = useState('POS')
+  // 15-Column Posyandu 3B Extended BNBA Form Fields (initialized to empty string "")
+  const [bnba3bSubKategori, setBnba3bSubKategori] = useState<SubKategori3B | ''>('')
+  const [bnba3bType, setBnba3bType] = useState('')
+  const [bnba3bKategori, setBnba3bKategori] = useState('')
   const [bnba3bHpht, setBnba3bHpht] = useState('')
   const [bnba3bNamaAnak, setBnba3bNamaAnak] = useState('')
-  const [bnba3bTypeIdAnak, setBnba3bTypeIdAnak] = useState('nik')
+  const [bnba3bTypeIdAnak, setBnba3bTypeIdAnak] = useState('')
   const [bnba3bIdCodeAnak, setBnba3bIdCodeAnak] = useState('')
   const [bnba3bTglAnak, setBnba3bTglAnak] = useState('')
   const [bnba3bNamaIbu, setBnba3bNamaIbu] = useState('')
-  const [bnba3bTypeIdIbu, setBnba3bTypeIdIbu] = useState('nik')
+  const [bnba3bTypeIdIbu, setBnba3bTypeIdIbu] = useState('')
   const [bnba3bIdCodeIbu, setBnba3bIdCodeIbu] = useState('')
 
   // NIK Smart Validation & Duplicate Detection States
@@ -620,26 +620,32 @@ function KelompokPenerimaManfaatContent() {
   // Real-Time 3B Validation Guard State for Add/Edit Form
   const liveValidation3B: Bnba3BFullValidationResult | null = useMemo(() => {
     if (!showAddBnbaModal || !isPosyandu3BItem(activeBnbaGroup)) return null
-    return validateBnba3BFull(
-      {
-        nama_lengkap: bnbaNama.trim().toUpperCase(),
-        tanggal_lahir: parse3BDateToIso(bnbaTglLahir),
-        gender: parseJk(bnbaJk),
-        type: bnba3bType,
-        identity_code: bnbaNisnNik.trim(),
-        kategori: bnba3bKategori,
-        sub_kategori: bnba3bSubKategori,
-        hpht: parse3BDateToIso(bnba3bHpht),
-        nama_anak: bnba3bNamaAnak.trim().toUpperCase(),
-        type_identity_anak: bnba3bTypeIdAnak,
-        identity_code_anak: bnba3bIdCodeAnak.trim(),
-        tanggal_lahir_anak: parse3BDateToIso(bnba3bTglAnak),
-        nama_ibu: bnba3bNamaIbu.trim().toUpperCase(),
-        type_identity_ibu: bnba3bTypeIdIbu,
-        identity_code_ibu: bnba3bIdCodeIbu.trim(),
-      },
-      { duplicateMatch: duplicate3BMatch }
-    )
+    try {
+      const safeGender: 'L' | 'P' | '' = bnbaJk === 'L' || bnbaJk === 'P' ? bnbaJk : ''
+      return validateBnba3BFull(
+        {
+          nama_lengkap: String(bnbaNama ?? '').trim().toUpperCase(),
+          tanggal_lahir: parse3BDateToIso(bnbaTglLahir ?? ''),
+          gender: safeGender,
+          type: String(bnba3bType ?? '').trim() || 'nik',
+          identity_code: String(bnbaNisnNik ?? '').trim(),
+          kategori: String(bnba3bKategori ?? '').trim() || 'POS',
+          sub_kategori: bnba3bSubKategori ?? '',
+          hpht: parse3BDateToIso(bnba3bHpht ?? ''),
+          nama_anak: String(bnba3bNamaAnak ?? '').trim().toUpperCase(),
+          type_identity_anak: String(bnba3bTypeIdAnak ?? '').trim() || 'nik',
+          identity_code_anak: String(bnba3bIdCodeAnak ?? '').trim(),
+          tanggal_lahir_anak: parse3BDateToIso(bnba3bTglAnak ?? ''),
+          nama_ibu: String(bnba3bNamaIbu ?? '').trim().toUpperCase(),
+          type_identity_ibu: String(bnba3bTypeIdIbu ?? '').trim() || 'nik',
+          identity_code_ibu: String(bnba3bIdCodeIbu ?? '').trim(),
+        },
+        { duplicateMatch: duplicate3BMatch }
+      )
+    } catch (err) {
+      console.warn('liveValidation3B guard error:', err)
+      return null
+    }
   }, [
     showAddBnbaModal,
     activeBnbaGroup,
@@ -1973,11 +1979,12 @@ const getBnbaCountForGroup = (
       }
     }
 
+    const groupJenis = String(group?.jenis ?? '')
     setBnbaPosisi(
       is3BGroup
-        ? (subFilter3B === 'bumil' || group.jenis.includes('Hamil')
+        ? (subFilter3B === 'bumil' || groupJenis.includes('Hamil')
             ? 'Bumil'
-            : subFilter3B === 'busui' || group.jenis.includes('Menyusui')
+            : subFilter3B === 'busui' || groupJenis.includes('Menyusui')
             ? 'Busui'
             : 'Balita')
         : 'Siswa'
@@ -2010,67 +2017,80 @@ const getBnbaCountForGroup = (
 
   const handleOpenAddBnbaModal = () => {
     setEditingBnbaItem(null)
+    setNikValidationResult(null)
+    setDuplicateNikMatch(null)
+    setDuplicate3BMatch(null)
+    setIsCheckingDuplicate(false)
+
     const is3B = isPosyandu3BItem(activeBnbaGroup)
-    setBnbaNisnNik(is3B ? '' : `${Math.floor(1000000000 + Math.random() * 9000000000)}`)
-    setBnbaNama('')
-    setBnbaTglLahir(is3B ? '2023-05-15' : '2015-05-15')
-    setBnbaJk(is3B && (bnbaCategoryTab === 'bumil' || bnbaCategoryTab === 'busui') ? 'P' : 'L')
-    setBnbaOrtu('')
-    if (activeBnbaGroup) {
-      const defaultSubKat: SubKategori3B =
-        bnbaCategoryTab === 'bumil' || activeBnbaGroup.jenis.includes('Hamil')
-          ? 'POS - Ibu Hamil'
-          : bnbaCategoryTab === 'busui' || activeBnbaGroup.jenis.includes('Menyusui')
-          ? 'POS - Ibu Menyusui'
-          : 'POS - Balita'
-      setBnba3bSubKategori(defaultSubKat)
-      setBnba3bType('nik')
-      setBnba3bKategori('POS')
-      setBnba3bHpht(new Date().toISOString().slice(0, 10))
+    if (is3B) {
+      // Initialize all 15 3B fields cleanly to empty string ""
+      setBnbaNama('')
+      setBnbaTglLahir('')
+      setBnbaJk('')
+      setBnba3bType('')
+      setBnbaNisnNik('')
+      setBnba3bKategori('')
+      setBnba3bSubKategori('')
+      setBnba3bHpht('')
       setBnba3bNamaAnak('')
-      setBnba3bTypeIdAnak('nik')
+      setBnba3bTypeIdAnak('')
       setBnba3bIdCodeAnak('')
-      setBnba3bTglAnak(new Date(new Date().setMonth(new Date().getMonth() - 10)).toISOString().slice(0, 10))
+      setBnba3bTglAnak('')
       setBnba3bNamaIbu('')
-      setBnba3bTypeIdIbu('nik')
+      setBnba3bTypeIdIbu('')
       setBnba3bIdCodeIbu('')
-      setBnbaPosisi(is3B ? subKategoriToPosisi(defaultSubKat) : 'Siswa')
-      setBnbaKelas(is3B ? '-' : 'Kelas 4')
+      setBnbaOrtu('')
+      setBnbaPosisi('Balita')
+      setBnbaKelas('-')
+    } else {
+      setBnbaNisnNik(`${Math.floor(1000000000 + Math.random() * 9000000000)}`)
+      setBnbaNama('')
+      setBnbaTglLahir('2015-05-15')
+      setBnbaJk('L')
+      setBnbaOrtu('')
+      setBnbaPosisi('Siswa')
+      setBnbaKelas('Kelas 4')
     }
     setShowAddBnbaModal(true)
   }
 
   const handleOpenEditBnbaModal = (item: PenerimaManfaatBnba) => {
     setEditingBnbaItem(item)
-    const is3B = isPosyandu3BItem(activeBnbaGroup) || ['Balita', 'Bumil', 'Busui'].includes(item.posisi) || Boolean(item.sub_kategori)
+    setNikValidationResult(null)
+    setDuplicateNikMatch(null)
+    setDuplicate3BMatch(null)
+    setIsCheckingDuplicate(false)
+
+    const is3B = isPosyandu3BItem(activeBnbaGroup) || ['Balita', 'Bumil', 'Busui'].includes(String(item?.posisi ?? '')) || Boolean(item?.sub_kategori)
     if (is3B) {
       const norm = normalizeBnba3BFields(item)
-      setBnbaNisnNik(norm.identity_code)
-      setBnbaNama(norm.nama_lengkap)
-      setBnbaTglLahir(norm.tanggal_lahir || '2020-01-01')
-      setBnbaJk(norm.gender)
-      setBnbaOrtu(item.nama_ortu === '-' ? '' : (item.nama_ortu || ''))
+      setBnbaNisnNik(norm.identity_code ?? '')
+      setBnbaNama(norm.nama_lengkap ?? '')
+      setBnbaTglLahir(norm.tanggal_lahir ?? '')
+      setBnbaJk(norm.gender ?? '')
+      setBnbaOrtu(item?.nama_ortu === '-' ? '' : (item?.nama_ortu ?? ''))
       setBnbaPosisi(subKategoriToPosisi(norm.sub_kategori))
       setBnbaKelas('-')
-      setBnba3bSubKategori(norm.sub_kategori)
+      setBnba3bSubKategori(norm.sub_kategori ?? '')
       setBnba3bType(norm.type || 'nik')
       setBnba3bKategori(norm.kategori || 'POS')
-      setBnba3bHpht(norm.hpht || '')
-      setBnba3bNamaAnak(norm.nama_anak || '')
+      setBnba3bHpht(norm.hpht ?? '')
+      setBnba3bNamaAnak(norm.nama_anak ?? '')
       setBnba3bTypeIdAnak(norm.type_identity_anak || 'nik')
-      setBnba3bIdCodeAnak(norm.identity_code_anak || '')
-      setBnba3bTglAnak(norm.tanggal_lahir_anak || '')
-      setBnba3bNamaIbu(norm.nama_ibu || '')
+      setBnba3bIdCodeAnak(norm.identity_code_anak ?? '')
+      setBnba3bTglAnak(norm.tanggal_lahir_anak ?? '')
+      setBnba3bNamaIbu(norm.nama_ibu ?? '')
       setBnba3bTypeIdIbu(norm.type_identity_ibu || 'nik')
-      setBnba3bIdCodeIbu(norm.identity_code_ibu || '')
+      setBnba3bIdCodeIbu(norm.identity_code_ibu ?? '')
     } else {
-      setBnbaNisnNik(item.nisn_nik || item.nik || item.nisn || '')
-      setBnbaNama(item.nama_lengkap || item.nama_penerima || item.nama || '')
-      setBnbaTglLahir(normalizeBirthDate(item.tanggal_lahir))
-      setBnbaJk(parseJk(item.jenis_kelamin || item.jk))
-      setBnbaOrtu(item.nama_ortu === '-' ? '' : (item.nama_ortu || ''))
-      setBnbaPosisi(parsePosisi(item.posisi))
-      setBnbaKelas(item.kelas || '-')
+      setBnbaNisnNik(item?.nisn_nik || item?.nik || item?.nisn || '')
+      setBnbaNama(item?.nama_lengkap || item?.nama_penerima || item?.nama || '')
+      setBnbaTglLahir(normalizeBirthDate(item?.tanggal_lahir))
+      setBnbaJk(parseJk(item?.jenis_kelamin || item?.jk))
+      setBnbaOrtu(item?.nama_ortu === '-' ? '' : (item?.nama_ortu ?? ''))
+      setBnbaPosisi(parsePosisi(item?.posisi))
+      setBnbaKelas(item?.kelas || '-')
     }
     setShowAddBnbaModal(true)
   }
@@ -2099,22 +2119,26 @@ const getBnbaCountForGroup = (
       let fallbackPayload: Record<string, any> | null = null
 
       if (is3B) {
+        const safeSubKat: SubKategori3B =
+          bnba3bSubKategori === 'POS - Ibu Hamil' || bnba3bSubKategori === 'POS - Ibu Menyusui' || bnba3bSubKategori === 'POS - Balita'
+            ? bnba3bSubKategori
+            : 'POS - Balita'
         const normalized3B = {
-          nama_lengkap: bnbaNama.trim().toUpperCase(),
+          nama_lengkap: String(bnbaNama ?? '').trim().toUpperCase(),
           tanggal_lahir: sanitizedDate,
           gender: parseJk(bnbaJk),
-          type: bnba3bType || 'nik',
-          identity_code: bnbaNisnNik.replace(/[^0-9]/g, '').trim(),
-          kategori: bnba3bKategori || 'POS',
-          sub_kategori: bnba3bSubKategori,
-          hpht: bnba3bSubKategori === 'POS - Ibu Hamil' ? parse3BDateToIso(bnba3bHpht) : '',
-          nama_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? bnba3bNamaAnak.trim().toUpperCase() : '',
-          type_identity_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? (bnba3bTypeIdAnak || 'nik') : '',
-          identity_code_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? bnba3bIdCodeAnak.replace(/[^0-9]/g, '').trim() : '',
-          tanggal_lahir_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? parse3BDateToIso(bnba3bTglAnak) : '',
-          nama_ibu: bnba3bSubKategori === 'POS - Balita' ? bnba3bNamaIbu.trim().toUpperCase() : '',
-          type_identity_ibu: bnba3bSubKategori === 'POS - Balita' ? (bnba3bTypeIdIbu || 'nik') : '',
-          identity_code_ibu: bnba3bSubKategori === 'POS - Balita' ? bnba3bIdCodeIbu.replace(/[^0-9]/g, '').trim() : '',
+          type: String(bnba3bType ?? '').trim() || 'nik',
+          identity_code: String(bnbaNisnNik ?? '').replace(/[^0-9]/g, '').trim(),
+          kategori: String(bnba3bKategori ?? '').trim().toUpperCase() || 'POS',
+          sub_kategori: safeSubKat,
+          hpht: safeSubKat === 'POS - Ibu Hamil' ? parse3BDateToIso(bnba3bHpht) : '',
+          nama_anak: safeSubKat === 'POS - Ibu Menyusui' ? String(bnba3bNamaAnak ?? '').trim().toUpperCase() : '',
+          type_identity_anak: safeSubKat === 'POS - Ibu Menyusui' ? (String(bnba3bTypeIdAnak ?? '').trim() || 'nik') : '',
+          identity_code_anak: safeSubKat === 'POS - Ibu Menyusui' ? String(bnba3bIdCodeAnak ?? '').replace(/[^0-9]/g, '').trim() : '',
+          tanggal_lahir_anak: safeSubKat === 'POS - Ibu Menyusui' ? parse3BDateToIso(bnba3bTglAnak) : '',
+          nama_ibu: safeSubKat === 'POS - Balita' ? String(bnba3bNamaIbu ?? '').trim().toUpperCase() : '',
+          type_identity_ibu: safeSubKat === 'POS - Balita' ? (String(bnba3bTypeIdIbu ?? '').trim() || 'nik') : '',
+          identity_code_ibu: safeSubKat === 'POS - Balita' ? String(bnba3bIdCodeIbu ?? '').replace(/[^0-9]/g, '').trim() : '',
         }
         const built = buildBnba3BPayloads(activeKelompokUuid, normalized3B)
         payload = built.fullPayload
@@ -2122,13 +2146,13 @@ const getBnbaCountForGroup = (
       } else {
         payload = {
           kelompok_id: activeKelompokUuid,
-          nisn_nik: bnbaNisnNik.trim(),
-          nama_lengkap: bnbaNama.trim().toUpperCase(),
+          nisn_nik: String(bnbaNisnNik ?? '').trim(),
+          nama_lengkap: String(bnbaNama ?? '').trim().toUpperCase(),
           tanggal_lahir: sanitizedDate,
           jenis_kelamin: parseJk(bnbaJk),
-          nama_ortu: bnbaOrtu.trim().toUpperCase() || '-',
+          nama_ortu: String(bnbaOrtu ?? '').trim().toUpperCase() || '-',
           posisi: parsePosisi(bnbaPosisi),
-          kelas: bnbaKelas
+          kelas: bnbaKelas || '-'
         }
       }
 
@@ -2464,20 +2488,21 @@ const getBnbaCountForGroup = (
 
   // Helper to format any birth date to Indonesian standard format DD/MM/YYYY
   const formatDDMMYYYY = (dateStr: string | null | undefined): string => {
-    if (!dateStr || dateStr === '-') return '-'
+    const str = String(dateStr ?? '').trim()
+    if (!str || str === '-') return '-'
     
     // If already in DD/MM/YYYY format
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return dateStr
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str
     
     // If in ISO YYYY-MM-DD format
-    const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if (isoMatch) {
       const [, yyyy, mm, dd] = isoMatch
       return `${dd}/${mm}/${yyyy}`
     }
     
     // If in DD-MM-YYYY format
-    const dmMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    const dmMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
     if (dmMatch) {
       const dd = String(parseInt(dmMatch[1], 10)).padStart(2, '0')
       const mm = String(parseInt(dmMatch[2], 10)).padStart(2, '0')
@@ -2487,7 +2512,7 @@ const getBnbaCountForGroup = (
 
     // Fallback to JS Date object
     try {
-      const d = new Date(dateStr)
+      const d = new Date(str)
       if (!isNaN(d.getTime())) {
         const dd = String(d.getDate()).padStart(2, '0')
         const mm = String(d.getMonth() + 1).padStart(2, '0')
@@ -2496,21 +2521,22 @@ const getBnbaCountForGroup = (
       }
     } catch {}
 
-    return dateStr
+    return str
   }
 
   // Helper to parse date string into day, month, year components for 3-Dropdown Selector
   const parseDateParts = (dateStr: string | null | undefined) => {
-    if (!dateStr) return { day: '15', month: '05', year: '2015' }
+    const str = String(dateStr ?? '').trim()
+    if (!str) return { day: '', month: '', year: '' }
     
     // If YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const [y, m, d] = dateStr.split('-')
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      const [y, m, d] = str.split('-')
       return { day: d, month: m, year: y }
     }
     
     // If DD/MM/YYYY or DD-MM-YYYY
-    const dmMatch = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    const dmMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
     if (dmMatch) {
       const d = String(parseInt(dmMatch[1], 10)).padStart(2, '0')
       const m = String(parseInt(dmMatch[2], 10)).padStart(2, '0')
@@ -2520,7 +2546,7 @@ const getBnbaCountForGroup = (
 
     // Try Date constructor
     try {
-      const date = new Date(dateStr)
+      const date = new Date(str)
       if (!isNaN(date.getTime())) {
         const d = String(date.getDate()).padStart(2, '0')
         const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -2529,7 +2555,7 @@ const getBnbaCountForGroup = (
       }
     } catch {}
 
-    return { day: '15', month: '05', year: '2015' }
+    return { day: '', month: '', year: '' }
   }
 
   const parseSmartGender = (val: any): 'L' | 'P' => {
@@ -5422,17 +5448,24 @@ const getBnbaCountForGroup = (
                   <div className="sm:col-span-2">
                     <label className="block font-semibold text-slate-700 mb-1">Sub-Kategori Sasaran 3B *</label>
                     <select
-                      value={bnba3bSubKategori}
+                      value={bnba3bSubKategori ?? ''}
                       onChange={(e) => {
-                        const val = e.target.value as SubKategori3B
+                        const val = (e.target.value ?? '') as SubKategori3B | ''
                         setBnba3bSubKategori(val)
-                        setBnbaPosisi(subKategoriToPosisi(val))
-                        if (val === 'POS - Ibu Hamil' || val === 'POS - Ibu Menyusui') {
-                          setBnbaJk('P')
+                        if (val) {
+                          setBnbaPosisi(subKategoriToPosisi(val))
+                          if (!bnba3bKategori) setBnba3bKategori('POS')
+                          if (!bnba3bType) setBnba3bType('nik')
+                          if ((val === 'POS - Ibu Hamil' || val === 'POS - Ibu Menyusui') && !bnbaJk) {
+                            setBnbaJk('P')
+                          }
+                          if (val === 'POS - Ibu Menyusui' && !bnba3bTypeIdAnak) setBnba3bTypeIdAnak('nik')
+                          if (val === 'POS - Balita' && !bnba3bTypeIdIbu) setBnba3bTypeIdIbu('nik')
                         }
                       }}
                       className="w-full px-3 py-1.5 border border-slate-300 rounded font-bold bg-white cursor-pointer"
                     >
+                      <option value="">-- Pilih Sub-Kategori 3B --</option>
                       <option value="POS - Ibu Hamil">POS - Ibu Hamil</option>
                       <option value="POS - Ibu Menyusui">POS - Ibu Menyusui</option>
                       <option value="POS - Balita">POS - Balita</option>
@@ -5441,8 +5474,20 @@ const getBnbaCountForGroup = (
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Kategori / Type</label>
                     <div className="flex items-center gap-1">
-                      <input type="text" value={bnba3bKategori} readOnly className="w-1/2 px-2 py-1.5 border border-slate-200 rounded bg-slate-100 font-mono text-center text-slate-700" />
-                      <input type="text" value={bnba3bType} readOnly className="w-1/2 px-2 py-1.5 border border-slate-200 rounded bg-slate-100 font-mono text-center text-slate-700" />
+                      <input
+                        type="text"
+                        value={bnba3bKategori ?? ''}
+                        onChange={(e) => setBnba3bKategori((e.target.value ?? '').toUpperCase())}
+                        placeholder="POS"
+                        className="w-1/2 px-2 py-1.5 border border-slate-200 rounded bg-white font-mono text-center text-slate-700"
+                      />
+                      <input
+                        type="text"
+                        value={bnba3bType ?? ''}
+                        onChange={(e) => setBnba3bType((e.target.value ?? '').toLowerCase())}
+                        placeholder="nik"
+                        className="w-1/2 px-2 py-1.5 border border-slate-200 rounded bg-white font-mono text-center text-slate-700"
+                      />
                     </div>
                   </div>
                 </div>
@@ -5462,22 +5507,17 @@ const getBnbaCountForGroup = (
                 <input
                   type="text"
                   required
-                  value={bnbaNisnNik}
+                  value={bnbaNisnNik ?? ''}
                   onChange={(e) => {
-                    const nextVal = e.target.value
+                    const nextVal = e.target.value ?? ''
                     setBnbaNisnNik(nextVal)
                     if (isPosyandu3BItem(activeBnbaGroup)) {
                       const trimmed = nextVal.trim()
                       if (/^\d{16}$/.test(trimmed)) {
                         const parsed = parseNikStructure3B(trimmed)
-                        if (parsed.isFormatValid && parsed.extractedBirthIso && parsed.extractedGender) {
+                        if (parsed?.isFormatValid && parsed?.extractedBirthIso && parsed?.extractedGender) {
                           setBnbaTglLahir(parsed.extractedBirthIso)
-                          if (bnba3bSubKategori === 'POS - Balita') {
-                            setBnbaJk(parsed.extractedGender)
-                          } else {
-                            // Bumil & Busui wajib P
-                            setBnbaJk(parsed.extractedGender)
-                          }
+                          setBnbaJk(parsed.extractedGender)
                         }
                       }
                     }
@@ -5485,11 +5525,11 @@ const getBnbaCountForGroup = (
                   placeholder="Masukkan 16 digit NIK resmi"
                   className={`w-full px-3 py-1.5 border rounded font-mono transition ${
                     isPosyandu3BItem(activeBnbaGroup)
-                      ? liveValidation3B && (!liveValidation3B.nikInfo.isFormatValid || Boolean(duplicate3BMatch) || liveValidation3B.errors.some(err => err.includes('cocok dengan kode NIK')))
+                      ? liveValidation3B && (!liveValidation3B?.nikInfo?.isFormatValid || Boolean(duplicate3BMatch) || (liveValidation3B?.errors ?? []).some(err => err.includes('cocok dengan kode NIK')))
                         ? 'border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-rose-500 focus:border-rose-500'
-                        : liveValidation3B?.nikInfo.isTempZeros
+                        : liveValidation3B?.nikInfo?.isTempZeros
                         ? 'border-amber-500 bg-amber-50/40 text-amber-900'
-                        : liveValidation3B?.nikInfo.isFormatValid && !duplicate3BMatch
+                        : liveValidation3B?.nikInfo?.isFormatValid && !duplicate3BMatch
                         ? 'border-emerald-500 bg-emerald-50/30 text-emerald-950'
                         : 'border-slate-300 bg-white'
                       : nikValidationResult && !nikValidationResult.isValid
@@ -5506,15 +5546,15 @@ const getBnbaCountForGroup = (
                       <div className="p-2 bg-rose-50 border border-rose-300 rounded text-rose-800 text-[11px] font-bold">
                         ✕ {duplicate3BMatch.message}
                       </div>
-                    ) : liveValidation3B && !liveValidation3B.nikInfo.isFormatValid ? (
+                    ) : liveValidation3B && !liveValidation3B?.nikInfo?.isFormatValid ? (
                       <p className="text-[11px] font-semibold text-rose-700">
-                        ✕ {liveValidation3B.nikInfo.error}
+                        ✕ {liveValidation3B?.nikInfo?.error ?? 'Format NIK tidak valid'}
                       </p>
-                    ) : liveValidation3B && liveValidation3B.errors.some(err => err.includes('cocok dengan kode NIK')) ? (
+                    ) : liveValidation3B && (liveValidation3B?.errors ?? []).some(err => err.includes('cocok dengan kode NIK')) ? (
                       <p className="text-[11px] font-semibold text-rose-700">
-                        ✕ {liveValidation3B.errors.find(err => err.includes('cocok dengan kode NIK'))}
+                        ✕ {(liveValidation3B?.errors ?? []).find(err => err.includes('cocok dengan kode NIK'))}
                       </p>
-                    ) : liveValidation3B?.nikInfo.isFormatValid ? (
+                    ) : liveValidation3B?.nikInfo?.isFormatValid ? (
                       <div className="space-y-1">
                         {!isCheckingDuplicate && (
                           <p className="text-[11px] font-semibold text-emerald-700">
@@ -5569,8 +5609,11 @@ const getBnbaCountForGroup = (
                 <input
                   type="text"
                   required
-                  value={bnbaNama}
-                  onChange={(e) => setBnbaNama(isPosyandu3BItem(activeBnbaGroup) ? e.target.value.toUpperCase() : e.target.value)}
+                  value={bnbaNama ?? ''}
+                  onChange={(e) => {
+                    const nextVal = e.target.value ?? ''
+                    setBnbaNama(isPosyandu3BItem(activeBnbaGroup) ? nextVal.toUpperCase() : nextVal)
+                  }}
                   placeholder="NAMA LENGKAP SESUAI KTP/KK"
                   className="w-full px-3 py-1.5 border border-slate-300 rounded font-bold uppercase"
                 />
@@ -5602,11 +5645,14 @@ const getBnbaCountForGroup = (
                       <select
                         value={parseDateParts(bnbaTglLahir).day}
                         onChange={(e) => {
+                          const d = e.target.value
+                          if (!d) { setBnbaTglLahir(''); return }
                           const current = parseDateParts(bnbaTglLahir)
-                          setBnbaTglLahir(`${current.year}-${current.month}-${e.target.value}`)
+                          setBnbaTglLahir(`${current.year || '2024'}-${current.month || '01'}-${d}`)
                         }}
                         className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-slate-900 bg-white focus:ring-2 focus:ring-emerald-400 focus:outline-none text-xs cursor-pointer"
                       >
+                        <option value="">--</option>
                         {Array.from({ length: 31 }, (_, i) => {
                           const val = String(i + 1).padStart(2, '0')
                           return <option key={val} value={val}>{val}</option>
@@ -5619,11 +5665,14 @@ const getBnbaCountForGroup = (
                       <select
                         value={parseDateParts(bnbaTglLahir).month}
                         onChange={(e) => {
+                          const m = e.target.value
+                          if (!m) { setBnbaTglLahir(''); return }
                           const current = parseDateParts(bnbaTglLahir)
-                          setBnbaTglLahir(`${current.year}-${e.target.value}-${current.day}`)
+                          setBnbaTglLahir(`${current.year || '2024'}-${m}-${current.day || '01'}`)
                         }}
                         className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-slate-900 bg-white focus:ring-2 focus:ring-emerald-400 focus:outline-none text-xs cursor-pointer"
                       >
+                        <option value="">--</option>
                         {[
                           { val: '01', label: '01 - Jan' },
                           { val: '02', label: '02 - Feb' },
@@ -5648,11 +5697,14 @@ const getBnbaCountForGroup = (
                       <select
                         value={parseDateParts(bnbaTglLahir).year}
                         onChange={(e) => {
+                          const y = e.target.value
+                          if (!y) { setBnbaTglLahir(''); return }
                           const current = parseDateParts(bnbaTglLahir)
-                          setBnbaTglLahir(`${e.target.value}-${current.month}-${current.day}`)
+                          setBnbaTglLahir(`${y}-${current.month || '01'}-${current.day || '01'}`)
                         }}
                         className="w-full px-2 py-1.5 border border-slate-300 rounded font-bold text-slate-900 bg-white focus:ring-2 focus:ring-emerald-400 focus:outline-none text-xs font-mono cursor-pointer"
                       >
+                        <option value="">----</option>
                         {Array.from({ length: 77 }, (_, i) => {
                           const y = 2026 - i
                           return <option key={y} value={String(y)}>{y}</option>
@@ -5666,7 +5718,8 @@ const getBnbaCountForGroup = (
                   <label className="block font-semibold text-slate-700 mb-1">
                     {isPosyandu3BItem(activeBnbaGroup) ? 'gender (L / P) *' : 'Jenis Kelamin (JK) *'}
                   </label>
-                  <select value={bnbaJk} onChange={(e) => setBnbaJk(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white cursor-pointer">
+                  <select value={bnbaJk ?? ''} onChange={(e) => setBnbaJk((e.target.value ?? '') as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white cursor-pointer">
+                    <option value="">-- Pilih L / P --</option>
                     <option value="L">L - Laki-laki</option>
                     <option value="P">P - Perempuan</option>
                   </select>
@@ -5698,8 +5751,8 @@ const getBnbaCountForGroup = (
                       <input
                         type="date"
                         required
-                        value={bnba3bHpht}
-                        onChange={(e) => setBnba3bHpht(e.target.value)}
+                        value={bnba3bHpht ?? ''}
+                        onChange={(e) => setBnba3bHpht(e.target.value ?? '')}
                         className="w-full px-3 py-1.5 border border-rose-300 rounded bg-white font-mono"
                       />
                     </div>
@@ -5720,16 +5773,28 @@ const getBnbaCountForGroup = (
                           </span>
                         )}
                       </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">nama_anak (HURUF KAPITAL) *</label>
-                        <input
-                          type="text"
-                          required
-                          value={bnba3bNamaAnak}
-                          onChange={(e) => setBnba3bNamaAnak(e.target.value.toUpperCase())}
-                          placeholder="NAMA LENGKAP ANAK"
-                          className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-bold uppercase"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="sm:col-span-2">
+                          <label className="block font-semibold text-slate-700 mb-1">nama_anak (HURUF KAPITAL) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={bnba3bNamaAnak ?? ''}
+                            onChange={(e) => setBnba3bNamaAnak((e.target.value ?? '').toUpperCase())}
+                            placeholder="NAMA LENGKAP ANAK"
+                            className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-bold uppercase"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">type_identity_anak</label>
+                          <input
+                            type="text"
+                            value={bnba3bTypeIdAnak ?? ''}
+                            onChange={(e) => setBnba3bTypeIdAnak((e.target.value ?? '').toLowerCase())}
+                            placeholder="nik"
+                            className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-mono"
+                          />
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
@@ -5737,14 +5802,14 @@ const getBnbaCountForGroup = (
                           <input
                             type="text"
                             required
-                            value={bnba3bIdCodeAnak}
+                            value={bnba3bIdCodeAnak ?? ''}
                             onChange={(e) => {
-                              const nextVal = e.target.value
+                              const nextVal = e.target.value ?? ''
                               setBnba3bIdCodeAnak(nextVal)
                               const trimmed = nextVal.trim()
                               if (/^\d{16}$/.test(trimmed)) {
                                 const parsedAnak = parseNikStructure3B(trimmed)
-                                if (parsedAnak.isFormatValid && parsedAnak.extractedBirthIso) {
+                                if (parsedAnak?.isFormatValid && parsedAnak?.extractedBirthIso) {
                                   setBnba3bTglAnak(parsedAnak.extractedBirthIso)
                                 }
                               }
@@ -5752,7 +5817,7 @@ const getBnbaCountForGroup = (
                             placeholder="16 digit NIK anak"
                             className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-mono"
                           />
-                          {liveValidation3B?.anakNikInfo && !liveValidation3B.anakNikInfo.isFormatValid && (
+                          {liveValidation3B?.anakNikInfo && !liveValidation3B?.anakNikInfo?.isFormatValid && (
                             <p className="text-[10.5px] font-semibold text-rose-700 mt-1">
                               ✕ {liveValidation3B.anakNikInfo.error}
                             </p>
@@ -5768,8 +5833,8 @@ const getBnbaCountForGroup = (
                           <input
                             type="date"
                             required
-                            value={bnba3bTglAnak}
-                            onChange={(e) => setBnba3bTglAnak(e.target.value)}
+                            value={bnba3bTglAnak ?? ''}
+                            onChange={(e) => setBnba3bTglAnak(e.target.value ?? '')}
                             className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-mono"
                           />
                         </div>
@@ -5784,39 +5849,49 @@ const getBnbaCountForGroup = (
                         <label className="font-bold text-sky-900">Data Ibu Kandung (Wajib Balita) *</label>
                         <span className="text-[10px] font-semibold text-sky-700">Usia balita 6 – 59 bulan</span>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="sm:col-span-2">
                           <label className="block font-semibold text-slate-700 mb-1">nama_ibu (HURUF KAPITAL) *</label>
                           <input
                             type="text"
                             required
-                            value={bnba3bNamaIbu}
-                            onChange={(e) => setBnba3bNamaIbu(e.target.value.toUpperCase())}
+                            value={bnba3bNamaIbu ?? ''}
+                            onChange={(e) => setBnba3bNamaIbu((e.target.value ?? '').toUpperCase())}
                             placeholder="NAMA LENGKAP IBU"
                             className="w-full px-3 py-1.5 border border-sky-300 rounded bg-white font-bold uppercase"
                           />
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-700 mb-1">identity_code_ibu (NIK 16 Digit) *</label>
+                          <label className="block font-semibold text-slate-700 mb-1">type_identity_ibu</label>
                           <input
                             type="text"
-                            required
-                            value={bnba3bIdCodeIbu}
-                            onChange={(e) => setBnba3bIdCodeIbu(e.target.value)}
-                            placeholder="16 digit NIK ibu"
+                            value={bnba3bTypeIdIbu ?? ''}
+                            onChange={(e) => setBnba3bTypeIdIbu((e.target.value ?? '').toLowerCase())}
+                            placeholder="nik"
                             className="w-full px-3 py-1.5 border border-sky-300 rounded bg-white font-mono"
                           />
-                          {liveValidation3B?.ibuNikInfo && !liveValidation3B.ibuNikInfo.isFormatValid && (
-                            <p className="text-[10.5px] font-semibold text-rose-700 mt-1">
-                              ✕ {liveValidation3B.ibuNikInfo.error}
-                            </p>
-                          )}
-                          {liveValidation3B?.ibuNikInfo?.isTempZeros && (
-                            <p className="text-[10.5px] font-semibold text-amber-800 mt-1">
-                              ⚠️ {liveValidation3B.ibuNikInfo.warning}
-                            </p>
-                          )}
                         </div>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">identity_code_ibu (NIK 16 Digit) *</label>
+                        <input
+                          type="text"
+                          required
+                          value={bnba3bIdCodeIbu ?? ''}
+                          onChange={(e) => setBnba3bIdCodeIbu(e.target.value ?? '')}
+                          placeholder="16 digit NIK ibu"
+                          className="w-full px-3 py-1.5 border border-sky-300 rounded bg-white font-mono"
+                        />
+                        {liveValidation3B?.ibuNikInfo && !liveValidation3B?.ibuNikInfo?.isFormatValid && (
+                          <p className="text-[10.5px] font-semibold text-rose-700 mt-1">
+                            ✕ {liveValidation3B.ibuNikInfo.error}
+                          </p>
+                        )}
+                        {liveValidation3B?.ibuNikInfo?.isTempZeros && (
+                          <p className="text-[10.5px] font-semibold text-amber-800 mt-1">
+                            ⚠️ {liveValidation3B.ibuNikInfo.warning}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -5831,7 +5906,7 @@ const getBnbaCountForGroup = (
                       <div className="p-2.5 bg-rose-50 border border-rose-300 rounded text-[11px] text-rose-900 space-y-1">
                         <div className="font-bold text-rose-800">✕ Tombol Simpan dikunci — perbaiki kesalahan berikut:</div>
                         <ul className="list-disc pl-4 space-y-0.5">
-                          {liveValidation3B.errors.map((err, i) => (
+                          {(liveValidation3B?.errors ?? []).map((err, i) => (
                             <li key={i}>{err}</li>
                           ))}
                         </ul>
