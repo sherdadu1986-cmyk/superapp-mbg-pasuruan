@@ -43,6 +43,14 @@ import {
   subKategoriToPosisi,
   parse3BDateToIso
 } from '@/lib/bnba3b'
+import {
+  parseNikStructure3B,
+  checkDuplicateNik3BLive,
+  buildGlobalNikLookupMap,
+  validateBnba3BFull,
+  type Duplicate3BMatch,
+  type Bnba3BValidationResult as Bnba3BFullValidationResult,
+} from '@/lib/bnba3bValidator'
 
 export interface DetailKpmItem {
   id: string
@@ -250,7 +258,7 @@ function KelompokPenerimaManfaatContent() {
   // BNBA Excel Import States
   const [importPreviewData, setImportPreviewData] = useState<PenerimaManfaatBnba[]>([])
   const [import3BAudit, setImport3BAudit] = useState<Parsed3BImportResult | null>(null)
-  const [importOnlyValid3B, setImportOnlyValid3B] = useState(false)
+  const [importAuditFilter, setImportAuditFilter] = useState<'all' | 'valid' | 'invalid'>('all')
   const [showImportConfirmModal, setShowImportConfirmModal] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
@@ -517,6 +525,7 @@ function KelompokPenerimaManfaatContent() {
   // NIK Smart Validation & Duplicate Detection States
   const [nikValidationResult, setNikValidationResult] = useState<NikValidationResult | null>(null)
   const [duplicateNikMatch, setDuplicateNikMatch] = useState<DuplicateNikMatch | null>(null)
+  const [duplicate3BMatch, setDuplicate3BMatch] = useState<Duplicate3BMatch | null>(null)
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
   // Interactive Audit NIK Modal & Duplicate Inspection States
@@ -532,6 +541,7 @@ function KelompokPenerimaManfaatContent() {
     if (!showAddBnbaModal) {
       setNikValidationResult(null)
       setDuplicateNikMatch(null)
+      setDuplicate3BMatch(null)
       setIsCheckingDuplicate(false)
       return
     }
@@ -540,15 +550,42 @@ function KelompokPenerimaManfaatContent() {
     if (!cleanInput) {
       setNikValidationResult(null)
       setDuplicateNikMatch(null)
+      setDuplicate3BMatch(null)
       setIsCheckingDuplicate(false)
       return
     }
 
-    // 1. Structural NIK Validation
+    const is3BMode = isPosyandu3BItem(activeBnbaGroup)
+
+    if (is3BMode) {
+      setNikValidationResult(null)
+      setDuplicateNikMatch(null)
+
+      if (cleanInput.length < 16 || !/^\d{16}$/.test(cleanInput)) {
+        setDuplicate3BMatch(null)
+        setIsCheckingDuplicate(false)
+        return
+      }
+
+      setIsCheckingDuplicate(true)
+      const timer = setTimeout(async () => {
+        try {
+          const dup3B = await checkDuplicateNik3BLive(cleanInput, editingBnbaItem?.id, allBnbaRecords, kpmItems)
+          setDuplicate3BMatch(dup3B)
+        } catch (err) {
+          console.warn('Duplicate NIK 3B check error:', err)
+        } finally {
+          setIsCheckingDuplicate(false)
+        }
+      }, 300)
+
+      return () => clearTimeout(timer)
+    }
+
+    // Standard School Validation
     const valResult = validateNikStructure(cleanInput)
     setNikValidationResult(valResult)
 
-    // Smart Auto-fill gender if valid NIK structure (Perempuan = tanggal lahir + 40)
     if (valResult.isValid) {
       if (valResult.gender) {
         setBnbaJk(valResult.gender === 'Perempuan' ? 'P' : 'L')
@@ -565,7 +602,6 @@ function KelompokPenerimaManfaatContent() {
       }
     }
 
-    // 2. Real-time / Debounced Duplicate Check to Supabase
     setIsCheckingDuplicate(true)
     const timer = setTimeout(async () => {
       try {
@@ -579,7 +615,51 @@ function KelompokPenerimaManfaatContent() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [bnbaNisnNik, editingBnbaItem, showAddBnbaModal, allBnbaRecords])
+  }, [bnbaNisnNik, editingBnbaItem, showAddBnbaModal, allBnbaRecords, activeBnbaGroup, kpmItems])
+
+  // Real-Time 3B Validation Guard State for Add/Edit Form
+  const liveValidation3B: Bnba3BFullValidationResult | null = useMemo(() => {
+    if (!showAddBnbaModal || !isPosyandu3BItem(activeBnbaGroup)) return null
+    return validateBnba3BFull(
+      {
+        nama_lengkap: bnbaNama.trim().toUpperCase(),
+        tanggal_lahir: parse3BDateToIso(bnbaTglLahir),
+        gender: parseJk(bnbaJk),
+        type: bnba3bType,
+        identity_code: bnbaNisnNik.trim(),
+        kategori: bnba3bKategori,
+        sub_kategori: bnba3bSubKategori,
+        hpht: parse3BDateToIso(bnba3bHpht),
+        nama_anak: bnba3bNamaAnak.trim().toUpperCase(),
+        type_identity_anak: bnba3bTypeIdAnak,
+        identity_code_anak: bnba3bIdCodeAnak.trim(),
+        tanggal_lahir_anak: parse3BDateToIso(bnba3bTglAnak),
+        nama_ibu: bnba3bNamaIbu.trim().toUpperCase(),
+        type_identity_ibu: bnba3bTypeIdIbu,
+        identity_code_ibu: bnba3bIdCodeIbu.trim(),
+      },
+      { duplicateMatch: duplicate3BMatch }
+    )
+  }, [
+    showAddBnbaModal,
+    activeBnbaGroup,
+    bnbaNama,
+    bnbaTglLahir,
+    bnbaJk,
+    bnba3bType,
+    bnbaNisnNik,
+    bnba3bKategori,
+    bnba3bSubKategori,
+    bnba3bHpht,
+    bnba3bNamaAnak,
+    bnba3bTypeIdAnak,
+    bnba3bIdCodeAnak,
+    bnba3bTglAnak,
+    bnba3bNamaIbu,
+    bnba3bTypeIdIbu,
+    bnba3bIdCodeIbu,
+    duplicate3BMatch,
+  ])
 
   // Map NIK duplicates across all records for Table Indicators
   const duplicateNikMap = useMemo(() => {
@@ -2887,7 +2967,8 @@ const getBnbaCountForGroup = (
       try {
         const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
         const selectedKelompokId = activeKelompokUuid || activeBnbaGroup.id
-        const result = await parse3BExcelFile(file, selectedKelompokId)
+        const globalNikMap = buildGlobalNikLookupMap(allBnbaRecords, kpmItems)
+        const result = await parse3BExcelFile(file, selectedKelompokId, globalNikMap)
 
         if (result.totalRows === 0) {
           showToast({
@@ -2901,7 +2982,7 @@ const getBnbaCountForGroup = (
         }
 
         setImport3BAudit(result)
-        setImportOnlyValid3B(false)
+        setImportAuditFilter('all')
         setImportPreviewData(result.rows.map(r => r.item))
         setShowImportConfirmModal(true)
       } catch (err: any) {
@@ -3072,12 +3153,10 @@ const getBnbaCountForGroup = (
       let fallbackPayload: any[] | null = null
 
       if (is3B && import3BAudit) {
-        const targetRows = importOnlyValid3B
-          ? import3BAudit.rows.filter(r => r.validation.isValid)
-          : import3BAudit.rows
+        const targetRows = import3BAudit.rows.filter(r => r.validation.isValid)
 
         if (targetRows.length === 0) {
-          showToast({ type: 'warning', title: 'Tidak Ada Baris Valid', message: 'Tidak ada baris valid untuk diimpor.' })
+          showToast({ type: 'warning', title: 'Tidak Ada Baris Valid', message: 'Tidak ada baris valid untuk disimpan ke database.' })
           setIsImporting(false)
           return
         }
@@ -5376,7 +5455,7 @@ const getBnbaCountForGroup = (
                   </label>
                   {isCheckingDuplicate && (
                     <span className="text-[10px] font-semibold text-indigo-600 animate-pulse flex items-center gap-1">
-                      <RotateCw size={10} className="animate-spin" /> Checking duplicate...
+                      <RotateCw size={10} className="animate-spin" /> Mengecek NIK ke database...
                     </span>
                   )}
                 </div>
@@ -5384,10 +5463,36 @@ const getBnbaCountForGroup = (
                   type="text"
                   required
                   value={bnbaNisnNik}
-                  onChange={(e) => setBnbaNisnNik(e.target.value)}
+                  onChange={(e) => {
+                    const nextVal = e.target.value
+                    setBnbaNisnNik(nextVal)
+                    if (isPosyandu3BItem(activeBnbaGroup)) {
+                      const trimmed = nextVal.trim()
+                      if (/^\d{16}$/.test(trimmed)) {
+                        const parsed = parseNikStructure3B(trimmed)
+                        if (parsed.isFormatValid && parsed.extractedBirthIso && parsed.extractedGender) {
+                          setBnbaTglLahir(parsed.extractedBirthIso)
+                          if (bnba3bSubKategori === 'POS - Balita') {
+                            setBnbaJk(parsed.extractedGender)
+                          } else {
+                            // Bumil & Busui wajib P
+                            setBnbaJk(parsed.extractedGender)
+                          }
+                        }
+                      }
+                    }
+                  }}
                   placeholder="Masukkan 16 digit NIK resmi"
                   className={`w-full px-3 py-1.5 border rounded font-mono transition ${
-                    nikValidationResult && !nikValidationResult.isValid
+                    isPosyandu3BItem(activeBnbaGroup)
+                      ? liveValidation3B && (!liveValidation3B.nikInfo.isFormatValid || Boolean(duplicate3BMatch) || liveValidation3B.errors.some(err => err.includes('cocok dengan kode NIK')))
+                        ? 'border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-rose-500 focus:border-rose-500'
+                        : liveValidation3B?.nikInfo.isTempZeros
+                        ? 'border-amber-500 bg-amber-50/40 text-amber-900'
+                        : liveValidation3B?.nikInfo.isFormatValid && !duplicate3BMatch
+                        ? 'border-emerald-500 bg-emerald-50/30 text-emerald-950'
+                        : 'border-slate-300 bg-white'
+                      : nikValidationResult && !nikValidationResult.isValid
                       ? 'border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-rose-500 focus:border-rose-500'
                       : duplicateNikMatch
                       ? 'border-amber-500 bg-amber-50/40 text-amber-900 focus:ring-amber-500 focus:border-amber-500'
@@ -5395,33 +5500,66 @@ const getBnbaCountForGroup = (
                   }`}
                 />
 
-                {nikValidationResult && !nikValidationResult.isValid && (
-                  <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
-                    <span>⚠️ Format Tidak Valid: {nikValidationResult.message}</span>
-                  </p>
-                )}
-
-                {nikValidationResult && nikValidationResult.isValid && !duplicateNikMatch && (
-                  <p className={`text-[11px] font-semibold mt-1 flex items-center gap-1 animate-fadeIn ${
-                    nikValidationResult.idType === 'NISN' ? 'text-blue-600' : 'text-emerald-600'
-                  }`}>
-                    <span>
-                      {nikValidationResult.idType === 'NISN'
-                        ? '✅ Format NISN Valid (10 Digit Kemendikbud)'
-                        : `✅ Format NIK Valid (${nikValidationResult.gender}, Tanggal Lahir: ${nikValidationResult.birthDate})`}
-                    </span>
-                  </p>
-                )}
-
-                {duplicateNikMatch && (
-                  <div className="mt-2 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 text-xs font-semibold space-y-1 animate-fadeIn shadow-2xs">
-                    <div className="flex items-center gap-1.5 font-bold text-rose-700">
-                      <span>⛔ NIK Duplikat!</span>
-                    </div>
-                    <p className="text-[11px] text-rose-800 leading-tight">
-                      Sudah terdaftar atas nama <strong className="font-bold underline">{duplicateNikMatch.nama}</strong> di <strong className="font-bold">{duplicateNikMatch.nama_sekolah}</strong>.
-                    </p>
+                {isPosyandu3BItem(activeBnbaGroup) ? (
+                  <div className="mt-1.5 space-y-1">
+                    {duplicate3BMatch ? (
+                      <div className="p-2 bg-rose-50 border border-rose-300 rounded text-rose-800 text-[11px] font-bold">
+                        ✕ {duplicate3BMatch.message}
+                      </div>
+                    ) : liveValidation3B && !liveValidation3B.nikInfo.isFormatValid ? (
+                      <p className="text-[11px] font-semibold text-rose-700">
+                        ✕ {liveValidation3B.nikInfo.error}
+                      </p>
+                    ) : liveValidation3B && liveValidation3B.errors.some(err => err.includes('cocok dengan kode NIK')) ? (
+                      <p className="text-[11px] font-semibold text-rose-700">
+                        ✕ {liveValidation3B.errors.find(err => err.includes('cocok dengan kode NIK'))}
+                      </p>
+                    ) : liveValidation3B?.nikInfo.isFormatValid ? (
+                      <div className="space-y-1">
+                        {!isCheckingDuplicate && (
+                          <p className="text-[11px] font-semibold text-emerald-700">
+                            ✓ NIK valid, belum terdaftar &amp; cocok dengan tanggal lahir ({liveValidation3B.nikInfo.extractedBirthDisplay} · {liveValidation3B.nikInfo.extractedGender})
+                          </p>
+                        )}
+                        {liveValidation3B.nikInfo.isTempZeros && (
+                          <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+                            ⚠️ {liveValidation3B.nikInfo.warning}
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
+                ) : (
+                  <>
+                    {nikValidationResult && !nikValidationResult.isValid && (
+                      <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
+                        <span>⚠️ Format Tidak Valid: {nikValidationResult.message}</span>
+                      </p>
+                    )}
+
+                    {nikValidationResult && nikValidationResult.isValid && !duplicateNikMatch && (
+                      <p className={`text-[11px] font-semibold mt-1 flex items-center gap-1 animate-fadeIn ${
+                        nikValidationResult.idType === 'NISN' ? 'text-blue-600' : 'text-emerald-600'
+                      }`}>
+                        <span>
+                          {nikValidationResult.idType === 'NISN'
+                            ? '✅ Format NISN Valid (10 Digit Kemendikbud)'
+                            : `✅ Format NIK Valid (${nikValidationResult.gender}, Tanggal Lahir: ${nikValidationResult.birthDate})`}
+                        </span>
+                      </p>
+                    )}
+
+                    {duplicateNikMatch && (
+                      <div className="mt-2 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 text-xs font-semibold space-y-1 animate-fadeIn shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-rose-700">
+                          <span>⛔ NIK Duplikat!</span>
+                        </div>
+                        <p className="text-[11px] text-rose-800 leading-tight">
+                          Sudah terdaftar atas nama <strong className="font-bold underline">{duplicateNikMatch.nama}</strong> di <strong className="font-bold">{duplicateNikMatch.nama_sekolah}</strong>.
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div>
@@ -5440,11 +5578,22 @@ const getBnbaCountForGroup = (
               {/* Tanggal Lahir (Format Indonesia DD/MM/YYYY) & Jenis Kelamin */}
               <div className="space-y-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                  <label className="block font-semibold text-slate-700 mb-1 flex flex-wrap items-center justify-between gap-1.5">
                     <span>{isPosyandu3BItem(activeBnbaGroup) ? 'tanggal_lahir (DD/MM/YYYY) *' : 'Tanggal Lahir *'}</span>
-                    <span className="text-[10.5px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300">
-                      📅 {formatDDMMYYYY(bnbaTglLahir)}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {isPosyandu3BItem(activeBnbaGroup) && liveValidation3B?.recipientAgeIndicator && (
+                        <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded border ${
+                          liveValidation3B.recipientAgeIndicator.isValid
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-rose-50 text-rose-800 border-rose-300'
+                        }`}>
+                          {liveValidation3B.recipientAgeIndicator.text}
+                        </span>
+                      )}
+                      <span className="text-[10.5px] font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-300">
+                        📅 {formatDDMMYYYY(bnbaTglLahir)}
+                      </span>
+                    </div>
                   </label>
                   
                   <div className="grid grid-cols-3 gap-1.5">
@@ -5521,6 +5670,11 @@ const getBnbaCountForGroup = (
                     <option value="L">L - Laki-laki</option>
                     <option value="P">P - Perempuan</option>
                   </select>
+                  {isPosyandu3BItem(activeBnbaGroup) && (bnba3bSubKategori === 'POS - Ibu Hamil' || bnba3bSubKategori === 'POS - Ibu Menyusui') && bnbaJk !== 'P' && (
+                    <p className="text-[11px] font-semibold text-rose-700 mt-1">
+                      ✕ Gender untuk {bnba3bSubKategori} wajib Perempuan (P).
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -5529,9 +5683,17 @@ const getBnbaCountForGroup = (
                   {/* Conditional Section 1: Ibu Hamil (HPHT) */}
                   {bnba3bSubKategori === 'POS - Ibu Hamil' && (
                     <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-lg space-y-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
                         <label className="font-bold text-rose-900">Data Kehamilan — HPHT (DD/MM/YYYY) *</label>
-                        <span className="text-[10px] font-semibold text-rose-700">Maks. 11 bulan ke belakang</span>
+                        {liveValidation3B?.hphtIndicator && (
+                          <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded border ${
+                            liveValidation3B.hphtIndicator.isValid
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-rose-100 text-rose-800 border-rose-300'
+                          }`}>
+                            {liveValidation3B.hphtIndicator.text}
+                          </span>
+                        )}
                       </div>
                       <input
                         type="date"
@@ -5546,9 +5708,17 @@ const getBnbaCountForGroup = (
                   {/* Conditional Section 2: Ibu Menyusui (Data Anak) */}
                   {bnba3bSubKategori === 'POS - Ibu Menyusui' && (
                     <div className="p-3 bg-violet-50/70 border border-violet-200 rounded-lg space-y-2.5">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
                         <label className="font-bold text-violet-900">Data Anak (Wajib Ibu Menyusui) *</label>
-                        <span className="text-[10px] font-semibold text-violet-700">Usia anak 6 – 24 bulan</span>
+                        {liveValidation3B?.childAgeIndicator && (
+                          <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded border ${
+                            liveValidation3B.childAgeIndicator.isValid
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-rose-100 text-rose-800 border-rose-300'
+                          }`}>
+                            {liveValidation3B.childAgeIndicator.text}
+                          </span>
+                        )}
                       </div>
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">nama_anak (HURUF KAPITAL) *</label>
@@ -5568,10 +5738,30 @@ const getBnbaCountForGroup = (
                             type="text"
                             required
                             value={bnba3bIdCodeAnak}
-                            onChange={(e) => setBnba3bIdCodeAnak(e.target.value.replace(/[^0-9]/g, ''))}
+                            onChange={(e) => {
+                              const nextVal = e.target.value
+                              setBnba3bIdCodeAnak(nextVal)
+                              const trimmed = nextVal.trim()
+                              if (/^\d{16}$/.test(trimmed)) {
+                                const parsedAnak = parseNikStructure3B(trimmed)
+                                if (parsedAnak.isFormatValid && parsedAnak.extractedBirthIso) {
+                                  setBnba3bTglAnak(parsedAnak.extractedBirthIso)
+                                }
+                              }
+                            }}
                             placeholder="16 digit NIK anak"
                             className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-mono"
                           />
+                          {liveValidation3B?.anakNikInfo && !liveValidation3B.anakNikInfo.isFormatValid && (
+                            <p className="text-[10.5px] font-semibold text-rose-700 mt-1">
+                              ✕ {liveValidation3B.anakNikInfo.error}
+                            </p>
+                          )}
+                          {liveValidation3B?.anakNikInfo?.isTempZeros && (
+                            <p className="text-[10.5px] font-semibold text-amber-800 mt-1">
+                              ⚠️ {liveValidation3B.anakNikInfo.warning}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">tanggal_lahir_anak *</label>
@@ -5612,52 +5802,42 @@ const getBnbaCountForGroup = (
                             type="text"
                             required
                             value={bnba3bIdCodeIbu}
-                            onChange={(e) => setBnba3bIdCodeIbu(e.target.value.replace(/[^0-9]/g, ''))}
+                            onChange={(e) => setBnba3bIdCodeIbu(e.target.value)}
                             placeholder="16 digit NIK ibu"
                             className="w-full px-3 py-1.5 border border-sky-300 rounded bg-white font-mono"
                           />
+                          {liveValidation3B?.ibuNikInfo && !liveValidation3B.ibuNikInfo.isFormatValid && (
+                            <p className="text-[10.5px] font-semibold text-rose-700 mt-1">
+                              ✕ {liveValidation3B.ibuNikInfo.error}
+                            </p>
+                          )}
+                          {liveValidation3B?.ibuNikInfo?.isTempZeros && (
+                            <p className="text-[10.5px] font-semibold text-amber-800 mt-1">
+                              ⚠️ {liveValidation3B.ibuNikInfo.warning}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Live 3B Rule Validation Preview */}
-                  {(() => {
-                    const liveVal = validate3BRecord({
-                      nama_lengkap: bnbaNama.trim().toUpperCase(),
-                      tanggal_lahir: parse3BDateToIso(bnbaTglLahir),
-                      gender: parseJk(bnbaJk),
-                      type: bnba3bType,
-                      identity_code: bnbaNisnNik.replace(/[^0-9]/g, '').trim(),
-                      kategori: bnba3bKategori,
-                      sub_kategori: bnba3bSubKategori,
-                      hpht: parse3BDateToIso(bnba3bHpht),
-                      nama_anak: bnba3bNamaAnak.trim().toUpperCase(),
-                      type_identity_anak: bnba3bTypeIdAnak,
-                      identity_code_anak: bnba3bIdCodeAnak.replace(/[^0-9]/g, '').trim(),
-                      tanggal_lahir_anak: parse3BDateToIso(bnba3bTglAnak),
-                      nama_ibu: bnba3bNamaIbu.trim().toUpperCase(),
-                      type_identity_ibu: bnba3bTypeIdIbu,
-                      identity_code_ibu: bnba3bIdCodeIbu.replace(/[^0-9]/g, '').trim(),
-                    })
-                    if (liveVal.errors.length === 0) {
-                      return (
-                        <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-[11px] font-semibold text-emerald-800">
-                          ✅ Aturan NIK &amp; rentang usia sasaran 3B terpenuhi.
-                        </div>
-                      )
-                    }
-                    return (
-                      <div className="p-2.5 bg-amber-50 border border-amber-300 rounded text-[11px] text-amber-900 space-y-1">
-                        <div className="font-bold">⚠️ Peringatan Validasi BGN 3B:</div>
+                  {/* Live Pre-Save 3B Rule Validation Guard Summary */}
+                  {liveValidation3B && (
+                    liveValidation3B.isValid ? (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded text-[11px] font-semibold text-emerald-800">
+                        ✓ Seluruh aturan NIK, kecocokan tanggal lahir/gender, duplikasi, dan batas usia 3B terpenuhi. Siap disimpan.
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-rose-50 border border-rose-300 rounded text-[11px] text-rose-900 space-y-1">
+                        <div className="font-bold text-rose-800">✕ Tombol Simpan dikunci — perbaiki kesalahan berikut:</div>
                         <ul className="list-disc pl-4 space-y-0.5">
-                          {liveVal.errors.map((err, i) => (
+                          {liveValidation3B.errors.map((err, i) => (
                             <li key={i}>{err}</li>
                           ))}
                         </ul>
                       </div>
                     )
-                  })()}
+                  )}
                 </>
               ) : (
                 <>
@@ -5688,11 +5868,25 @@ const getBnbaCountForGroup = (
                 <button type="button" onClick={() => { setShowAddBnbaModal(false); setEditingBnbaItem(null); }} className="px-3 py-1.5 bg-white border border-slate-300 rounded text-slate-700 font-semibold cursor-pointer">Batal</button>
                 <button 
                   type="submit" 
-                  disabled={savingBnba || (Boolean(nikValidationResult) && !nikValidationResult?.isValid) || Boolean(duplicateNikMatch)} 
-                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded font-bold cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={
+                    savingBnba ||
+                    isCheckingDuplicate ||
+                    (isPosyandu3BItem(activeBnbaGroup)
+                      ? Boolean(liveValidation3B && !liveValidation3B.isValid)
+                      : (Boolean(nikValidationResult) && !nikValidationResult?.isValid) || Boolean(duplicateNikMatch))
+                  } 
+                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded font-bold cursor-pointer flex items-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed"
                 >
                   {savingBnba && <RotateCw size={13} className="animate-spin" />}
-                  <span>{savingBnba ? 'Menyimpan...' : editingBnbaItem ? 'Simpan Perubahan' : 'Simpan'}</span>
+                  <span>
+                    {savingBnba
+                      ? 'Menyimpan...'
+                      : editingBnbaItem
+                      ? 'Simpan Perubahan'
+                      : isPosyandu3BItem(activeBnbaGroup)
+                      ? 'Simpan Data BNBA'
+                      : 'Simpan'}
+                  </span>
                 </button>
               </div>
             </form>
@@ -5704,114 +5898,162 @@ const getBnbaCountForGroup = (
       {showImportConfirmModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
           <div className={`bg-white rounded-xl shadow-2xl w-full overflow-hidden border border-slate-200 animate-fadeIn my-auto max-h-[90vh] flex flex-col text-xs ${
-            import3BAudit ? 'max-w-[94vw]' : 'max-w-3xl'
+            import3BAudit ? 'max-w-[95vw]' : 'max-w-3xl'
           }`}>
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-slate-800" />
                 <div>
                   <h3 className="font-bold text-slate-900 text-sm">
-                    {import3BAudit ? 'Audit & Konfirmasi Import BNBA 3B (15 Kolom)' : 'Konfirmasi Import Data BNBA'}
+                    {import3BAudit ? 'Pratinjau & Audit Validasi Excel BNBA 3B (Pre-Save Guard)' : 'Konfirmasi Import Data BNBA'}
                   </h3>
                   <p className="text-[11px] text-slate-500">
                     {import3BAudit
-                      ? `Total ${import3BAudit.totalRows} baris terbaca (${import3BAudit.validCount} valid, ${import3BAudit.invalidCount} peringatan${import3BAudit.skippedExampleCount > 0 ? `, ${import3BAudit.skippedExampleCount} baris contoh dilewati` : ''}).`
+                      ? `Audit baris per baris untuk ${activeBnbaGroup?.nama}${import3BAudit.skippedExampleCount > 0 ? ` (${import3BAudit.skippedExampleCount} baris contoh template dilewati)` : ''}.`
                       : <>Ditemukan <strong className="text-slate-900">{importPreviewData.length}</strong> baris data BNBA yang terverifikasi valid.</>}
                   </p>
                 </div>
               </div>
-              <button onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); setImport3BAudit(null); }} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); setImport3BAudit(null); }} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
             <div className="p-4 flex-1 overflow-y-auto space-y-3 bg-slate-50">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              {import3BAudit ? (
+                <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+                  {/* Ringkasan Atas */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-3 py-1 rounded-md bg-slate-100 text-slate-900 border border-slate-300 font-bold">
+                      Total Baris: <span className="font-mono">{import3BAudit.totalRows}</span>
+                    </span>
+                    <span className="px-3 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold">
+                      ✓ Siap Simpan (Valid): <span className="font-mono">{import3BAudit.validCount}</span>
+                    </span>
+                    <span className="px-3 py-1 rounded-md bg-red-50 text-red-800 border border-red-300 font-bold">
+                      ✕ Bermasalah / Ditolak: <span className="font-mono">{import3BAudit.invalidCount}</span>
+                    </span>
+                  </div>
+
+                  {/* Filter Cepat Pratinjau */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setImportAuditFilter('all')}
+                      className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                        importAuditFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      Semua ({import3BAudit.totalRows})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportAuditFilter('valid')}
+                      className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                        importAuditFilter === 'valid' ? 'bg-emerald-700 text-white' : 'text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      Valid ({import3BAudit.validCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportAuditFilter('invalid')}
+                      className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                        importAuditFilter === 'invalid' ? 'bg-red-700 text-white' : 'text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      Bermasalah ({import3BAudit.invalidCount})
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <p className="text-slate-600 font-medium">
                   Data yang akan diimpor ke kelompok <strong className="text-slate-900">{activeBnbaGroup?.nama}</strong>:
                 </p>
+              )}
 
-                {import3BAudit && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
-                      ✅ Valid: {import3BAudit.validCount}
-                    </span>
-                    {import3BAudit.invalidCount > 0 && (
-                      <>
-                        <span className="px-2.5 py-1 rounded bg-rose-50 text-rose-800 border border-rose-200 font-bold">
-                          ⚠️ Peringatan Usia/Kolom Wajib: {import3BAudit.invalidCount}
-                        </span>
-                        <label className="inline-flex items-center gap-1.5 bg-white px-2.5 py-1 rounded border border-slate-300 font-semibold text-slate-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={importOnlyValid3B}
-                            onChange={(e) => setImportOnlyValid3B(e.target.checked)}
-                            className="rounded border-slate-300"
-                          />
-                          <span>Hanya impor baris valid ({import3BAudit.validCount})</span>
-                        </label>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Scrollable Container with max-h-[380px] and sticky top-0 header */}
-              <div className="max-h-[380px] overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg scrollbar-thin">
-                {import3BAudit ? (
-                  <table className="w-full text-left border-collapse text-[11px] whitespace-nowrap">
-                    <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-slate-700 font-bold z-10 shadow-2xs">
-                      <tr>
-                        <th className="py-2.5 px-2.5 text-center">#</th>
-                        <th className="py-2.5 px-3">Audit Aturan 3B</th>
-                        {BNBA_3B_HEADERS.map(h => (
-                          <th key={h} className="py-2.5 px-3">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white font-medium">
-                      {import3BAudit.rows.map((r, idx) => {
-                        const n = r.normalized
-                        const isBumil = n.sub_kategori === 'POS - Ibu Hamil'
-                        const isBusui = n.sub_kategori === 'POS - Ibu Menyusui'
-                        const isBalita = n.sub_kategori === 'POS - Balita'
-                        return (
-                          <tr key={idx} className={r.validation.isValid ? 'hover:bg-slate-50' : 'bg-rose-50/40'}>
-                            <td className="py-2 px-2.5 text-slate-500 text-center font-mono">{r.rowNumber}</td>
-                            <td className="py-2 px-3">
-                              {r.validation.isValid ? (
-                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[10px]">
-                                  Valid
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-bold text-[10px]">
-                                  {r.validation.errors.join(' · ')}
-                                </span>
-                              )}
+              {/* Scrollable Container with max-h-[420px] and sticky top-0 header */}
+              <div className="max-h-[420px] overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg scrollbar-thin bg-white">
+                {import3BAudit ? (() => {
+                  const filteredImportRows = import3BAudit.rows.filter(r => {
+                    if (importAuditFilter === 'valid') return r.validation.isValid
+                    if (importAuditFilter === 'invalid') return !r.validation.isValid
+                    return true
+                  })
+                  return (
+                    <table className="w-full text-left border-collapse text-[11px] whitespace-nowrap">
+                      <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-slate-700 font-bold z-10 shadow-2xs">
+                        <tr>
+                          <th className="py-2.5 px-2.5 text-center">Baris</th>
+                          <th className="py-2.5 px-3 min-w-[240px]">Status Validasi</th>
+                          {BNBA_3B_HEADERS.map(h => (
+                            <th key={h} className="py-2.5 px-3">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 bg-white font-medium">
+                        {filteredImportRows.length > 0 ? (
+                          filteredImportRows.map((r, idx) => {
+                            const n = r.normalized
+                            const isBumil = n.sub_kategori === 'POS - Ibu Hamil'
+                            const isBusui = n.sub_kategori === 'POS - Ibu Menyusui'
+                            const isBalita = n.sub_kategori === 'POS - Balita'
+                            return (
+                              <tr key={idx} className={r.validation.isValid ? 'hover:bg-slate-50' : 'bg-red-50 hover:bg-red-100/70'}>
+                                <td className="py-2 px-2.5 text-slate-600 text-center font-mono font-bold">{r.rowNumber}</td>
+                                <td className="py-2 px-3 whitespace-normal min-w-[240px]">
+                                  {r.validation.isValid ? (
+                                    <div className="space-y-0.5">
+                                      <span className="inline-block px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px]">
+                                        ✓ Valid
+                                      </span>
+                                      {r.validation.warnings.length > 0 && (
+                                        <div className="text-[10px] font-semibold text-amber-800">
+                                          ⚠️ {r.validation.warnings.join(' · ')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      {r.validation.errors.map((errMsg, eIdx) => (
+                                        <div key={eIdx} className="text-[10.5px] font-bold text-red-800 leading-snug">
+                                          ✕ {errMsg}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 font-bold text-slate-900">{n.nama_lengkap || '-'}</td>
+                                <td className="py-2 px-3 font-mono">{formatIsoToDDMMYYYY(n.tanggal_lahir)}</td>
+                                <td className="py-2 px-3 text-center font-bold">{n.gender}</td>
+                                <td className="py-2 px-3 text-center font-mono">{n.type}</td>
+                                <td className="py-2 px-3 font-mono font-bold">{n.identity_code || '-'}</td>
+                                <td className="py-2 px-3 text-center font-bold">{n.kategori}</td>
+                                <td className="py-2 px-3 font-semibold">{n.sub_kategori}</td>
+                                <td className={`py-2 px-3 font-mono ${!isBumil ? 'bg-slate-100 text-slate-400 text-center' : ''}`}>
+                                  {isBumil ? formatIsoToDDMMYYYY(n.hpht) : '—'}
+                                </td>
+                                <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3'}>{isBusui ? (n.nama_anak || '-') : '—'}</td>
+                                <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 text-center font-mono'}>{isBusui ? n.type_identity_anak : '—'}</td>
+                                <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBusui ? (n.identity_code_anak || '-') : '—'}</td>
+                                <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBusui ? formatIsoToDDMMYYYY(n.tanggal_lahir_anak) : '—'}</td>
+                                <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3'}>{isBalita ? (n.nama_ibu || '-') : '—'}</td>
+                                <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 text-center font-mono'}>{isBalita ? n.type_identity_ibu : '—'}</td>
+                                <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBalita ? (n.identity_code_ibu || '-') : '—'}</td>
+                              </tr>
+                            )
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={17} className="py-8 text-center text-slate-400 font-medium">
+                              Tidak ada baris pada filter ini.
                             </td>
-                            <td className="py-2 px-3 font-bold text-slate-900">{n.nama_lengkap || '-'}</td>
-                            <td className="py-2 px-3 font-mono">{formatIsoToDDMMYYYY(n.tanggal_lahir)}</td>
-                            <td className="py-2 px-3 text-center font-bold">{n.gender}</td>
-                            <td className="py-2 px-3 text-center font-mono">{n.type}</td>
-                            <td className="py-2 px-3 font-mono font-bold">{n.identity_code || '-'}</td>
-                            <td className="py-2 px-3 text-center font-bold">{n.kategori}</td>
-                            <td className="py-2 px-3 font-semibold">{n.sub_kategori}</td>
-                            <td className={`py-2 px-3 font-mono ${!isBumil ? 'bg-slate-100 text-slate-400 text-center' : ''}`}>
-                              {isBumil ? formatIsoToDDMMYYYY(n.hpht) : '—'}
-                            </td>
-                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3'}>{isBusui ? (n.nama_anak || '-') : '—'}</td>
-                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 text-center font-mono'}>{isBusui ? n.type_identity_anak : '—'}</td>
-                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBusui ? (n.identity_code_anak || '-') : '—'}</td>
-                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBusui ? formatIsoToDDMMYYYY(n.tanggal_lahir_anak) : '—'}</td>
-                            <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3'}>{isBalita ? (n.nama_ibu || '-') : '—'}</td>
-                            <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 text-center font-mono'}>{isBalita ? n.type_identity_ibu : '—'}</td>
-                            <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBalita ? (n.identity_code_ibu || '-') : '—'}</td>
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                ) : (
+                        )}
+                      </tbody>
+                    </table>
+                  )
+                })() : (
                   <table className="w-full text-left border-collapse text-[11px]">
                     <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase z-10 shadow-2xs">
                       <tr>
@@ -5846,30 +6088,37 @@ const getBnbaCountForGroup = (
               </div>
             </div>
 
-            <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); setImport3BAudit(null); }}
-                disabled={isImporting}
-                className="px-4 py-1.5 bg-white border border-slate-300 rounded-md font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={confirmExecuteImport}
-                disabled={isImporting || (Boolean(import3BAudit) && importOnlyValid3B && import3BAudit?.validCount === 0)}
-                className="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {isImporting ? <RotateCw size={14} className="animate-spin" /> : <Upload size={14} />}
-                <span>
-                  {isImporting
-                    ? 'Mengimpor Data...'
-                    : import3BAudit && importOnlyValid3B
-                    ? `Ya, Impor ${import3BAudit.validCount} Data Valid`
-                    : `Ya, Impor ${importPreviewData.length} Data`}
-                </span>
-              </button>
+            <div className="p-3 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[11px] text-slate-500">
+                {import3BAudit && import3BAudit.invalidCount > 0 && (
+                  <span>Baris bermasalah ({import3BAudit.invalidCount}) akan dilewati secara otomatis agar database tetap bersih.</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); setImport3BAudit(null); }}
+                  disabled={isImporting}
+                  className="px-4 py-1.5 bg-white border border-slate-300 rounded-md font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  {import3BAudit ? 'Batal / Perbaiki File Excel' : 'Batal'}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmExecuteImport}
+                  disabled={isImporting || (Boolean(import3BAudit) && import3BAudit?.validCount === 0)}
+                  className="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-45 disabled:cursor-not-allowed"
+                >
+                  {isImporting ? <RotateCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                  <span>
+                    {isImporting
+                      ? 'Menyimpan Data Valid...'
+                      : import3BAudit
+                      ? `Simpan ${import3BAudit.validCount} Data Valid ke Database`
+                      : `Ya, Impor ${importPreviewData.length} Data`}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

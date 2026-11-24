@@ -1,6 +1,20 @@
 import ExcelJS from 'exceljs'
 import * as XLSX from 'xlsx'
 import type { PenerimaManfaatBnba } from './data-helpers'
+import {
+  type SubKategori3B,
+  type NormalizedBnba3B,
+  type Bnba3BValidationResult,
+  type GlobalNikRecordInfo,
+  cleanDigits,
+  isValidCalendarDate,
+  formatIsoDateToDDMMYYYY,
+  getCalendarMonthsDiff,
+  formatDuplicateMessage,
+  validateBnba3BFull,
+} from './bnba3bValidator'
+
+export type { SubKategori3B, NormalizedBnba3B, Bnba3BValidationResult }
 
 export const BNBA_3B_HEADERS = [
   'nama_lengkap',
@@ -19,32 +33,6 @@ export const BNBA_3B_HEADERS = [
   'type_identity_ibu',
   'identity_code_ibu',
 ] as const
-
-export type SubKategori3B = 'POS - Ibu Hamil' | 'POS - Ibu Menyusui' | 'POS - Balita'
-
-export interface NormalizedBnba3B {
-  nama_lengkap: string
-  tanggal_lahir: string // YYYY-MM-DD
-  gender: 'L' | 'P'
-  type: string
-  identity_code: string
-  kategori: string
-  sub_kategori: SubKategori3B
-  hpht: string // YYYY-MM-DD or ''
-  nama_anak: string
-  type_identity_anak: string
-  identity_code_anak: string
-  tanggal_lahir_anak: string // YYYY-MM-DD or ''
-  nama_ibu: string
-  type_identity_ibu: string
-  identity_code_ibu: string
-}
-
-export interface Bnba3BValidationResult {
-  isValid: boolean
-  errors: string[]
-  warnings: string[]
-}
 
 export interface Parsed3BImportRow {
   item: PenerimaManfaatBnba
@@ -76,15 +64,19 @@ export function subKategoriToPosisi(subKat: SubKategori3B): 'Bumil' | 'Busui' | 
   return 'Balita'
 }
 
-export function cleanNikString(val: unknown): string {
-  if (val === null || val === undefined) return ''
-  return String(val).replace(/[^0-9]/g, '').trim()
-}
+export const cleanNikString = cleanDigits
 
 export function parseGender3B(val: unknown): 'L' | 'P' {
   const s = String(val || '').trim().toUpperCase()
   if (s === 'P' || s.startsWith('PEREMPUAN') || s.startsWith('WANITA') || s === 'F') return 'P'
   return 'L'
+}
+
+function parseGenderStrict3B(val: unknown): 'L' | 'P' | '' {
+  const s = String(val || '').trim().toUpperCase()
+  if (s === 'P' || s.startsWith('PEREMPUAN') || s.startsWith('WANITA') || s === 'F') return 'P'
+  if (s === 'L' || s.startsWith('LAKI') || s.startsWith('PRIA') || s === 'M') return 'L'
+  return ''
 }
 
 /**
@@ -101,7 +93,6 @@ export function parse3BDateToIso(val: unknown): string {
   }
 
   if (typeof val === 'number' && !isNaN(val)) {
-    // Excel serial number (epoch 1899-12-30)
     const utcDays = Math.floor(val - 25569)
     const d = new Date(utcDays * 86400 * 1000)
     if (!isNaN(d.getTime())) {
@@ -116,7 +107,6 @@ export function parse3BDateToIso(val: unknown): string {
   const str = String(val).trim()
   if (!str || str === '-' || str === '—') return ''
 
-  // ISO YYYY-MM-DD
   const isoMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
   if (isoMatch) {
     const yyyy = isoMatch[1]
@@ -128,14 +118,12 @@ export function parse3BDateToIso(val: unknown): string {
     return ''
   }
 
-  // Indonesian DD/MM/YYYY or DD-MM-YYYY
   const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
   if (dmyMatch) {
     let day = parseInt(dmyMatch[1], 10)
     let month = parseInt(dmyMatch[2], 10)
     const year = parseInt(dmyMatch[3], 10)
     if (month > 12 && day <= 12) {
-      // Fallback if MM/DD/YYYY was entered
       const tmp = day
       day = month
       month = tmp
@@ -146,7 +134,6 @@ export function parse3BDateToIso(val: unknown): string {
     return ''
   }
 
-  // Short DD/MM/YY
   const shortMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/)
   if (shortMatch) {
     let day = parseInt(shortMatch[1], 10)
@@ -175,150 +162,11 @@ export function parse3BDateToIso(val: unknown): string {
   return ''
 }
 
-function isValidCalendarDate(year: number, month: number, day: number): boolean {
-  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return false
-  const d = new Date(year, month - 1, day)
-  return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day
-}
-
-export function formatIsoToDDMMYYYY(dateStr?: string | null): string {
-  if (!dateStr || dateStr === '-' || dateStr === '—') return '—'
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return dateStr
-  const iso = parse3BDateToIso(dateStr)
-  if (!iso) return dateStr
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
-}
-
-/**
- * Exact completed calendar months from an ISO YYYY-MM-DD date to reference date.
- * Returns negative if fromIso is in the future.
- */
-export function getMonthsDiff(fromIso: string, refDate: Date = new Date()): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromIso)) return null
-  const [fy, fm, fd] = fromIso.split('-').map(Number)
-  const ty = refDate.getFullYear()
-  const tm = refDate.getMonth() + 1
-  const td = refDate.getDate()
-
-  const fromDateOnly = new Date(fy, fm - 1, fd)
-  const toDateOnly = new Date(ty, tm - 1, td)
-  if (fromDateOnly.getTime() > toDateOnly.getTime()) {
-    return -1
-  }
-
-  let months = (ty - fy) * 12 + (tm - fm)
-  if (td < fd) {
-    months -= 1
-  }
-  return months
-}
-
-/**
- * Check if `fromIso` is strictly older than `maxMonths` calendar months relative to `refDate`.
- */
-function isOlderThanMonths(fromIso: string, maxMonths: number, refDate: Date = new Date()): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromIso)) return false
-  const [fy, fm, fd] = fromIso.split('-').map(Number)
-  const fromDate = new Date(fy, fm - 1, fd)
-  const minAllowed = new Date(refDate.getFullYear(), refDate.getMonth() - maxMonths, refDate.getDate())
-  return fromDate.getTime() < minAllowed.getTime()
-}
+export const formatIsoToDDMMYYYY = formatIsoDateToDDMMYYYY
+export const getMonthsDiff = getCalendarMonthsDiff
 
 export function validate3BRecord(rec: NormalizedBnba3B, refDate: Date = new Date()): Bnba3BValidationResult {
-  const errors: string[] = []
-  const warnings: string[] = []
-
-  // Common mandatory fields
-  if (!rec.nama_lengkap.trim()) {
-    errors.push('nama_lengkap wajib diisi')
-  }
-  if (!rec.tanggal_lahir) {
-    errors.push('tanggal_lahir wajib diisi (DD/MM/YYYY)')
-  }
-  if (rec.gender !== 'L' && rec.gender !== 'P') {
-    errors.push('gender harus L atau P')
-  }
-  if (!/^\d{16}$/.test(rec.identity_code)) {
-    errors.push(`identity_code harus 16 digit NIK (terbaca ${rec.identity_code.length} digit)`)
-  }
-
-  // Minimum recipient age: 6 months
-  if (rec.tanggal_lahir) {
-    const recipientMonths = getMonthsDiff(rec.tanggal_lahir, refDate)
-    if (recipientMonths === null) {
-      errors.push('Format tanggal_lahir tidak valid')
-    } else if (recipientMonths < 0) {
-      errors.push('tanggal_lahir tidak boleh melebihi hari ini')
-    } else if (recipientMonths < 6) {
-      errors.push(`Usia penerima minimal 6 bulan (saat ini ${recipientMonths} bulan)`)
-    }
-  }
-
-  if (rec.sub_kategori === 'POS - Ibu Hamil') {
-    if (!rec.hpht) {
-      errors.push('hpht wajib diisi untuk Ibu Hamil')
-    } else {
-      const hphtMonths = getMonthsDiff(rec.hpht, refDate)
-      if (hphtMonths === null) {
-        errors.push('Format hpht tidak valid')
-      } else if (hphtMonths < 0) {
-        errors.push('hpht tidak boleh melebihi hari ini')
-      } else if (hphtMonths > 11) {
-        errors.push(`hpht maksimal 11 bulan ke belakang (${hphtMonths} bulan)`)
-      }
-    }
-    if (rec.gender === 'L') {
-      warnings.push('Gender Ibu Hamil umumnya Perempuan (P)')
-    }
-  } else if (rec.sub_kategori === 'POS - Ibu Menyusui') {
-    if (!rec.nama_anak.trim()) {
-      errors.push('nama_anak wajib diisi untuk Ibu Menyusui')
-    }
-    if (!/^\d{16}$/.test(rec.identity_code_anak)) {
-      errors.push(`identity_code_anak harus 16 digit NIK (${rec.identity_code_anak.length} digit)`)
-    }
-    if (!rec.tanggal_lahir_anak) {
-      errors.push('tanggal_lahir_anak wajib diisi untuk Ibu Menyusui')
-    } else {
-      const childMonths = getMonthsDiff(rec.tanggal_lahir_anak, refDate)
-      if (childMonths === null) {
-        errors.push('Format tanggal_lahir_anak tidak valid')
-      } else if (childMonths < 0) {
-        errors.push('tanggal_lahir_anak tidak boleh melebihi hari ini')
-      } else if (childMonths < 6) {
-        errors.push(`Usia anak Busui minimal 6 bulan (saat ini ${childMonths} bulan)`)
-      } else if (childMonths > 24) {
-        errors.push(`Usia anak Busui maksimal 24 bulan / 2 tahun (saat ini ${childMonths} bulan)`)
-      }
-    }
-    if (rec.gender === 'L') {
-      warnings.push('Gender Ibu Menyusui umumnya Perempuan (P)')
-    }
-  } else if (rec.sub_kategori === 'POS - Balita') {
-    if (!rec.nama_ibu.trim()) {
-      errors.push('nama_ibu wajib diisi untuk Balita')
-    }
-    if (!/^\d{16}$/.test(rec.identity_code_ibu)) {
-      errors.push(`identity_code_ibu harus 16 digit NIK (${rec.identity_code_ibu.length} digit)`)
-    }
-    if (rec.tanggal_lahir) {
-      const balitaMonths = getMonthsDiff(rec.tanggal_lahir, refDate)
-      if (balitaMonths !== null && balitaMonths >= 0) {
-        if (balitaMonths < 6) {
-          // Already covered above, avoid duplicating
-        } else if (balitaMonths > 59) {
-          errors.push(`Usia Balita maksimal 59 bulan (saat ini ${balitaMonths} bulan)`)
-        }
-      }
-    }
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-    warnings,
-  }
+  return validateBnba3BFull(rec, { refDate })
 }
 
 /**
@@ -779,7 +627,8 @@ export async function exportBnba3BExcel(records: PenerimaManfaatBnba[], groupNam
  */
 export async function parse3BExcelFile(
   file: File,
-  selectedKelompokId: string
+  selectedKelompokId: string,
+  globalNikMap?: Map<string, GlobalNikRecordInfo[]>
 ): Promise<Parsed3BImportResult> {
   const arrayBuffer = await file.arrayBuffer()
   const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: false })
@@ -830,6 +679,7 @@ export async function parse3BExcelFile(
 
   const parsedRows: Parsed3BImportRow[] = []
   let skippedExampleCount = 0
+  const seenExcelNiks = new Map<string, number>()
 
   for (let r = headerIdx + 1; r < rowsArray.length; r++) {
     const row = rowsArray[r] || []
@@ -848,38 +698,69 @@ export async function parse3BExcelFile(
       continue
     }
 
-    const identityCode = cleanNikString(row[idxNik])
+    const rawNikStr = String(row[idxNik] ?? '').trim()
+    const cleanedNikForExample = cleanNikString(rawNikStr)
 
     // Skip unchanged template example rows (rows 3, 4, 5)
-    if (TEMPLATE_EXAMPLE_NAMES.has(firstCell) && TEMPLATE_EXAMPLE_NIKS.has(identityCode)) {
+    if (TEMPLATE_EXAMPLE_NAMES.has(firstCell) && TEMPLATE_EXAMPLE_NIKS.has(cleanedNikForExample)) {
       skippedExampleCount++
       continue
     }
 
     const subKategori = normalizeSubKategori3B(String(row[idxSubKat] ?? ''))
-    const gender = parseGender3B(row[idxGender])
+    const strictGender = parseGenderStrict3B(row[idxGender])
     const tanggalLahir = parse3BDateToIso(row[idxTgl])
 
-    const normalized: NormalizedBnba3B = {
+    const rawAnakNikStr = subKategori === 'POS - Ibu Menyusui' ? String(row[idxNikAnak] ?? '').trim() : ''
+    const rawIbuNikStr = subKategori === 'POS - Balita' ? String(row[idxNikIbu] ?? '').trim() : ''
+
+    const normalizedForValidation: NormalizedBnba3B = {
       nama_lengkap: firstCell,
       tanggal_lahir: tanggalLahir,
-      gender,
+      gender: (strictGender || 'X') as any,
       type: String(row[idxType] || 'nik').trim().toLowerCase() || 'nik',
-      identity_code: identityCode,
+      identity_code: rawNikStr,
       kategori: String(row[idxKategori] || 'POS').trim().toUpperCase() || 'POS',
       sub_kategori: subKategori,
       hpht: subKategori === 'POS - Ibu Hamil' ? parse3BDateToIso(row[idxHpht]) : '',
       nama_anak: subKategori === 'POS - Ibu Menyusui' ? String(row[idxNamaAnak] ?? '').toUpperCase().trim() : '',
       type_identity_anak: subKategori === 'POS - Ibu Menyusui' ? (String(row[idxTypeAnak] || 'nik').trim().toLowerCase() || 'nik') : '',
-      identity_code_anak: subKategori === 'POS - Ibu Menyusui' ? cleanNikString(row[idxNikAnak]) : '',
+      identity_code_anak: rawAnakNikStr,
       tanggal_lahir_anak: subKategori === 'POS - Ibu Menyusui' ? parse3BDateToIso(row[idxTglAnak]) : '',
       nama_ibu: subKategori === 'POS - Balita' ? String(row[idxNamaIbu] ?? '').toUpperCase().trim() : '',
       type_identity_ibu: subKategori === 'POS - Balita' ? (String(row[idxTypeIbu] || 'nik').trim().toLowerCase() || 'nik') : '',
-      identity_code_ibu: subKategori === 'POS - Balita' ? cleanNikString(row[idxNikIbu]) : '',
+      identity_code_ibu: rawIbuNikStr,
     }
 
-    const validation = validate3BRecord(normalized)
-    const { fullPayload } = buildBnba3BPayloads(selectedKelompokId, normalized)
+    const excelRowNum = r + 1
+    let internalDupRow: number | null = null
+    if (/^\d{16}$/.test(rawNikStr)) {
+      if (seenExcelNiks.has(rawNikStr)) {
+        internalDupRow = seenExcelNiks.get(rawNikStr)!
+      } else {
+        seenExcelNiks.set(rawNikStr, excelRowNum)
+      }
+    }
+
+    const dbMatches = globalNikMap && /^\d{16}$/.test(rawNikStr) ? globalNikMap.get(rawNikStr) : undefined
+    const dbDupMatch = dbMatches && dbMatches.length > 0
+      ? { ...dbMatches[0], message: formatDuplicateMessage(dbMatches[0]) }
+      : null
+
+    const validation = validateBnba3BFull(normalizedForValidation, {
+      duplicateMatch: dbDupMatch,
+      internalDuplicateRow: internalDupRow,
+    })
+
+    const cleanNormalized: NormalizedBnba3B = {
+      ...normalizedForValidation,
+      gender: strictGender || 'L',
+      identity_code: cleanNikString(rawNikStr),
+      identity_code_anak: cleanNikString(rawAnakNikStr),
+      identity_code_ibu: cleanNikString(rawIbuNikStr),
+    }
+
+    const { fullPayload } = buildBnba3BPayloads(selectedKelompokId, cleanNormalized)
 
     const item: PenerimaManfaatBnba = {
       id: `bnba-3b-${Date.now()}-${r}`,
@@ -889,9 +770,9 @@ export async function parse3BExcelFile(
 
     parsedRows.push({
       item,
-      normalized,
+      normalized: cleanNormalized,
       validation,
-      rowNumber: r + 1,
+      rowNumber: excelRowNum,
     })
   }
 
