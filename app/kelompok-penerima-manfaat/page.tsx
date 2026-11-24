@@ -28,6 +28,21 @@ import { validateNikStructure, checkDuplicateNik, auditIdentityNumber, auditNik,
 import LembarDistribusiPrint from '@/components/LembarDistribusiPrint'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { showToast } from '@/components/toast'
+import {
+  BNBA_3B_HEADERS,
+  type SubKategori3B,
+  type Parsed3BImportResult,
+  normalizeBnba3BFields,
+  buildBnba3BPayloads,
+  validate3BRecord,
+  downloadTemplateBnba3B,
+  exportBnba3BExcel,
+  parse3BExcelFile,
+  formatIsoToDDMMYYYY,
+  normalizeSubKategori3B,
+  subKategoriToPosisi,
+  parse3BDateToIso
+} from '@/lib/bnba3b'
 
 export interface DetailKpmItem {
   id: string
@@ -97,10 +112,10 @@ const isPosyandu3BItem = (item: { jenis?: string; nama?: string } | null | undef
 }
 
 const getBnba3BCategory = (item: PenerimaManfaatBnba): 'balita' | 'bumil' | 'busui' | 'lainnya' => {
-  const pos = (item.posisi || '').toLowerCase()
-  if (pos.includes('balita') || pos.includes('bayi')) return 'balita'
-  if (pos.includes('bumil') || pos.includes('hamil')) return 'bumil'
-  if (pos.includes('busui') || pos.includes('menyusui')) return 'busui'
+  const combined = `${item.sub_kategori || ''} ${item.posisi || ''}`.toLowerCase()
+  if (combined.includes('bumil') || combined.includes('hamil')) return 'bumil'
+  if (combined.includes('busui') || combined.includes('menyusui')) return 'busui'
+  if (combined.includes('balita') || combined.includes('bayi')) return 'balita'
   return 'lainnya'
 }
 
@@ -234,6 +249,8 @@ function KelompokPenerimaManfaatContent() {
 
   // BNBA Excel Import States
   const [importPreviewData, setImportPreviewData] = useState<PenerimaManfaatBnba[]>([])
+  const [import3BAudit, setImport3BAudit] = useState<Parsed3BImportResult | null>(null)
+  const [importOnlyValid3B, setImportOnlyValid3B] = useState(false)
   const [showImportConfirmModal, setShowImportConfirmModal] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
@@ -483,6 +500,19 @@ function KelompokPenerimaManfaatContent() {
   const [bnbaOrtu, setBnbaOrtu] = useState('')
   const [bnbaPosisi, setBnbaPosisi] = useState<'Siswa' | 'Tendik' | 'Balita' | 'Bumil' | 'Busui'>('Siswa')
   const [bnbaKelas, setBnbaKelas] = useState('')
+
+  // 15-Column Posyandu 3B Extended BNBA Form Fields
+  const [bnba3bSubKategori, setBnba3bSubKategori] = useState<SubKategori3B>('POS - Balita')
+  const [bnba3bType, setBnba3bType] = useState('nik')
+  const [bnba3bKategori, setBnba3bKategori] = useState('POS')
+  const [bnba3bHpht, setBnba3bHpht] = useState('')
+  const [bnba3bNamaAnak, setBnba3bNamaAnak] = useState('')
+  const [bnba3bTypeIdAnak, setBnba3bTypeIdAnak] = useState('nik')
+  const [bnba3bIdCodeAnak, setBnba3bIdCodeAnak] = useState('')
+  const [bnba3bTglAnak, setBnba3bTglAnak] = useState('')
+  const [bnba3bNamaIbu, setBnba3bNamaIbu] = useState('')
+  const [bnba3bTypeIdIbu, setBnba3bTypeIdIbu] = useState('nik')
+  const [bnba3bIdCodeIbu, setBnba3bIdCodeIbu] = useState('')
 
   // NIK Smart Validation & Duplicate Detection States
   const [nikValidationResult, setNikValidationResult] = useState<NikValidationResult | null>(null)
@@ -1900,22 +1930,31 @@ const getBnbaCountForGroup = (
 
   const handleOpenAddBnbaModal = () => {
     setEditingBnbaItem(null)
-    setBnbaNisnNik(`${Math.floor(1000000000 + Math.random() * 9000000000)}`)
+    const is3B = isPosyandu3BItem(activeBnbaGroup)
+    setBnbaNisnNik(is3B ? '' : `${Math.floor(1000000000 + Math.random() * 9000000000)}`)
     setBnbaNama('')
-    setBnbaTglLahir('2015-05-15')
-    setBnbaJk('L')
+    setBnbaTglLahir(is3B ? '2023-05-15' : '2015-05-15')
+    setBnbaJk(is3B && (bnbaCategoryTab === 'bumil' || bnbaCategoryTab === 'busui') ? 'P' : 'L')
     setBnbaOrtu('')
     if (activeBnbaGroup) {
-      const is3B = isPosyandu3BItem(activeBnbaGroup)
-      setBnbaPosisi(
-        is3B
-          ? (bnbaCategoryTab === 'bumil' || activeBnbaGroup.jenis.includes('Hamil')
-              ? 'Bumil'
-              : bnbaCategoryTab === 'busui' || activeBnbaGroup.jenis.includes('Menyusui')
-              ? 'Busui'
-              : 'Balita')
-          : 'Siswa'
-      )
+      const defaultSubKat: SubKategori3B =
+        bnbaCategoryTab === 'bumil' || activeBnbaGroup.jenis.includes('Hamil')
+          ? 'POS - Ibu Hamil'
+          : bnbaCategoryTab === 'busui' || activeBnbaGroup.jenis.includes('Menyusui')
+          ? 'POS - Ibu Menyusui'
+          : 'POS - Balita'
+      setBnba3bSubKategori(defaultSubKat)
+      setBnba3bType('nik')
+      setBnba3bKategori('POS')
+      setBnba3bHpht(new Date().toISOString().slice(0, 10))
+      setBnba3bNamaAnak('')
+      setBnba3bTypeIdAnak('nik')
+      setBnba3bIdCodeAnak('')
+      setBnba3bTglAnak(new Date(new Date().setMonth(new Date().getMonth() - 10)).toISOString().slice(0, 10))
+      setBnba3bNamaIbu('')
+      setBnba3bTypeIdIbu('nik')
+      setBnba3bIdCodeIbu('')
+      setBnbaPosisi(is3B ? subKategoriToPosisi(defaultSubKat) : 'Siswa')
       setBnbaKelas(is3B ? '-' : 'Kelas 4')
     }
     setShowAddBnbaModal(true)
@@ -1923,14 +1962,43 @@ const getBnbaCountForGroup = (
 
   const handleOpenEditBnbaModal = (item: PenerimaManfaatBnba) => {
     setEditingBnbaItem(item)
-    setBnbaNisnNik(item.nisn_nik || item.nik || item.nisn || '')
-    setBnbaNama(item.nama_lengkap || item.nama_penerima || item.nama || '')
-    setBnbaTglLahir(normalizeBirthDate(item.tanggal_lahir))
-    setBnbaJk(parseJk(item.jenis_kelamin || item.jk))
-    setBnbaOrtu(item.nama_ortu === '-' ? '' : (item.nama_ortu || ''))
-    setBnbaPosisi(parsePosisi(item.posisi))
-    setBnbaKelas(item.kelas || '-')
+    const is3B = isPosyandu3BItem(activeBnbaGroup) || ['Balita', 'Bumil', 'Busui'].includes(item.posisi) || Boolean(item.sub_kategori)
+    if (is3B) {
+      const norm = normalizeBnba3BFields(item)
+      setBnbaNisnNik(norm.identity_code)
+      setBnbaNama(norm.nama_lengkap)
+      setBnbaTglLahir(norm.tanggal_lahir || '2020-01-01')
+      setBnbaJk(norm.gender)
+      setBnbaOrtu(item.nama_ortu === '-' ? '' : (item.nama_ortu || ''))
+      setBnbaPosisi(subKategoriToPosisi(norm.sub_kategori))
+      setBnbaKelas('-')
+      setBnba3bSubKategori(norm.sub_kategori)
+      setBnba3bType(norm.type || 'nik')
+      setBnba3bKategori(norm.kategori || 'POS')
+      setBnba3bHpht(norm.hpht || '')
+      setBnba3bNamaAnak(norm.nama_anak || '')
+      setBnba3bTypeIdAnak(norm.type_identity_anak || 'nik')
+      setBnba3bIdCodeAnak(norm.identity_code_anak || '')
+      setBnba3bTglAnak(norm.tanggal_lahir_anak || '')
+      setBnba3bNamaIbu(norm.nama_ibu || '')
+      setBnba3bTypeIdIbu(norm.type_identity_ibu || 'nik')
+      setBnba3bIdCodeIbu(norm.identity_code_ibu || '')
+    } else {
+      setBnbaNisnNik(item.nisn_nik || item.nik || item.nisn || '')
+      setBnbaNama(item.nama_lengkap || item.nama_penerima || item.nama || '')
+      setBnbaTglLahir(normalizeBirthDate(item.tanggal_lahir))
+      setBnbaJk(parseJk(item.jenis_kelamin || item.jk))
+      setBnbaOrtu(item.nama_ortu === '-' ? '' : (item.nama_ortu || ''))
+      setBnbaPosisi(parsePosisi(item.posisi))
+      setBnbaKelas(item.kelas || '-')
+    }
     setShowAddBnbaModal(true)
+  }
+
+  const isSchemaColumnError = (err: any) => {
+    const msg = String(err?.message || '').toLowerCase()
+    const code = String(err?.code || '')
+    return code === 'PGRST204' || msg.includes('schema cache') || msg.includes('column')
   }
 
   const handleSaveBnbaItem = async (e: React.FormEvent) => {
@@ -1940,30 +2008,68 @@ const getBnbaCountForGroup = (
 
     try {
       const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
+      const is3B = isPosyandu3BItem(activeBnbaGroup)
 
       let sanitizedDate = normalizeBirthDate(bnbaTglLahir)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedDate)) {
-        sanitizedDate = '2015-01-01'
+        sanitizedDate = is3B ? '2022-01-01' : '2015-01-01'
       }
 
-      const payload = {
-        kelompok_id: activeKelompokUuid,
-        nisn_nik: bnbaNisnNik.trim(),
-        nama_lengkap: bnbaNama.trim().toUpperCase(),
-        tanggal_lahir: sanitizedDate,
-        jenis_kelamin: parseJk(bnbaJk),
-        nama_ortu: bnbaOrtu.trim().toUpperCase() || '-',
-        posisi: parsePosisi(bnbaPosisi),
-        kelas: bnbaKelas
+      let payload: Record<string, any>
+      let fallbackPayload: Record<string, any> | null = null
+
+      if (is3B) {
+        const normalized3B = {
+          nama_lengkap: bnbaNama.trim().toUpperCase(),
+          tanggal_lahir: sanitizedDate,
+          gender: parseJk(bnbaJk),
+          type: bnba3bType || 'nik',
+          identity_code: bnbaNisnNik.replace(/[^0-9]/g, '').trim(),
+          kategori: bnba3bKategori || 'POS',
+          sub_kategori: bnba3bSubKategori,
+          hpht: bnba3bSubKategori === 'POS - Ibu Hamil' ? parse3BDateToIso(bnba3bHpht) : '',
+          nama_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? bnba3bNamaAnak.trim().toUpperCase() : '',
+          type_identity_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? (bnba3bTypeIdAnak || 'nik') : '',
+          identity_code_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? bnba3bIdCodeAnak.replace(/[^0-9]/g, '').trim() : '',
+          tanggal_lahir_anak: bnba3bSubKategori === 'POS - Ibu Menyusui' ? parse3BDateToIso(bnba3bTglAnak) : '',
+          nama_ibu: bnba3bSubKategori === 'POS - Balita' ? bnba3bNamaIbu.trim().toUpperCase() : '',
+          type_identity_ibu: bnba3bSubKategori === 'POS - Balita' ? (bnba3bTypeIdIbu || 'nik') : '',
+          identity_code_ibu: bnba3bSubKategori === 'POS - Balita' ? bnba3bIdCodeIbu.replace(/[^0-9]/g, '').trim() : '',
+        }
+        const built = buildBnba3BPayloads(activeKelompokUuid, normalized3B)
+        payload = built.fullPayload
+        fallbackPayload = built.fallbackPayload
+      } else {
+        payload = {
+          kelompok_id: activeKelompokUuid,
+          nisn_nik: bnbaNisnNik.trim(),
+          nama_lengkap: bnbaNama.trim().toUpperCase(),
+          tanggal_lahir: sanitizedDate,
+          jenis_kelamin: parseJk(bnbaJk),
+          nama_ortu: bnbaOrtu.trim().toUpperCase() || '-',
+          posisi: parsePosisi(bnbaPosisi),
+          kelas: bnbaKelas
+        }
       }
 
       if (editingBnbaItem) {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('penerima_manfaat_bnba')
           .update(payload)
           .eq('id', editingBnbaItem.id)
           .select()
           .single()
+
+        if (error && fallbackPayload && isSchemaColumnError(error)) {
+          const retry = await supabase
+            .from('penerima_manfaat_bnba')
+            .update(fallbackPayload)
+            .eq('id', editingBnbaItem.id)
+            .select()
+            .single()
+          data = retry.data
+          error = retry.error
+        }
 
         if (error) {
           console.error('Error updating BNBA in Supabase:', error)
@@ -1974,23 +2080,36 @@ const getBnbaCountForGroup = (
         const updatedBnba: PenerimaManfaatBnba = {
           ...editingBnbaItem,
           ...payload,
+          ...(data || {}),
           id: data?.id || editingBnbaItem.id
-        }
+        } as PenerimaManfaatBnba
 
-        await saveBnbaItem(updatedBnba)
-        const updatedList = await fetchBnbaList(activeBnbaGroup.id)
-        setBnbaList(updatedList)
+        const updatedList = await fetchBnbaList(activeKelompokUuid)
+        const finalList = updatedList.length > 0
+          ? updatedList.map(b => (b.id === updatedBnba.id ? { ...updatedBnba, ...b } : b))
+          : bnbaList.map(b => (b.id === updatedBnba.id ? updatedBnba : b))
+        setBnbaList(finalList)
         setAllBnbaRecords(prev => prev.map(b => b.id === updatedBnba.id ? updatedBnba : b))
 
         setShowAddBnbaModal(false)
         setEditingBnbaItem(null)
-        triggerToast(`Penerima BNBA "${bnbaNama}" berhasil diperbarui.`)
+        triggerToast(`Penerima BNBA "${bnbaNama.toUpperCase()}" berhasil diperbarui.`)
       } else {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('penerima_manfaat_bnba')
           .insert(payload)
           .select()
           .single()
+
+        if (error && fallbackPayload && isSchemaColumnError(error)) {
+          const retry = await supabase
+            .from('penerima_manfaat_bnba')
+            .insert(fallbackPayload)
+            .select()
+            .single()
+          data = retry.data
+          error = retry.error
+        }
 
         if (error) {
           console.error('Error inserting single BNBA to Supabase:', error)
@@ -1999,29 +2118,21 @@ const getBnbaCountForGroup = (
         }
 
         const newBnba: PenerimaManfaatBnba = {
+          ...(payload as any),
+          ...(data || {}),
           id: data?.id || `bnba-${Date.now()}`,
-          kelompok_id: activeBnbaGroup.id,
-          nisn_nik: payload.nisn_nik,
-          nama_lengkap: payload.nama_lengkap,
-          tanggal_lahir: payload.tanggal_lahir,
-          jenis_kelamin: payload.jenis_kelamin,
-          nama_ortu: payload.nama_ortu,
-          posisi: payload.posisi,
-          kelas: payload.kelas,
           created_at: data?.created_at || new Date().toISOString()
         }
 
-        await saveBnbaItem(newBnba)
-        const updatedList = await fetchBnbaList(activeBnbaGroup.id)
+        const updatedList = await fetchBnbaList(activeKelompokUuid)
         const finalList = updatedList.length > 0 ? updatedList : [newBnba, ...bnbaList]
         setBnbaList(finalList)
         setAllBnbaRecords(prev => [newBnba, ...prev.filter(b => b.id !== newBnba.id)])
 
-        // Update count on active group
         setActiveBnbaGroup(prev => prev ? { ...prev, rincianTerisi: finalList.length } : null)
 
         setShowAddBnbaModal(false)
-        triggerToast(`Penerima BNBA "${bnbaNama}" berhasil ditambahkan.`)
+        triggerToast(`Penerima BNBA "${bnbaNama.toUpperCase()}" berhasil ditambahkan.`)
       }
     } catch (err: any) {
       console.error('Exception saving BNBA item:', err)
@@ -2360,10 +2471,16 @@ const getBnbaCountForGroup = (
     return 'Siswa'
   }
 
-  // Download BNBA Excel Template
-  const handleDownloadTemplate = () => {
+  // Download BNBA Excel Template (15-Col ExcelJS for Posyandu 3B vs 7-Col for Schools)
+  const handleDownloadTemplate = async () => {
     if (!activeBnbaGroup) return
     const groupName = activeBnbaGroup.nama.replace(/[^a-zA-Z0-9_-]/g, '_')
+
+    if (isPosyandu3BItem(activeBnbaGroup)) {
+      await downloadTemplateBnba3B(activeBnbaGroup.nama)
+      triggerToast(`Template Excel BNBA 3B (15 kolom) "${groupName}" berhasil diunduh.`)
+      return
+    }
 
     const headers = [
       'NIK / NISN',
@@ -2701,13 +2818,19 @@ const getBnbaCountForGroup = (
     }
   }
 
-  // Ekspor Data BNBA Terurut (Siswa Kelas 1-6 dulu, Tendik di paling bawah) ke Excel
-  const handleExportBnbaExcel = () => {
+  // Ekspor Data BNBA Terurut ke Excel (15-Col untuk Posyandu 3B, 8-Col untuk Sekolah)
+  const handleExportBnbaExcel = async () => {
     if (!activeBnbaGroup) return
     const groupName = activeBnbaGroup.nama.replace(/[^a-zA-Z0-9_-]/g, '_')
     const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '') // YYYYMMDD
 
     const sortedRows = [...bnbaList].sort(sortBNBA)
+
+    if (isPosyandu3BItem(activeBnbaGroup)) {
+      await exportBnba3BExcel(sortedRows, activeBnbaGroup.nama)
+      triggerToast(`Ekspor Excel BNBA 3B "${groupName}" berhasil diunduh.`)
+      return
+    }
 
     const headers = [
       'NO',
@@ -2753,10 +2876,42 @@ const getBnbaCountForGroup = (
     triggerToast(`Ekspor Excel BNBA "${fileName}" berhasil diunduh.`)
   }
 
-  // Handle File Input Change for Excel / CSV Import (Smart AI-like Two-Layer Extractor)
-  const handleFileImportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle File Input Change for Excel / CSV Import
+  const handleFileImportChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !activeBnbaGroup) return
+
+    const is3B = isPosyandu3BItem(activeBnbaGroup)
+
+    if (is3B) {
+      try {
+        const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
+        const selectedKelompokId = activeKelompokUuid || activeBnbaGroup.id
+        const result = await parse3BExcelFile(file, selectedKelompokId)
+
+        if (result.totalRows === 0) {
+          showToast({
+            type: 'warning',
+            title: 'Data Tidak Ditemukan',
+            message: result.skippedExampleCount > 0
+              ? 'File hanya berisi baris contoh bawaan template. Silakan isi data warga penerima terlebih dahulu.'
+              : 'File Excel kosong atau tidak memiliki baris data yang dapat diimpor.'
+          })
+          return
+        }
+
+        setImport3BAudit(result)
+        setImportOnlyValid3B(false)
+        setImportPreviewData(result.rows.map(r => r.item))
+        setShowImportConfirmModal(true)
+      } catch (err: any) {
+        console.error('Error parsing 3B Excel file:', err)
+        showToast({ type: 'error', title: 'Gagal Membaca Excel 3B', message: err.message || 'Format file tidak sesuai' })
+      } finally {
+        e.target.value = ''
+      }
+      return
+    }
 
     const reader = new FileReader()
     reader.onload = async (evt) => {
@@ -2791,10 +2946,8 @@ const getBnbaCountForGroup = (
         const dataRowsArray = rawRowsAsArray.slice(headerRowIdx + 1).filter((r) => r && r.length > 0 && (r[0] || r[1]))
 
         const parsedItems: PenerimaManfaatBnba[] = dataRowsArray.map((rowArr, index) => {
-          // Baris objek alternatif jika user punya nama header berbeda
           const rowObj = rawRowsWithHeader[index] || {}
 
-          // Helper Fuzzy Header Match (mengabaikan teks dalam kurung, spasi, case)
           const findByHeaderFuzzy = (keywords: string[]) => {
             for (const key of Object.keys(rowObj)) {
               const cleanKey = key.replace(/\(.*?\)/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -2805,31 +2958,24 @@ const getBnbaCountForGroup = (
             return undefined
           }
 
-          // 1. NIK / NISN (Kolom A / index 0)
           const rawNik = rowArr[0] ?? findByHeaderFuzzy(['nik', 'nisn', 'nomor', 'ktp'])
           const nikNisn = rawNik ? String(rawNik).replace(/[^0-9]/g, '').trim() : ''
 
-          // 2. Nama Lengkap (Kolom B / index 1)
           const rawNama = rowArr[1] ?? findByHeaderFuzzy(['nama', 'lengkap', 'siswa', 'peserta', 'penerima'])
           const namaLengkap = rawNama ? String(rawNama).trim().toUpperCase() : ''
 
-          // 3. Tanggal Lahir (Kolom C / index 2)
           const rawTgl = rowArr[2] ?? findByHeaderFuzzy(['tanggallahir', 'tgl', 'lahir', 'birth'])
           const tanggalLahir = parseSmartDate(rawTgl)
 
-          // 4. Jenis Kelamin (Kolom D / index 3)
           const rawJk = rowArr[3] ?? findByHeaderFuzzy(['jeniskelamin', 'jk', 'kelamin', 'gender'])
           const jenisKelamin = parseSmartGender(rawJk)
 
-          // 5. Nama Ortu / Wali (Kolom E / index 4)
           const rawOrtu = rowArr[4] ?? findByHeaderFuzzy(['namaortu', 'ortu', 'wali', 'ayah', 'ibu'])
           const ortuWali = rawOrtu && String(rawOrtu).trim() !== '' ? String(rawOrtu).trim().toUpperCase() : '-'
 
-          // 6. Posisi (Kolom F / index 5)
           const rawPosisi = rowArr[5] ?? findByHeaderFuzzy(['posisi', 'jabatan', 'kategori', 'peran', 'sasaran'])
           const posisi = parsePosisi(rawPosisi)
 
-          // 7. Kelas / Sasaran (Kolom G / index 6)
           const rawKelas = rowArr[6] ?? findByHeaderFuzzy(['kelas', 'sasaran', 'rombel', 'tingkat'])
           const kelas = rawKelas && String(rawKelas).trim() !== '' ? String(rawKelas).trim() : '-'
 
@@ -2852,6 +2998,7 @@ const getBnbaCountForGroup = (
           return
         }
 
+        setImport3BAudit(null)
         setImportPreviewData(parsedItems)
         setShowImportConfirmModal(true)
       } catch (err: any) {
@@ -2919,60 +3066,70 @@ const getBnbaCountForGroup = (
     try {
       const activeKelompokUuid = await resolveSupabaseKelompokUuid(activeBnbaGroup)
       const selectedKelompokId = activeKelompokUuid || activeBnbaGroup.id
+      const is3B = isPosyandu3BItem(activeBnbaGroup) && Boolean(import3BAudit)
 
-      const payload = importPreviewData.map(item => {
-        let sanitizedDate: string | null = normalizeBirthDate(item.tanggal_lahir)
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedDate || '')) {
-          sanitizedDate = '2015-01-01'
+      let payload: any[] = []
+      let fallbackPayload: any[] | null = null
+
+      if (is3B && import3BAudit) {
+        const targetRows = importOnlyValid3B
+          ? import3BAudit.rows.filter(r => r.validation.isValid)
+          : import3BAudit.rows
+
+        if (targetRows.length === 0) {
+          showToast({ type: 'warning', title: 'Tidak Ada Baris Valid', message: 'Tidak ada baris valid untuk diimpor.' })
+          setIsImporting(false)
+          return
         }
 
-        const bnbaRow: any = {
-          kelompok_id: selectedKelompokId,
-          nama_lengkap: String(item.nama_lengkap || item.nama_penerima || item.nama || '').trim().toUpperCase(),
-          nisn_nik: String(item.nisn_nik || item.nik || item.nisn || '').trim(),
-          tanggal_lahir: sanitizedDate,
-          jenis_kelamin: parseJk(item.jenis_kelamin || item.jk),
-          nama_ortu: String(item.nama_ortu || '-').trim().toUpperCase(),
-          posisi: parsePosisi(item.posisi || 'Murid'),
-          kelas: String(item.kelas || '-').trim()
-        }
+        const builtRows = targetRows.map(r => buildBnba3BPayloads(selectedKelompokId, r.normalized))
+        payload = builtRows.map(b => b.fullPayload)
+        fallbackPayload = builtRows.map(b => b.fallbackPayload)
+      } else {
+        payload = importPreviewData.map(item => {
+          let sanitizedDate: string | null = normalizeBirthDate(item.tanggal_lahir)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitizedDate || '')) {
+            sanitizedDate = '2015-01-01'
+          }
 
-        if (item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
-          bnbaRow.id = item.id
-        }
+          const bnbaRow: any = {
+            kelompok_id: selectedKelompokId,
+            nama_lengkap: String(item.nama_lengkap || item.nama_penerima || item.nama || '').trim().toUpperCase(),
+            nisn_nik: String(item.nisn_nik || item.nik || item.nisn || '').trim(),
+            tanggal_lahir: sanitizedDate,
+            jenis_kelamin: parseJk(item.jenis_kelamin || item.jk),
+            nama_ortu: String(item.nama_ortu || '-').trim().toUpperCase(),
+            posisi: parsePosisi(item.posisi || 'Murid'),
+            kelas: String(item.kelas || '-').trim()
+          }
 
-        return bnbaRow
-      })
+          if (item.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
+            bnbaRow.id = item.id
+          }
 
-      console.log('Sending BNBA Bulk Import Payload to Supabase:', payload)
+          return bnbaRow
+        })
+      }
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('penerima_manfaat_bnba')
         .insert(payload)
         .select()
+
+      if (error && fallbackPayload && isSchemaColumnError(error)) {
+        const retry = await supabase
+          .from('penerima_manfaat_bnba')
+          .insert(fallbackPayload)
+          .select()
+        data = retry.data
+        error = retry.error
+      }
 
       if (error) {
         console.error("Gagal Import BNBA:", error)
         showToast({ type: 'error', title: 'Gagal Import BNBA', message: error.message })
         return
       }
-
-      console.log('BNBA Bulk Import Success from Supabase:', data)
-
-      const localItems: PenerimaManfaatBnba[] = (data || []).map((d: any, idx: number) => ({
-        id: d.id || `bnba-imp-${Date.now()}-${idx}`,
-        kelompok_id: selectedKelompokId,
-        nisn_nik: d.nisn_nik,
-        nama_lengkap: d.nama_lengkap,
-        tanggal_lahir: d.tanggal_lahir,
-        jenis_kelamin: d.jenis_kelamin,
-        nama_ortu: d.nama_ortu,
-        posisi: d.posisi,
-        kelas: d.kelas,
-        created_at: d.created_at || new Date().toISOString()
-      }))
-
-      await saveBnbaBulk(localItems.length > 0 ? localItems : importPreviewData)
 
       const updatedList = await fetchBnbaList(selectedKelompokId)
       const finalList = updatedList.length > 0 ? updatedList : (data || [])
@@ -3014,6 +3171,7 @@ const getBnbaCountForGroup = (
       triggerToast(`Berhasil mengimpor ${payload.length} data BNBA ke Supabase!`)
       setShowImportConfirmModal(false)
       setImportPreviewData([])
+      setImport3BAudit(null)
     } catch (err: any) {
       console.error('Exception importing BNBA:', err)
       showToast({ type: 'error', title: 'Gagal Import BNBA', message: err.message || 'Terjadi kesalahan sistem' })
@@ -3668,237 +3826,9 @@ const getBnbaCountForGroup = (
         className="hidden"
       />
 
-      {/* 5. Tabel Data Flat & Compact */}
+      {/* 5. Tabel Data Flat & Compact (Struktur Kolom Seragam untuk Global, Sekolah, & Spesifik 3B) */}
       {loading ? (
         <TableSkeleton />
-      ) : mainTab === '3b' ? (
-        <div className="bg-white border border-slate-200 rounded-lg shadow-none overflow-hidden transition-opacity duration-300 opacity-100">
-          <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
-                  <th className="py-3 px-3 text-center w-14">No</th>
-                  <th className="py-3 px-3 min-w-[220px]">Nama Posyandu / Dusun</th>
-                  <th className="py-3 px-3 min-w-[200px]">Rute &amp; PIC Kader</th>
-                  <th className={`py-3 px-3 text-right min-w-[140px] transition ${
-                    subFilter3B === 'balita' ? 'bg-sky-100 text-sky-900 border-x border-sky-300' : ''
-                  }`}>
-                    Balita (L / P)
-                  </th>
-                  <th className={`py-3 px-3 text-right min-w-[100px] transition ${
-                    subFilter3B === 'bumil' ? 'bg-rose-100 text-rose-900 border-x border-rose-300' : ''
-                  }`}>
-                    Bumil
-                  </th>
-                  <th className={`py-3 px-3 text-right min-w-[100px] transition ${
-                    subFilter3B === 'busui' ? 'bg-violet-100 text-violet-900 border-x border-violet-300' : ''
-                  }`}>
-                    Busui
-                  </th>
-                  <th className="py-3 px-3 text-right min-w-[130px]">Total Porsi 3B</th>
-                  <th className="py-3 px-3 text-center min-w-[155px]">Audit NIK</th>
-                  <th className="py-3 px-3 text-center min-w-[210px]">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
-                {filteredRows.length > 0 ? (
-                  filteredRows.slice(0, perPage).map((row, idx) => {
-                    const b3 = posyandu3BMap.get(row.id) || {
-                      balitaL: 0,
-                      balitaP: 0,
-                      balita: 0,
-                      bumil: 0,
-                      busui: 0,
-                      total3B: row.totalTarget,
-                      source: 'target' as const
-                    }
-                    const ruteVal = row.rute || getRuteSekolah(row.nama)
-
-                    return (
-                      <tr key={row.id} className={`hover:bg-slate-50 transition duration-150 whitespace-nowrap ${row.status === 'Non-Aktif' ? 'opacity-60 bg-slate-50' : ''}`}>
-                        <td className="py-3 px-3 text-center font-bold text-slate-700">
-                          <div className="flex items-center justify-center gap-1">
-                            <div className="flex flex-col items-center justify-center -my-1">
-                              <button
-                                type="button"
-                                onClick={() => handleMoveRow(idx, 'up')}
-                                disabled={idx === 0 || isReordering}
-                                title="Pindah urutan ke atas"
-                                className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed rounded"
-                              >
-                                <ChevronUp size={13} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleMoveRow(idx, 'down')}
-                                disabled={idx === filteredRows.length - 1 || isReordering}
-                                title="Pindah urutan ke bawah"
-                                className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed rounded"
-                              >
-                                <ChevronDown size={13} />
-                              </button>
-                            </div>
-                            <span>{idx + 1}</span>
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3">
-                          <div className="font-bold text-slate-900">{row.nama}</div>
-                          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500">
-                            <span className="font-mono">[{row.npsnReg}]</span>
-                            <span>·</span>
-                            <span>{row.kelDesa !== '-' ? row.kelDesa : row.alamat}</span>
-                            {row.status === 'Non-Aktif' && (
-                              <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-semibold">Non-Aktif</span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                              ruteVal.includes('Kanan')
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                            }`}>
-                              {ruteVal}
-                            </span>
-                            <span className="font-semibold text-slate-800">{row.pimpinan}</span>
-                          </div>
-                          {row.hp && row.hp !== '-' && (
-                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">{row.hp}</div>
-                          )}
-                        </td>
-
-                        <td className={`py-3 px-3 text-right font-mono transition ${
-                          subFilter3B === 'balita' ? 'bg-sky-50 text-sky-900 font-bold border-x border-sky-200' : 'text-slate-800'
-                        }`}>
-                          <div className="font-bold">{b3.balita.toLocaleString('id-ID')}</div>
-                          <div className="text-[10px] text-slate-500">
-                            L: {b3.balitaL} / P: {b3.balitaP}
-                          </div>
-                        </td>
-
-                        <td className={`py-3 px-3 text-right font-mono transition ${
-                          subFilter3B === 'bumil' ? 'bg-rose-50 text-rose-900 font-extrabold border-x border-rose-200' : 'text-slate-800 font-semibold'
-                        }`}>
-                          {b3.bumil.toLocaleString('id-ID')}
-                        </td>
-
-                        <td className={`py-3 px-3 text-right font-mono transition ${
-                          subFilter3B === 'busui' ? 'bg-violet-50 text-violet-900 font-extrabold border-x border-violet-200' : 'text-slate-800 font-semibold'
-                        }`}>
-                          {b3.busui.toLocaleString('id-ID')}
-                        </td>
-
-                        <td className="py-3 px-3 text-right font-mono">
-                          <div className="font-bold text-slate-900">{b3.total3B.toLocaleString('id-ID')} Porsi</div>
-                          <div className="text-[10px] font-sans text-slate-500">
-                            {b3.source === 'bnba' ? `BNBA (${row.rincianTerisi}/${row.totalTarget})` : `Target Master`}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3 text-center">
-                          {renderNikAuditBadge(row)}
-                        </td>
-
-                        <td className="py-3 px-3 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenBnbaModal(row)}
-                              className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1.5 rounded transition cursor-pointer"
-                            >
-                              <UserPlus size={12} />
-                              <span>Lihat Rincian BNBA ({row.rincianTerisi})</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleEditClick(row)}
-                              title="Edit Posyandu"
-                              className="p-1.5 text-slate-600 hover:bg-slate-200 rounded transition cursor-pointer"
-                            >
-                              <Edit size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteClick(row)}
-                              title="Hapus Posyandu"
-                              className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={9} className="py-10 text-center text-slate-400 font-medium">
-                      {loading ? 'Memuat data Posyandu 3B dari database Supabase...' : 'Tidak ada Posyandu 3B yang sesuai dengan filter.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              {filteredRows.length > 0 && (
-                <tfoot>
-                  <tr className="bg-slate-100 border-t-2 border-slate-300 text-slate-900 font-bold text-xs whitespace-nowrap">
-                    <td colSpan={3} className="py-3 px-3 text-right uppercase tracking-wider text-[11px]">
-                      Total Rekap ({filteredRows.length} Posyandu):
-                    </td>
-                    <td className={`py-3 px-3 text-right font-mono ${
-                      subFilter3B === 'balita' ? 'bg-sky-100 text-sky-900 border-x border-sky-300' : ''
-                    }`}>
-                      <div>{summary3B.totalBalita.toLocaleString('id-ID')}</div>
-                      <div className="text-[10px] font-normal text-slate-600">
-                        L: {summary3B.balitaL} / P: {summary3B.balitaP}
-                      </div>
-                    </td>
-                    <td className={`py-3 px-3 text-right font-mono ${
-                      subFilter3B === 'bumil' ? 'bg-rose-100 text-rose-900 border-x border-rose-300' : ''
-                    }`}>
-                      {summary3B.totalBumil.toLocaleString('id-ID')}
-                    </td>
-                    <td className={`py-3 px-3 text-right font-mono ${
-                      subFilter3B === 'busui' ? 'bg-violet-100 text-violet-900 border-x border-violet-300' : ''
-                    }`}>
-                      {summary3B.totalBusui.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono text-teal-900">
-                      {summary3B.grandTotal.toLocaleString('id-ID')} Porsi
-                    </td>
-                    <td colSpan={2} className="py-3 px-3" />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-
-          {/* Footer Pagination */}
-          <div className="p-3 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-medium">
-            <div>
-              Menampilkan 1-{Math.min(filteredRows.length, perPage)} dari {filteredRows.length} Posyandu 3B
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 mr-3">
-                <label className="text-xs text-slate-500">Tampilkan:</label>
-                <select
-                  value={perPage}
-                  onChange={(e) => setPerPage(Number(e.target.value))}
-                  className="px-2 py-1 border border-slate-300 rounded-md text-xs font-medium bg-white cursor-pointer"
-                >
-                  <option value={10}>10 baris</option>
-                  <option value={20}>20 baris</option>
-                  <option value={30}>30 baris</option>
-                  <option value={50}>50 baris</option>
-                  <option value={9999}>Semua</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-lg shadow-none overflow-hidden transition-opacity duration-300 opacity-100">
           <div className="overflow-x-auto scrollbar-thin">
@@ -4039,7 +3969,24 @@ const getBnbaCountForGroup = (
                       </td>
 
                       <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">
-                        {row.totalTarget} Orang
+                        <div>{row.totalTarget} Orang</div>
+                        {isPosyandu3BItem(row) && (() => {
+                          const b3 = posyandu3BMap.get(row.id)
+                          if (!b3) return null
+                          return (
+                            <div className="mt-0.5 flex items-center justify-end gap-1 font-sans text-[10px] font-semibold">
+                              <span className={`px-1.5 py-0.2 rounded ${subFilter3B === 'balita' ? 'bg-sky-700 text-white' : 'bg-sky-50 text-sky-800 border border-sky-200'}`}>
+                                Balita: {b3.balita} ({b3.balitaL}/{b3.balitaP})
+                              </span>
+                              <span className={`px-1.5 py-0.2 rounded ${subFilter3B === 'bumil' ? 'bg-rose-700 text-white' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                                Bumil: {b3.bumil}
+                              </span>
+                              <span className={`px-1.5 py-0.2 rounded ${subFilter3B === 'busui' ? 'bg-violet-700 text-white' : 'bg-violet-50 text-violet-800 border border-violet-200'}`}>
+                                Busui: {b3.busui}
+                              </span>
+                            </div>
+                          )
+                        })()}
                       </td>
 
                       <td className="py-3 px-3 text-center">
@@ -4717,7 +4664,9 @@ const getBnbaCountForGroup = (
       {/* BNBA Modal Drawer */}
       {activeBnbaGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2 sm:p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden border border-slate-200 animate-fadeIn h-[90vh] flex flex-col">
+          <div className={`bg-white rounded-xl shadow-2xl overflow-hidden border border-slate-200 animate-fadeIn h-[92vh] flex flex-col ${
+            isPosyandu3BItem(activeBnbaGroup) ? 'max-w-[96vw] w-full' : 'w-full max-w-5xl'
+          }`}>
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div>
                 <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
@@ -4954,8 +4903,229 @@ const getBnbaCountForGroup = (
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
-              <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto scrollbar-thin">
+                {isPosyandu3BItem(activeBnbaGroup) ? (
+                  <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold text-[11px]">
+                        <th className="py-2.5 px-2.5 text-center w-[72px] min-w-[72px] sticky left-0 z-20 bg-slate-50 border-r border-slate-200">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={filteredBnbaList.length > 0 && selectedBnbaIds.length === filteredBnbaList.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedBnbaIds(filteredBnbaList.map(item => item.id))
+                                } else {
+                                  setSelectedBnbaIds([])
+                                }
+                              }}
+                              className="rounded border-slate-300 text-slate-900 focus:ring-slate-800 cursor-pointer"
+                              title="Pilih Semua Data BNBA"
+                            />
+                            <span>No</span>
+                          </div>
+                        </th>
+                        <th className="py-2.5 px-3 min-w-[210px] sticky left-[72px] z-20 bg-slate-50 border-r border-slate-200 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]">
+                          nama_lengkap
+                        </th>
+                        <th className="py-2.5 px-3 min-w-[115px]">tanggal_lahir</th>
+                        <th className="py-2.5 px-3 text-center min-w-[72px]">gender</th>
+                        <th className="py-2.5 px-3 text-center min-w-[64px]">type</th>
+                        <th className="py-2.5 px-3 min-w-[165px]">identity_code</th>
+                        <th className="py-2.5 px-3 text-center min-w-[78px]">kategori</th>
+                        <th className="py-2.5 px-3 min-w-[155px]">sub_kategori</th>
+                        <th className="py-2.5 px-3 min-w-[115px]">hpht</th>
+                        <th className="py-2.5 px-3 min-w-[170px]">nama_anak</th>
+                        <th className="py-2.5 px-3 text-center min-w-[125px]">type_identity_anak</th>
+                        <th className="py-2.5 px-3 min-w-[165px]">identity_code_anak</th>
+                        <th className="py-2.5 px-3 min-w-[130px]">tanggal_lahir_anak</th>
+                        <th className="py-2.5 px-3 min-w-[170px]">nama_ibu</th>
+                        <th className="py-2.5 px-3 text-center min-w-[120px]">type_identity_ibu</th>
+                        <th className="py-2.5 px-3 min-w-[165px]">identity_code_ibu</th>
+                        <th className="py-2.5 px-3 min-w-[210px]">Status Validasi (NIK &amp; Usia)</th>
+                        <th className="py-2.5 px-3 text-center min-w-[95px]">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {filteredBnbaList.length > 0 ? (
+                        filteredBnbaList.map((row: PenerimaManfaatBnba, idx) => {
+                          const isSelected = selectedBnbaIds.includes(row.id)
+                          const norm = normalizeBnba3BFields(row)
+                          const validation3B = validate3BRecord(norm)
+                          const cleanNik = norm.identity_code.trim()
+                          const nikAuditDetail = cleanNik ? auditNik(cleanNik) : null
+                          const dupInfo = duplicateNikMap.get(row.id)
+
+                          const isBumil = norm.sub_kategori === 'POS - Ibu Hamil'
+                          const isBusui = norm.sub_kategori === 'POS - Ibu Menyusui'
+                          const isBalita = norm.sub_kategori === 'POS - Balita'
+
+                          const grayCellClass = 'py-2.5 px-3 bg-slate-100 text-slate-400 text-center select-none'
+                          const stickyRowBg = isSelected ? 'bg-amber-50' : 'bg-white'
+
+                          return (
+                            <tr key={row.id} className={`hover:bg-slate-50 transition ${isSelected ? 'bg-amber-50/70' : ''}`}>
+                              <td className={`py-2.5 px-2.5 text-center sticky left-0 z-10 border-r border-slate-200 ${stickyRowBg}`}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedBnbaIds(prev => [...prev, row.id])
+                                      } else {
+                                        setSelectedBnbaIds(prev => prev.filter(id => id !== row.id))
+                                      }
+                                    }}
+                                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-800 cursor-pointer"
+                                  />
+                                  <span className="font-mono text-slate-600 font-semibold">{idx + 1}</span>
+                                </div>
+                              </td>
+                              <td className={`py-2.5 px-3 font-bold text-slate-900 sticky left-[72px] z-10 border-r border-slate-200 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)] ${stickyRowBg}`}>
+                                {norm.nama_lengkap || '-'}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-slate-700">
+                                {formatIsoToDDMMYYYY(norm.tanggal_lahir)}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                                {norm.gender}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-mono text-slate-600">
+                                {norm.type || 'nik'}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
+                                {norm.identity_code || '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold text-slate-700">
+                                {norm.kategori || 'POS'}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                  isBumil
+                                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                    : isBusui
+                                    ? 'bg-violet-50 text-violet-800 border-violet-200'
+                                    : 'bg-sky-50 text-sky-800 border-sky-200'
+                                }`}>
+                                  {norm.sub_kategori}
+                                </span>
+                              </td>
+
+                              {/* Col H: hpht (Active only for Ibu Hamil) */}
+                              {isBumil ? (
+                                <td className="py-2.5 px-3 font-mono text-slate-800 font-semibold">
+                                  {formatIsoToDDMMYYYY(norm.hpht)}
+                                </td>
+                              ) : (
+                                <td className={grayCellClass}>—</td>
+                              )}
+
+                              {/* Cols I-L: Anak (Active only for Ibu Menyusui) */}
+                              {isBusui ? (
+                                <>
+                                  <td className="py-2.5 px-3 font-semibold text-slate-800">{norm.nama_anak || '-'}</td>
+                                  <td className="py-2.5 px-3 text-center font-mono text-slate-600">{norm.type_identity_anak || 'nik'}</td>
+                                  <td className="py-2.5 px-3 font-mono text-slate-800">{norm.identity_code_anak || '-'}</td>
+                                  <td className="py-2.5 px-3 font-mono text-slate-800">{formatIsoToDDMMYYYY(norm.tanggal_lahir_anak)}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className={grayCellClass}>—</td>
+                                  <td className={grayCellClass}>—</td>
+                                  <td className={grayCellClass}>—</td>
+                                  <td className={grayCellClass}>—</td>
+                                </>
+                              )}
+
+                              {/* Cols M-O: Ibu (Active only for Balita) */}
+                              {isBalita ? (
+                                <>
+                                  <td className="py-2.5 px-3 font-semibold text-slate-800">{norm.nama_ibu || '-'}</td>
+                                  <td className="py-2.5 px-3 text-center font-mono text-slate-600">{norm.type_identity_ibu || 'nik'}</td>
+                                  <td className="py-2.5 px-3 font-mono text-slate-800">{norm.identity_code_ibu || '-'}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className={grayCellClass}>—</td>
+                                  <td className={grayCellClass}>—</td>
+                                  <td className={grayCellClass}>—</td>
+                                </>
+                              )}
+
+                              {/* Status Validasi (NIK & Usia) */}
+                              <td className="py-2.5 px-3">
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {dupInfo ? (
+                                    <>
+                                      <span
+                                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300"
+                                        title={`Duplikat: Dipakai juga oleh ${dupInfo.nama} (${dupInfo.sekolah})`}
+                                      >
+                                        Duplikat ({dupInfo.nama})
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleInspectDuplicatePair(cleanNik, row)}
+                                        className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[9px] font-bold cursor-pointer"
+                                      >
+                                        Inspeksi
+                                      </button>
+                                    </>
+                                  ) : validation3B.isValid && (!nikAuditDetail || nikAuditDetail.status === 'VALID') ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                      ✅ Valid (NIK &amp; Usia)
+                                    </span>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      {nikAuditDetail && nikAuditDetail.status !== 'VALID' && (
+                                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 mr-1">
+                                          ⚠️ {nikAuditDetail.badgeLabel}
+                                        </span>
+                                      )}
+                                      {validation3B.errors.map((err, eIdx) => (
+                                        <span key={eIdx} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-800 border border-rose-200 mr-1">
+                                          {err}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="py-2.5 px-3 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => handleOpenEditBnbaModal(row)}
+                                    title="Edit Data BNBA 3B"
+                                    className="p-1 text-slate-600 hover:text-amber-700 hover:bg-amber-50 rounded transition cursor-pointer"
+                                  >
+                                    <Edit size={13} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteBnba(row.id)}
+                                    title="Hapus Data BNBA"
+                                    className="p-1 text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={18} className="py-10 text-center text-slate-400 font-medium">
+                            Belum ada data riil BNBA 3B yang diinput untuk kategori ini.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px]">
                       <th className="py-2.5 px-3 text-center w-10">
@@ -5096,7 +5266,8 @@ const getBnbaCountForGroup = (
                       </tr>
                     )}
                   </tbody>
-                </table>
+                  </table>
+                )}
               </div>
             </div>
           </div>
@@ -5152,21 +5323,56 @@ const getBnbaCountForGroup = (
         </div>
       )}
 
-      {/* Add / Edit BNBA Form Modal */}
+      {/* Add / Edit BNBA Form Modal (Dinamis 15-Kolom untuk Posyandu 3B vs Sekolah) */}
       {showAddBnbaModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200">
+          <div className={`bg-white rounded-xl shadow-xl w-full overflow-hidden border border-slate-200 max-h-[92vh] flex flex-col ${
+            isPosyandu3BItem(activeBnbaGroup) ? 'max-w-xl' : 'max-w-md'
+          }`}>
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-sm">
-                {editingBnbaItem ? 'Edit Data BNBA' : 'Tambah Data BNBA'}
+                {editingBnbaItem
+                  ? (isPosyandu3BItem(activeBnbaGroup) ? 'Edit Data BNBA 3B (Posyandu)' : 'Edit Data BNBA')
+                  : (isPosyandu3BItem(activeBnbaGroup) ? 'Tambah Data BNBA 3B (Posyandu)' : 'Tambah Data BNBA')}
               </h3>
               <button onClick={() => { setShowAddBnbaModal(false); setEditingBnbaItem(null); }} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
             </div>
-            <form onSubmit={handleSaveBnbaItem} className="p-4 space-y-3 text-xs">
+            <form onSubmit={handleSaveBnbaItem} className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+              {isPosyandu3BItem(activeBnbaGroup) && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <div className="sm:col-span-2">
+                    <label className="block font-semibold text-slate-700 mb-1">Sub-Kategori Sasaran 3B *</label>
+                    <select
+                      value={bnba3bSubKategori}
+                      onChange={(e) => {
+                        const val = e.target.value as SubKategori3B
+                        setBnba3bSubKategori(val)
+                        setBnbaPosisi(subKategoriToPosisi(val))
+                        if (val === 'POS - Ibu Hamil' || val === 'POS - Ibu Menyusui') {
+                          setBnbaJk('P')
+                        }
+                      }}
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded font-bold bg-white cursor-pointer"
+                    >
+                      <option value="POS - Ibu Hamil">POS - Ibu Hamil</option>
+                      <option value="POS - Ibu Menyusui">POS - Ibu Menyusui</option>
+                      <option value="POS - Balita">POS - Balita</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Kategori / Type</label>
+                    <div className="flex items-center gap-1">
+                      <input type="text" value={bnba3bKategori} readOnly className="w-1/2 px-2 py-1.5 border border-slate-200 rounded bg-slate-100 font-mono text-center text-slate-700" />
+                      <input type="text" value={bnba3bType} readOnly className="w-1/2 px-2 py-1.5 border border-slate-200 rounded bg-slate-100 font-mono text-center text-slate-700" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block font-semibold text-slate-700">
-                    NIK / NISN *
+                    {isPosyandu3BItem(activeBnbaGroup) ? 'identity_code (NIK 16 Digit) *' : 'NIK / NISN *'}
                   </label>
                   {isCheckingDuplicate && (
                     <span className="text-[10px] font-semibold text-indigo-600 animate-pulse flex items-center gap-1">
@@ -5189,14 +5395,12 @@ const getBnbaCountForGroup = (
                   }`}
                 />
 
-                {/* Teks Peringatan NIK / NISN Tidak Valid */}
                 {nikValidationResult && !nikValidationResult.isValid && (
                   <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1 animate-fadeIn">
                     <span>⚠️ Format Tidak Valid: {nikValidationResult.message}</span>
                   </p>
                 )}
 
-                {/* Indikator Format NIK / NISN Valid */}
                 {nikValidationResult && nikValidationResult.isValid && !duplicateNikMatch && (
                   <p className={`text-[11px] font-semibold mt-1 flex items-center gap-1 animate-fadeIn ${
                     nikValidationResult.idType === 'NISN' ? 'text-blue-600' : 'text-emerald-600'
@@ -5209,7 +5413,6 @@ const getBnbaCountForGroup = (
                   </p>
                 )}
 
-                {/* Banner Peringatan NIK Duplikat */}
                 {duplicateNikMatch && (
                   <div className="mt-2 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-rose-900 text-xs font-semibold space-y-1 animate-fadeIn shadow-2xs">
                     <div className="flex items-center gap-1.5 font-bold text-rose-700">
@@ -5222,22 +5425,29 @@ const getBnbaCountForGroup = (
                 )}
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nama Penerima *</label>
-                <input type="text" required value={bnbaNama} onChange={(e) => setBnbaNama(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-bold" />
+                <label className="block font-semibold text-slate-700 mb-1">
+                  {isPosyandu3BItem(activeBnbaGroup) ? 'nama_lengkap (HURUF KAPITAL) *' : 'Nama Penerima *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={bnbaNama}
+                  onChange={(e) => setBnbaNama(isPosyandu3BItem(activeBnbaGroup) ? e.target.value.toUpperCase() : e.target.value)}
+                  placeholder="NAMA LENGKAP SESUAI KTP/KK"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded font-bold uppercase"
+                />
               </div>
               {/* Tanggal Lahir (Format Indonesia DD/MM/YYYY) & Jenis Kelamin */}
               <div className="space-y-2.5 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>Tanggal Lahir *</span>
+                    <span>{isPosyandu3BItem(activeBnbaGroup) ? 'tanggal_lahir (DD/MM/YYYY) *' : 'Tanggal Lahir *'}</span>
                     <span className="text-[10.5px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300">
                       📅 {formatDDMMYYYY(bnbaTglLahir)}
                     </span>
                   </label>
                   
-                  {/* Selector 3 Kolom Ringkas (Hari / Bulan / Tahun) */}
                   <div className="grid grid-cols-3 gap-1.5">
-                    {/* Dropdown Hari / Tanggal (01 - 31) */}
                     <div>
                       <span className="block text-[9px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">HARI (01-31)</span>
                       <select
@@ -5255,7 +5465,6 @@ const getBnbaCountForGroup = (
                       </select>
                     </div>
 
-                    {/* Dropdown Bulan (01 - 12) */}
                     <div>
                       <span className="block text-[9px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">BULAN (01-12)</span>
                       <select
@@ -5285,7 +5494,6 @@ const getBnbaCountForGroup = (
                       </select>
                     </div>
 
-                    {/* Dropdown Tahun (1950 - 2026) */}
                     <div>
                       <span className="block text-[9px] font-bold text-slate-500 mb-0.5 uppercase tracking-wider">TAHUN</span>
                       <select
@@ -5306,33 +5514,176 @@ const getBnbaCountForGroup = (
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Jenis Kelamin (JK) *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    {isPosyandu3BItem(activeBnbaGroup) ? 'gender (L / P) *' : 'Jenis Kelamin (JK) *'}
+                  </label>
                   <select value={bnbaJk} onChange={(e) => setBnbaJk(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white cursor-pointer">
                     <option value="L">L - Laki-laki</option>
                     <option value="P">P - Perempuan</option>
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nama Ortu / Wali</label>
-                <input type="text" value={bnbaOrtu} onChange={(e) => setBnbaOrtu(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Posisi *</label>
-                  <select value={bnbaPosisi} onChange={(e) => setBnbaPosisi(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white">
-                    <option value="Siswa">Siswa</option>
-                    <option value="Tendik">Tendik / Guru</option>
-                    <option value="Balita">Balita</option>
-                    <option value="Bumil">Bumil</option>
-                    <option value="Busui">Busui</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Kelas</label>
-                  <input type="text" value={bnbaKelas} onChange={(e) => setBnbaKelas(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono" />
-                </div>
-              </div>
+
+              {isPosyandu3BItem(activeBnbaGroup) ? (
+                <>
+                  {/* Conditional Section 1: Ibu Hamil (HPHT) */}
+                  {bnba3bSubKategori === 'POS - Ibu Hamil' && (
+                    <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-lg space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-rose-900">Data Kehamilan — HPHT (DD/MM/YYYY) *</label>
+                        <span className="text-[10px] font-semibold text-rose-700">Maks. 11 bulan ke belakang</span>
+                      </div>
+                      <input
+                        type="date"
+                        required
+                        value={bnba3bHpht}
+                        onChange={(e) => setBnba3bHpht(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-rose-300 rounded bg-white font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {/* Conditional Section 2: Ibu Menyusui (Data Anak) */}
+                  {bnba3bSubKategori === 'POS - Ibu Menyusui' && (
+                    <div className="p-3 bg-violet-50/70 border border-violet-200 rounded-lg space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-violet-900">Data Anak (Wajib Ibu Menyusui) *</label>
+                        <span className="text-[10px] font-semibold text-violet-700">Usia anak 6 – 24 bulan</span>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">nama_anak (HURUF KAPITAL) *</label>
+                        <input
+                          type="text"
+                          required
+                          value={bnba3bNamaAnak}
+                          onChange={(e) => setBnba3bNamaAnak(e.target.value.toUpperCase())}
+                          placeholder="NAMA LENGKAP ANAK"
+                          className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-bold uppercase"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">identity_code_anak (NIK 16 Digit) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={bnba3bIdCodeAnak}
+                            onChange={(e) => setBnba3bIdCodeAnak(e.target.value.replace(/[^0-9]/g, ''))}
+                            placeholder="16 digit NIK anak"
+                            className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">tanggal_lahir_anak *</label>
+                          <input
+                            type="date"
+                            required
+                            value={bnba3bTglAnak}
+                            onChange={(e) => setBnba3bTglAnak(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-violet-300 rounded bg-white font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Conditional Section 3: Balita (Data Ibu) */}
+                  {bnba3bSubKategori === 'POS - Balita' && (
+                    <div className="p-3 bg-sky-50/70 border border-sky-200 rounded-lg space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-sky-900">Data Ibu Kandung (Wajib Balita) *</label>
+                        <span className="text-[10px] font-semibold text-sky-700">Usia balita 6 – 59 bulan</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">nama_ibu (HURUF KAPITAL) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={bnba3bNamaIbu}
+                            onChange={(e) => setBnba3bNamaIbu(e.target.value.toUpperCase())}
+                            placeholder="NAMA LENGKAP IBU"
+                            className="w-full px-3 py-1.5 border border-sky-300 rounded bg-white font-bold uppercase"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">identity_code_ibu (NIK 16 Digit) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={bnba3bIdCodeIbu}
+                            onChange={(e) => setBnba3bIdCodeIbu(e.target.value.replace(/[^0-9]/g, ''))}
+                            placeholder="16 digit NIK ibu"
+                            className="w-full px-3 py-1.5 border border-sky-300 rounded bg-white font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Live 3B Rule Validation Preview */}
+                  {(() => {
+                    const liveVal = validate3BRecord({
+                      nama_lengkap: bnbaNama.trim().toUpperCase(),
+                      tanggal_lahir: parse3BDateToIso(bnbaTglLahir),
+                      gender: parseJk(bnbaJk),
+                      type: bnba3bType,
+                      identity_code: bnbaNisnNik.replace(/[^0-9]/g, '').trim(),
+                      kategori: bnba3bKategori,
+                      sub_kategori: bnba3bSubKategori,
+                      hpht: parse3BDateToIso(bnba3bHpht),
+                      nama_anak: bnba3bNamaAnak.trim().toUpperCase(),
+                      type_identity_anak: bnba3bTypeIdAnak,
+                      identity_code_anak: bnba3bIdCodeAnak.replace(/[^0-9]/g, '').trim(),
+                      tanggal_lahir_anak: parse3BDateToIso(bnba3bTglAnak),
+                      nama_ibu: bnba3bNamaIbu.trim().toUpperCase(),
+                      type_identity_ibu: bnba3bTypeIdIbu,
+                      identity_code_ibu: bnba3bIdCodeIbu.replace(/[^0-9]/g, '').trim(),
+                    })
+                    if (liveVal.errors.length === 0) {
+                      return (
+                        <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-[11px] font-semibold text-emerald-800">
+                          ✅ Aturan NIK &amp; rentang usia sasaran 3B terpenuhi.
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className="p-2.5 bg-amber-50 border border-amber-300 rounded text-[11px] text-amber-900 space-y-1">
+                        <div className="font-bold">⚠️ Peringatan Validasi BGN 3B:</div>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {liveVal.errors.map((err, i) => (
+                            <li key={i}>{err}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  })()}
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Nama Ortu / Wali</label>
+                    <input type="text" value={bnbaOrtu} onChange={(e) => setBnbaOrtu(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Posisi *</label>
+                      <select value={bnbaPosisi} onChange={(e) => setBnbaPosisi(e.target.value as any)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-semibold bg-white">
+                        <option value="Siswa">Siswa</option>
+                        <option value="Tendik">Tendik / Guru</option>
+                        <option value="Balita">Balita</option>
+                        <option value="Bumil">Bumil</option>
+                        <option value="Busui">Busui</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Kelas</label>
+                      <input type="text" value={bnbaKelas} onChange={(e) => setBnbaKelas(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded font-mono" />
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button type="button" onClick={() => { setShowAddBnbaModal(false); setEditingBnbaItem(null); }} className="px-3 py-1.5 bg-white border border-slate-300 rounded text-slate-700 font-semibold cursor-pointer">Batal</button>
                 <button 
@@ -5352,64 +5703,153 @@ const getBnbaCountForGroup = (
       {/* Import Preview & Confirmation Modal */}
       {showImportConfirmModal && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-fadeIn my-auto max-h-[90vh] flex flex-col text-xs">
+          <div className={`bg-white rounded-xl shadow-2xl w-full overflow-hidden border border-slate-200 animate-fadeIn my-auto max-h-[90vh] flex flex-col text-xs ${
+            import3BAudit ? 'max-w-[94vw]' : 'max-w-3xl'
+          }`}>
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-slate-800" />
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Konfirmasi Import Data BNBA</h3>
-                  <p className="text-[11px] text-slate-500">Ditemukan <strong className="text-slate-900">{importPreviewData.length}</strong> baris data BNBA yang terverifikasi valid.</p>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    {import3BAudit ? 'Audit & Konfirmasi Import BNBA 3B (15 Kolom)' : 'Konfirmasi Import Data BNBA'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {import3BAudit
+                      ? `Total ${import3BAudit.totalRows} baris terbaca (${import3BAudit.validCount} valid, ${import3BAudit.invalidCount} peringatan${import3BAudit.skippedExampleCount > 0 ? `, ${import3BAudit.skippedExampleCount} baris contoh dilewati` : ''}).`
+                      : <>Ditemukan <strong className="text-slate-900">{importPreviewData.length}</strong> baris data BNBA yang terverifikasi valid.</>}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); }} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); setImport3BAudit(null); }} className="text-slate-400 hover:text-slate-600">
                 <X size={18} />
               </button>
             </div>
 
             <div className="p-4 flex-1 overflow-y-auto space-y-3 bg-slate-50">
-              <p className="text-slate-600 font-medium">
-                Data yang akan diimpor ke kelompok <strong className="text-slate-900">{activeBnbaGroup?.nama}</strong>:
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-slate-600 font-medium">
+                  Data yang akan diimpor ke kelompok <strong className="text-slate-900">{activeBnbaGroup?.nama}</strong>:
+                </p>
+
+                {import3BAudit && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                      ✅ Valid: {import3BAudit.validCount}
+                    </span>
+                    {import3BAudit.invalidCount > 0 && (
+                      <>
+                        <span className="px-2.5 py-1 rounded bg-rose-50 text-rose-800 border border-rose-200 font-bold">
+                          ⚠️ Peringatan Usia/Kolom Wajib: {import3BAudit.invalidCount}
+                        </span>
+                        <label className="inline-flex items-center gap-1.5 bg-white px-2.5 py-1 rounded border border-slate-300 font-semibold text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={importOnlyValid3B}
+                            onChange={(e) => setImportOnlyValid3B(e.target.checked)}
+                            className="rounded border-slate-300"
+                          />
+                          <span>Hanya impor baris valid ({import3BAudit.validCount})</span>
+                        </label>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Scrollable Container with max-h-[380px] and sticky top-0 header */}
               <div className="max-h-[380px] overflow-y-auto overflow-x-auto border border-slate-200 rounded-lg scrollbar-thin">
-                <table className="w-full text-left border-collapse text-[11px]">
-                  <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase z-10 shadow-2xs">
-                    <tr>
-                      <th className="py-2.5 px-3 text-center w-10">#</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap">NIK / NISN</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap">NAMA LENGKAP</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap">TGL LAHIR</th>
-                      <th className="py-2.5 px-3 text-center whitespace-nowrap">JK</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap">ORTU / WALI</th>
-                      <th className="py-2.5 px-3 text-center whitespace-nowrap">POSISI</th>
-                      <th className="py-2.5 px-3 text-center whitespace-nowrap">KELAS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white font-medium">
-                    {importPreviewData.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition">
-                        <td className="py-2 px-3 text-slate-400 text-center font-bold">{idx + 1}</td>
-                        <td className="py-2 px-3 font-mono font-bold text-slate-800">{row.nisn_nik}</td>
-                        <td className="py-2 px-3 font-bold text-slate-900">{row.nama_lengkap}</td>
-                        <td className="py-2 px-3 font-mono text-slate-800 font-semibold">{row.tanggal_lahir}</td>
-                        <td className="py-2 px-3 text-center font-bold text-slate-800">
-                          {row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
-                        </td>
-                        <td className="py-2 px-3 text-slate-700">{row.nama_ortu}</td>
-                        <td className="py-2 px-3 text-center font-semibold text-slate-700">{row.posisi}</td>
-                        <td className="py-2 px-3 text-center font-mono text-slate-700">{row.kelas}</td>
+                {import3BAudit ? (
+                  <table className="w-full text-left border-collapse text-[11px] whitespace-nowrap">
+                    <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-slate-700 font-bold z-10 shadow-2xs">
+                      <tr>
+                        <th className="py-2.5 px-2.5 text-center">#</th>
+                        <th className="py-2.5 px-3">Audit Aturan 3B</th>
+                        {BNBA_3B_HEADERS.map(h => (
+                          <th key={h} className="py-2.5 px-3">{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white font-medium">
+                      {import3BAudit.rows.map((r, idx) => {
+                        const n = r.normalized
+                        const isBumil = n.sub_kategori === 'POS - Ibu Hamil'
+                        const isBusui = n.sub_kategori === 'POS - Ibu Menyusui'
+                        const isBalita = n.sub_kategori === 'POS - Balita'
+                        return (
+                          <tr key={idx} className={r.validation.isValid ? 'hover:bg-slate-50' : 'bg-rose-50/40'}>
+                            <td className="py-2 px-2.5 text-slate-500 text-center font-mono">{r.rowNumber}</td>
+                            <td className="py-2 px-3">
+                              {r.validation.isValid ? (
+                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[10px]">
+                                  Valid
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-bold text-[10px]">
+                                  {r.validation.errors.join(' · ')}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 font-bold text-slate-900">{n.nama_lengkap || '-'}</td>
+                            <td className="py-2 px-3 font-mono">{formatIsoToDDMMYYYY(n.tanggal_lahir)}</td>
+                            <td className="py-2 px-3 text-center font-bold">{n.gender}</td>
+                            <td className="py-2 px-3 text-center font-mono">{n.type}</td>
+                            <td className="py-2 px-3 font-mono font-bold">{n.identity_code || '-'}</td>
+                            <td className="py-2 px-3 text-center font-bold">{n.kategori}</td>
+                            <td className="py-2 px-3 font-semibold">{n.sub_kategori}</td>
+                            <td className={`py-2 px-3 font-mono ${!isBumil ? 'bg-slate-100 text-slate-400 text-center' : ''}`}>
+                              {isBumil ? formatIsoToDDMMYYYY(n.hpht) : '—'}
+                            </td>
+                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3'}>{isBusui ? (n.nama_anak || '-') : '—'}</td>
+                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 text-center font-mono'}>{isBusui ? n.type_identity_anak : '—'}</td>
+                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBusui ? (n.identity_code_anak || '-') : '—'}</td>
+                            <td className={!isBusui ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBusui ? formatIsoToDDMMYYYY(n.tanggal_lahir_anak) : '—'}</td>
+                            <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3'}>{isBalita ? (n.nama_ibu || '-') : '—'}</td>
+                            <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 text-center font-mono'}>{isBalita ? n.type_identity_ibu : '—'}</td>
+                            <td className={!isBalita ? 'py-2 px-3 bg-slate-100 text-slate-400 text-center' : 'py-2 px-3 font-mono'}>{isBalita ? (n.identity_code_ibu || '-') : '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase z-10 shadow-2xs">
+                      <tr>
+                        <th className="py-2.5 px-3 text-center w-10">#</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">NIK / NISN</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">NAMA LENGKAP</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">TGL LAHIR</th>
+                        <th className="py-2.5 px-3 text-center whitespace-nowrap">JK</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">ORTU / WALI</th>
+                        <th className="py-2.5 px-3 text-center whitespace-nowrap">POSISI</th>
+                        <th className="py-2.5 px-3 text-center whitespace-nowrap">KELAS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white font-medium">
+                      {importPreviewData.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition">
+                          <td className="py-2 px-3 text-slate-400 text-center font-bold">{idx + 1}</td>
+                          <td className="py-2 px-3 font-mono font-bold text-slate-800">{row.nisn_nik}</td>
+                          <td className="py-2 px-3 font-bold text-slate-900">{row.nama_lengkap}</td>
+                          <td className="py-2 px-3 font-mono text-slate-800 font-semibold">{row.tanggal_lahir}</td>
+                          <td className="py-2 px-3 text-center font-bold text-slate-800">
+                            {row.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
+                          </td>
+                          <td className="py-2 px-3 text-slate-700">{row.nama_ortu}</td>
+                          <td className="py-2 px-3 text-center font-semibold text-slate-700">{row.posisi}</td>
+                          <td className="py-2 px-3 text-center font-mono text-slate-700">{row.kelas}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
 
             <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); }}
+                onClick={() => { setShowImportConfirmModal(false); setImportPreviewData([]); setImport3BAudit(null); }}
                 disabled={isImporting}
                 className="px-4 py-1.5 bg-white border border-slate-300 rounded-md font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
               >
@@ -5418,11 +5858,17 @@ const getBnbaCountForGroup = (
               <button
                 type="button"
                 onClick={confirmExecuteImport}
-                disabled={isImporting}
+                disabled={isImporting || (Boolean(import3BAudit) && importOnlyValid3B && import3BAudit?.validCount === 0)}
                 className="px-5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
                 {isImporting ? <RotateCw size={14} className="animate-spin" /> : <Upload size={14} />}
-                <span>{isImporting ? 'Mengimpor Data...' : `Ya, Impor ${importPreviewData.length} Data`}</span>
+                <span>
+                  {isImporting
+                    ? 'Mengimpor Data...'
+                    : import3BAudit && importOnlyValid3B
+                    ? `Ya, Impor ${import3BAudit.validCount} Data Valid`
+                    : `Ya, Impor ${importPreviewData.length} Data`}
+                </span>
               </button>
             </div>
           </div>

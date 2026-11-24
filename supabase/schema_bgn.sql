@@ -48,8 +48,37 @@ CREATE TABLE IF NOT EXISTS public.penerima_manfaat_bnba (
     nama_ortu VARCHAR(255) DEFAULT '-',
     posisi VARCHAR(50) NOT NULL CHECK (posisi IN ('Siswa', 'Tendik', 'Balita', 'Bumil', 'Busui')),
     kelas VARCHAR(50) DEFAULT '-',
+    gender VARCHAR(10),
+    type VARCHAR(20) DEFAULT 'nik',
+    identity_code VARCHAR(50),
+    kategori VARCHAR(50),
+    sub_kategori VARCHAR(100),
+    hpht DATE,
+    nama_anak VARCHAR(255),
+    type_identity_anak VARCHAR(20) DEFAULT 'nik',
+    identity_code_anak VARCHAR(50),
+    tanggal_lahir_anak DATE,
+    nama_ibu VARCHAR(255),
+    type_identity_ibu VARCHAR(20) DEFAULT 'nik',
+    identity_code_ibu VARCHAR(50),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration for 15-column 3B Posyandu schema on existing databases
+ALTER TABLE public.penerima_manfaat_bnba
+    ADD COLUMN IF NOT EXISTS gender VARCHAR(10),
+    ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'nik',
+    ADD COLUMN IF NOT EXISTS identity_code VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS kategori VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS sub_kategori VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS hpht DATE,
+    ADD COLUMN IF NOT EXISTS nama_anak VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS type_identity_anak VARCHAR(20) DEFAULT 'nik',
+    ADD COLUMN IF NOT EXISTS identity_code_anak VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS tanggal_lahir_anak DATE,
+    ADD COLUMN IF NOT EXISTS nama_ibu VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS type_identity_ibu VARCHAR(20) DEFAULT 'nik',
+    ADD COLUMN IF NOT EXISTS identity_code_ibu VARCHAR(50);
 
 -- Indexes for high-performance querying
 CREATE INDEX IF NOT EXISTS idx_kpm_status ON public.kelompok_penerima_manfaat(status);

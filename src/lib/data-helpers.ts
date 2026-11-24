@@ -1069,6 +1069,20 @@ export interface PenerimaManfaatBnba {
   nik?: string
   nisn?: string
   jk?: string
+  // 15-Column Posyandu 3B Extended Fields
+  gender?: string
+  type?: string
+  identity_code?: string
+  kategori?: string
+  sub_kategori?: string
+  hpht?: string | null
+  nama_anak?: string | null
+  type_identity_anak?: string | null
+  identity_code_anak?: string | null
+  tanggal_lahir_anak?: string | null
+  nama_ibu?: string | null
+  type_identity_ibu?: string | null
+  identity_code_ibu?: string | null
 }
 
 const LS_BNBA = 'sppg_penerima_bnba'
