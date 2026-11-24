@@ -1,10 +1,11 @@
 "use client"
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { 
   Search, RotateCw, Plus, X, Check, Building2, Info, Eye, Edit, Trash2, 
   Bookmark, FileSpreadsheet, FileText, FileCheck, Printer, ChevronLeft, 
   ChevronRight, UserPlus, ShieldAlert, HeartHandshake, FileDown, Download, Upload,
-  ChevronUp, ChevronDown
+  ChevronUp, ChevronDown, Globe
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
@@ -19,6 +20,7 @@ import {
   deleteBnbaItem,
   clearBnbaByKelompokId,
   deleteBnbaBulkIds,
+  getPosyanduBreakdown,
   type KelompokPenerimaManfaat,
   type PenerimaManfaatBnba
 } from '@/lib/data-helpers'
@@ -73,7 +75,84 @@ export interface DuplicatePairRecord {
   kpmGroup?: DetailKpmItem
 }
 
-export default function KelompokPenerimaManfaatPage() {
+export type MainViewTab = 'global' | 'sekolah' | '3b'
+export type SubFilter3B = 'semua' | 'balita' | 'bumil' | 'busui'
+
+const isPosyandu3BItem = (item: { jenis?: string; nama?: string } | null | undefined): boolean => {
+  if (!item) return false
+  const j = (item.jenis || '').toUpperCase()
+  const n = (item.nama || '').toUpperCase()
+  return (
+    j.includes('3B') ||
+    j.includes('POSYANDU') ||
+    j.includes('IBU HAMIL') ||
+    j.includes('IBU MENYUSUI') ||
+    j.includes('BAYI') ||
+    j.includes('BALITA') ||
+    j.includes('BUMIL') ||
+    j.includes('BUSUI') ||
+    j.includes('KOMUNITAS') ||
+    n.includes('POSYANDU')
+  )
+}
+
+const getBnba3BCategory = (item: PenerimaManfaatBnba): 'balita' | 'bumil' | 'busui' | 'lainnya' => {
+  const pos = (item.posisi || '').toLowerCase()
+  if (pos.includes('balita') || pos.includes('bayi')) return 'balita'
+  if (pos.includes('bumil') || pos.includes('hamil')) return 'bumil'
+  if (pos.includes('busui') || pos.includes('menyusui')) return 'busui'
+  return 'lainnya'
+}
+
+const parseMainTabParam = (val: string | null): MainViewTab => {
+  if (val === 'sekolah') return 'sekolah'
+  if (val === '3b') return '3b'
+  return 'global'
+}
+
+const parseSubFilter3BParam = (val: string | null): SubFilter3B => {
+  if (val === 'balita' || val === 'bumil' || val === 'busui') return val
+  return 'semua'
+}
+
+function KelompokPenerimaManfaatContent() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [mainTab, setMainTab] = useState<MainViewTab>(() => parseMainTabParam(searchParams.get('view')))
+  const [subFilter3B, setSubFilter3B] = useState<SubFilter3B>(() => parseSubFilter3BParam(searchParams.get('kategori')))
+  const [bnbaCategoryTab, setBnbaCategoryTab] = useState<SubFilter3B>('semua')
+
+  // Sync state when URL query changes externally (browser back/forward)
+  useEffect(() => {
+    const viewParam = parseMainTabParam(searchParams.get('view'))
+    const katParam = parseSubFilter3BParam(searchParams.get('kategori'))
+    setMainTab(viewParam)
+    setSubFilter3B(viewParam === '3b' ? katParam : 'semua')
+  }, [searchParams])
+
+  const updateViewQuery = (nextTab: MainViewTab, nextKat: SubFilter3B = 'semua') => {
+    setMainTab(nextTab)
+    const normalizedKat: SubFilter3B = nextTab === '3b' ? nextKat : 'semua'
+    setSubFilter3B(normalizedKat)
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextTab === 'global') {
+      params.delete('view')
+      params.delete('kategori')
+    } else {
+      params.set('view', nextTab)
+      if (nextTab === '3b' && normalizedKat !== 'semua') {
+        params.set('kategori', normalizedKat)
+      } else {
+        params.delete('kategori')
+      }
+    }
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
+
   const [searchQuery, setSearchQuery] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRealtimeActive, setIsRealtimeActive] = useState(false)
@@ -833,12 +912,12 @@ export default function KelompokPenerimaManfaatPage() {
     }
   }, [isPosyanduCategory, isSdCategory, formKategori, formBalitaLaki, formBalitaPerem, formBumil, formBusui, formKaderPosyandu, formSdSiswaLaki13, formSdSiswaPerem13, formSdSiswaLaki46, formSdSiswaPerem46, formPria, formWanita, formGuru, formTendik])
 
-// Helper to calculate exact BNBA count for a KPM group by matching all possible identifiers (UUID, kode, npsnReg, nama)
-const getBnbaCountForGroup = (
+// Helper to retrieve matched BNBA records for a KPM group by matching all possible identifiers (UUID, kode, npsnReg, nama)
+const getBnbaRecordsForGroup = (
   group: { id?: string; npsnReg?: string; kode?: string; identitas_npsn_tmp?: string; nama?: string },
   records: PenerimaManfaatBnba[]
-) => {
-  if (!records || records.length === 0) return 0
+): PenerimaManfaatBnba[] => {
+  if (!records || records.length === 0) return []
   const possibleKeys = new Set<string>()
   if (group.id) possibleKeys.add(String(group.id).trim().toLowerCase())
   if (group.npsnReg) possibleKeys.add(String(group.npsnReg).trim().toLowerCase())
@@ -852,6 +931,7 @@ const getBnbaCountForGroup = (
   }
 
   const matchedRowIds = new Set<string>()
+  const matchedRecords: PenerimaManfaatBnba[] = []
   records.forEach(b => {
     const raw = b as any
     const rowKeys = [
@@ -876,12 +956,22 @@ const getBnbaCountForGroup = (
     }
 
     if (isMatch) {
-      matchedRowIds.add(b.id || `${b.nisn_nik}-${b.nama_lengkap}`)
+      const uniqueKey = b.id || `${b.nisn_nik}-${b.nama_lengkap}`
+      if (!matchedRowIds.has(uniqueKey)) {
+        matchedRowIds.add(uniqueKey)
+        matchedRecords.push(b)
+      }
     }
   })
 
-  return matchedRowIds.size
+  return matchedRecords
 }
+
+// Helper to calculate exact BNBA count for a KPM group
+const getBnbaCountForGroup = (
+  group: { id?: string; npsnReg?: string; kode?: string; identitas_npsn_tmp?: string; nama?: string },
+  records: PenerimaManfaatBnba[]
+) => getBnbaRecordsForGroup(group, records).length
 
   // Load Data Purely from Supabase Database
   const loadData = async () => {
@@ -1096,15 +1186,107 @@ const getBnbaCountForGroup = (
     })
   }, [kpmItems, allBnbaRecords])
 
-  // Aggregate KPI Calculations
+  // Precomputed 3B breakdown per Posyandu (real-time BNBA counts when available, fallback to target breakdown)
+  const posyandu3BMap = useMemo(() => {
+    const map = new Map<string, {
+      balitaL: number
+      balitaP: number
+      balita: number
+      bumil: number
+      busui: number
+      total3B: number
+      source: 'bnba' | 'target'
+    }>()
+
+    fullDataList.forEach(item => {
+      if (!isPosyandu3BItem(item)) return
+      const records = getBnbaRecordsForGroup(item, allBnbaRecords)
+      if (records.length > 0) {
+        let balitaL = 0
+        let balitaP = 0
+        let bumil = 0
+        let busui = 0
+        records.forEach(rec => {
+          const cat = getBnba3BCategory(rec)
+          if (cat === 'balita') {
+            const jk = (rec.jenis_kelamin || rec.jk || 'L').toString().trim().toUpperCase()
+            if (jk.startsWith('P') || jk === 'PEREMPUAN' || jk === 'WANITA') {
+              balitaP++
+            } else {
+              balitaL++
+            }
+          } else if (cat === 'bumil') {
+            bumil++
+          } else if (cat === 'busui') {
+            busui++
+          }
+        })
+        const balita = balitaL + balitaP
+        const total3B = balita + bumil + busui || records.length
+        map.set(item.id, { balitaL, balitaP, balita, bumil, busui, total3B, source: 'bnba' })
+      } else {
+        const pos = getPosyanduBreakdown({
+          ...item,
+          sub_kategori: item.subKategoriRaw,
+          target_pria: item.pria,
+          target_wanita: item.wanita,
+          target_guru: item.guru,
+          jumlah_penerima: item.totalTarget
+        })
+        const total3B = (pos.balita + pos.bumil + pos.busui) || item.totalTarget
+        map.set(item.id, {
+          balitaL: pos.balitaLk,
+          balitaP: pos.balitaPr,
+          balita: pos.balita,
+          bumil: pos.bumil,
+          busui: pos.busui,
+          total3B,
+          source: 'target'
+        })
+      }
+    })
+
+    return map
+  }, [fullDataList, allBnbaRecords])
+
+  // Counts for top-level navigation tabs
+  const tabCounts = useMemo(() => {
+    const globalCount = fullDataList.length
+    const posyanduCount = fullDataList.filter(i => isPosyandu3BItem(i)).length
+    const sekolahCount = globalCount - posyanduCount
+    return { globalCount, sekolahCount, posyanduCount }
+  }, [fullDataList])
+
+  // Base dataset scoped by active mainTab (and subFilter3B when in 3B mode)
+  const tabScopedList = useMemo(() => {
+    if (mainTab === 'sekolah') {
+      return fullDataList.filter(i => !isPosyandu3BItem(i))
+    }
+    if (mainTab === '3b') {
+      return fullDataList.filter(i => {
+        if (!isPosyandu3BItem(i)) return false
+        if (subFilter3B === 'semua') return true
+        const b = posyandu3BMap.get(i.id)
+        if (!b) return false
+        if (subFilter3B === 'balita') return b.balita > 0
+        if (subFilter3B === 'bumil') return b.bumil > 0
+        if (subFilter3B === 'busui') return b.busui > 0
+        return true
+      })
+    }
+    return fullDataList
+  }, [fullDataList, mainTab, subFilter3B, posyandu3BMap])
+
+  // Aggregate KPI Calculations scoped to active mainTab
   const stats = useMemo(() => {
-    const totalAktif = fullDataList.filter(i => i.status === 'Aktif').length
-    const totalTarget = fullDataList.filter(i => i.status === 'Aktif').reduce((acc, curr) => acc + curr.totalTarget, 0)
-    const totalRincian = fullDataList.filter(i => i.status === 'Aktif').reduce((acc, curr) => acc + curr.rincianTerisi, 0)
-    const totalBelumDetail = fullDataList.filter(i => i.status === 'Aktif' && (i.keteranganStatus === 'Belum ada detail' || i.rincianTerisi < i.totalTarget)).length
-    const totalKurang = fullDataList.filter(i => i.status === 'Aktif' && i.keteranganStatus === 'Kurang').length
-    const totalSesuai = fullDataList.filter(i => i.status === 'Aktif' && i.keteranganStatus === 'Sesuai').length
-    const totalLebih = fullDataList.filter(i => i.status === 'Aktif' && i.keteranganStatus === 'Lebih').length
+    const activeRows = tabScopedList.filter(i => i.status === 'Aktif')
+    const totalAktif = activeRows.length
+    const totalTarget = activeRows.reduce((acc, curr) => acc + curr.totalTarget, 0)
+    const totalRincian = activeRows.reduce((acc, curr) => acc + curr.rincianTerisi, 0)
+    const totalBelumDetail = activeRows.filter(i => i.keteranganStatus === 'Belum ada detail' || i.rincianTerisi < i.totalTarget).length
+    const totalKurang = activeRows.filter(i => i.keteranganStatus === 'Kurang').length
+    const totalSesuai = activeRows.filter(i => i.keteranganStatus === 'Sesuai').length
+    const totalLebih = activeRows.filter(i => i.keteranganStatus === 'Lebih').length
     const percentageTerisi = totalTarget > 0 ? Math.round((totalRincian / totalTarget) * 100) : 0
 
     return {
@@ -1117,18 +1299,19 @@ const getBnbaCountForGroup = (
       totalLebih,
       percentageTerisi
     }
-  }, [fullDataList])
+  }, [tabScopedList])
 
   // Filtered dataset for table
   const filteredRows = useMemo(() => {
-    return fullDataList.filter((item) => {
+    return tabScopedList.filter((item) => {
       const q = searchQuery.toLowerCase()
       const matchSearch = 
         item.nama.toLowerCase().includes(q) ||
         item.npsnReg.toLowerCase().includes(q) ||
         item.jenis.toLowerCase().includes(q) ||
         item.pimpinan.toLowerCase().includes(q) ||
-        item.alamat.toLowerCase().includes(q)
+        item.alamat.toLowerCase().includes(q) ||
+        (item.rute || '').toLowerCase().includes(q)
 
       if (!matchSearch) return false
 
@@ -1138,7 +1321,74 @@ const getBnbaCountForGroup = (
       if (activeFilter === 'Lebih') return item.keteranganStatus === 'Lebih'
       return true
     })
-  }, [fullDataList, searchQuery, activeFilter])
+  }, [tabScopedList, searchQuery, activeFilter])
+
+  // Real-time 3B Summary Cards (respecting search, status filter, and active subFilter3B)
+  const summary3B = useMemo(() => {
+    const all3BActiveRows = fullDataList.filter(i => isPosyandu3BItem(i) && i.status === 'Aktif')
+    let allBalitaL = 0
+    let allBalitaP = 0
+    let allBumil = 0
+    let allBusui = 0
+    let allPosWithBalita = 0
+    let allPosWithBumil = 0
+    let allPosWithBusui = 0
+
+    all3BActiveRows.forEach(item => {
+      const b = posyandu3BMap.get(item.id)
+      if (!b) return
+      allBalitaL += b.balitaL
+      allBalitaP += b.balitaP
+      allBumil += b.bumil
+      allBusui += b.busui
+      if (b.balita > 0) allPosWithBalita++
+      if (b.bumil > 0) allPosWithBumil++
+      if (b.busui > 0) allPosWithBusui++
+    })
+
+    const visibleActive3B = filteredRows.filter(i => isPosyandu3BItem(i) && i.status === 'Aktif')
+    let visibleBalitaL = 0
+    let visibleBalitaP = 0
+    let visibleBumil = 0
+    let visibleBusui = 0
+
+    visibleActive3B.forEach(item => {
+      const b = posyandu3BMap.get(item.id)
+      if (!b) return
+      visibleBalitaL += b.balitaL
+      visibleBalitaP += b.balitaP
+      visibleBumil += b.bumil
+      visibleBusui += b.busui
+    })
+
+    const displayBalitaL = subFilter3B === 'semua' || subFilter3B === 'balita' ? visibleBalitaL : 0
+    const displayBalitaP = subFilter3B === 'semua' || subFilter3B === 'balita' ? visibleBalitaP : 0
+    const displayBalita = displayBalitaL + displayBalitaP
+    const displayBumil = subFilter3B === 'semua' || subFilter3B === 'bumil' ? visibleBumil : 0
+    const displayBusui = subFilter3B === 'semua' || subFilter3B === 'busui' ? visibleBusui : 0
+    const grandTotal = displayBalita + displayBumil + displayBusui
+
+    return {
+      totalPosyanduAktif: visibleActive3B.length,
+      balitaL: displayBalitaL,
+      balitaP: displayBalitaP,
+      totalBalita: displayBalita,
+      totalBumil: displayBumil,
+      totalBusui: displayBusui,
+      grandTotal,
+      // Totals for pill badges
+      pillCounts: {
+        semua: all3BActiveRows.length,
+        balita: allPosWithBalita,
+        bumil: allPosWithBumil,
+        busui: allPosWithBusui,
+        balitaTotal: allBalitaL + allBalitaP,
+        bumilTotal: allBumil,
+        busuiTotal: allBusui,
+        grandAll: allBalitaL + allBalitaP + allBumil + allBusui
+      }
+    }
+  }, [fullDataList, filteredRows, posyandu3BMap, subFilter3B])
 
   // Reorder row position handler (Swaps urutan property & updates Supabase)
   const [isReordering, setIsReordering] = useState(false)
@@ -1212,8 +1462,8 @@ const getBnbaCountForGroup = (
   const handleOpenAddModal = () => {
     setEditingItem(null)
     setFormNama('')
-    setFormKategori('SD')
-    setFormSubKategori('Balita')
+    setFormKategori(mainTab === '3b' ? 'POSYANDU 3B' : 'SD')
+    setFormSubKategori(subFilter3B === 'bumil' ? 'Bumil' : subFilter3B === 'busui' ? 'Busui' : 'Balita')
     setFormIdentitas('')
     setFormKepemilikan('Negeri')
     setFormRute('Rute Kiri')
@@ -1584,6 +1834,15 @@ const getBnbaCountForGroup = (
   const handleOpenBnbaModal = async (group: DetailKpmItem) => {
     setActiveBnbaGroup(group)
     setSelectedBnbaIds([])
+    setBnbaSearch('')
+
+    const is3BGroup = isPosyandu3BItem(group)
+    if (is3BGroup && mainTab === '3b' && subFilter3B !== 'semua') {
+      setBnbaCategoryTab(subFilter3B)
+    } else {
+      setBnbaCategoryTab('semua')
+    }
+
     const activeKelompokUuid = await resolveSupabaseKelompokUuid(group)
     const selectedKelompokId = activeKelompokUuid || group.id
 
@@ -1592,16 +1851,28 @@ const getBnbaCountForGroup = (
       .select('*')
       .eq('kelompok_id', selectedKelompokId)
 
-    if (!error && data) {
+    if (!error && data && data.length > 0) {
       setBnbaList(data)
     } else {
       const list = await fetchBnbaList(selectedKelompokId)
-      setBnbaList(list)
+      if (list.length > 0) {
+        setBnbaList(list)
+      } else {
+        const localFallback = getBnbaRecordsForGroup(group, allBnbaRecords)
+        setBnbaList(localFallback)
+      }
     }
 
-    const is3B = group.jenis.includes('Ibu') || group.jenis.includes('Bayi')
-    setBnbaPosisi(is3B ? (group.jenis.includes('Hamil') ? 'Bumil' : group.jenis.includes('Menyusui') ? 'Busui' : 'Balita') : 'Siswa')
-    setBnbaKelas(is3B ? '-' : 'Kelas 4')
+    setBnbaPosisi(
+      is3BGroup
+        ? (subFilter3B === 'bumil' || group.jenis.includes('Hamil')
+            ? 'Bumil'
+            : subFilter3B === 'busui' || group.jenis.includes('Menyusui')
+            ? 'Busui'
+            : 'Balita')
+        : 'Siswa'
+    )
+    setBnbaKelas(is3BGroup ? '-' : 'Kelas 4')
   }
 
   // Logika Pengurutan Hierarkis (Students first by Class 1-6 & Alphabetical, then Tendik at bottom)
@@ -1635,8 +1906,16 @@ const getBnbaCountForGroup = (
     setBnbaJk('L')
     setBnbaOrtu('')
     if (activeBnbaGroup) {
-      const is3B = activeBnbaGroup.jenis.includes('Ibu') || activeBnbaGroup.jenis.includes('Bayi') || activeBnbaGroup.jenis.includes('3B')
-      setBnbaPosisi(is3B ? (activeBnbaGroup.jenis.includes('Hamil') ? 'Bumil' : activeBnbaGroup.jenis.includes('Menyusui') ? 'Busui' : 'Balita') : 'Siswa')
+      const is3B = isPosyandu3BItem(activeBnbaGroup)
+      setBnbaPosisi(
+        is3B
+          ? (bnbaCategoryTab === 'bumil' || activeBnbaGroup.jenis.includes('Hamil')
+              ? 'Bumil'
+              : bnbaCategoryTab === 'busui' || activeBnbaGroup.jenis.includes('Menyusui')
+              ? 'Busui'
+              : 'Balita')
+          : 'Siswa'
+      )
       setBnbaKelas(is3B ? '-' : 'Kelas 4')
     }
     setShowAddBnbaModal(true)
@@ -2825,16 +3104,82 @@ const getBnbaCountForGroup = (
     }
   }, [activeBnbaGroup, bnbaList])
 
+  const bnbaCategoryCounts = useMemo(() => {
+    let balita = 0
+    let bumil = 0
+    let busui = 0
+    bnbaList.forEach(item => {
+      const cat = getBnba3BCategory(item)
+      if (cat === 'balita') balita++
+      else if (cat === 'bumil') bumil++
+      else if (cat === 'busui') busui++
+    })
+    return {
+      total: bnbaList.length,
+      balita,
+      bumil,
+      busui
+    }
+  }, [bnbaList])
+
   const filteredBnbaList = useMemo(() => {
     const q = bnbaSearch.toLowerCase()
-    const list = bnbaList.filter(item => 
-      (item.nama_lengkap || '').toLowerCase().includes(q) ||
-      (item.nisn_nik || '').toLowerCase().includes(q) ||
-      (item.nama_ortu || '').toLowerCase().includes(q) ||
-      (item.posisi || '').toLowerCase().includes(q)
-    )
+    const isActiveGroup3B = isPosyandu3BItem(activeBnbaGroup)
+    const list = bnbaList.filter(item => {
+      if (isActiveGroup3B && bnbaCategoryTab !== 'semua') {
+        if (getBnba3BCategory(item) !== bnbaCategoryTab) return false
+      }
+      if (!q) return true
+      return (
+        (item.nama_lengkap || '').toLowerCase().includes(q) ||
+        (item.nisn_nik || '').toLowerCase().includes(q) ||
+        (item.nama_ortu || '').toLowerCase().includes(q) ||
+        (item.posisi || '').toLowerCase().includes(q)
+      )
+    })
     return list.sort(sortBNBA)
-  }, [bnbaList, bnbaSearch])
+  }, [bnbaList, bnbaSearch, bnbaCategoryTab, activeBnbaGroup])
+
+  const renderNikAuditBadge = (row: DetailKpmItem) => {
+    const auditData = kpmNikAuditMap.get(row.id)
+    if (!auditData || auditData.totalBnba === 0) {
+      return (
+        <span className="px-2.5 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 inline-block">
+          Belum Ada BNBA
+        </span>
+      )
+    }
+    if (auditData.problemCount === 0) {
+      return (
+        <button
+          type="button"
+          onClick={() => setActiveAuditGroupModal(row)}
+          className="px-2.5 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 cursor-pointer transition inline-flex items-center justify-center gap-1"
+          title="Klik untuk membuka Laporan Audit NIK 100% Valid"
+        >
+          <span>✅ 100% Valid</span>
+        </button>
+      )
+    }
+
+    let pillText = `⚠️ ${auditData.problemCount} NIK Perlu Cek`
+    if (auditData.duplicateCount > 0 && auditData.tempZerosCount === 0) {
+      pillText = `⚠️ ${auditData.duplicateCount} Duplikat`
+    } else if (auditData.tempZerosCount > 0 && auditData.duplicateCount === 0) {
+      pillText = `⚠️ ${auditData.tempZerosCount} Ujung 0000`
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => setActiveAuditGroupModal(row)}
+        className="px-2.5 py-1 rounded text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 cursor-pointer transition inline-flex items-center justify-center gap-1"
+        title="Klik untuk membuka Laporan Anomali & Masalah NIK"
+      >
+        <span>{pillText}</span>
+      </button>
+    )
+  }
 
   return (
     <div className="space-y-5 font-sans text-slate-800 pb-16 relative">
@@ -2936,44 +3281,262 @@ const getBnbaCountForGroup = (
         </div>
       </div>
 
-      {/* 2. 4 Kartu KPI Metrik (Flat Minimal Design) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
-          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-            Total Kelompok Aktif
+      {/* 1B. Navigasi Tab Utama (Global vs Lembaga Sekolah vs Spesifik 3B) */}
+      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => updateViewQuery('global')}
+          className={`flex-1 min-w-[180px] px-4 py-2.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 border ${
+            mainTab === 'global'
+              ? 'bg-slate-900 text-white border-slate-900'
+              : 'bg-white text-slate-700 border-transparent hover:bg-slate-50 hover:border-slate-200'
+          }`}
+        >
+          <Globe size={15} className={mainTab === 'global' ? 'text-white' : 'text-slate-500'} />
+          <span>Global (Semua Sasaran)</span>
+          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+            mainTab === 'global' ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-700 border border-slate-200'
+          }`}>
+            {tabCounts.globalCount}
           </span>
-          <div className="text-2xl font-bold text-slate-800 tracking-tight">
-            {stats.totalAktif} <span className="text-xs font-normal text-slate-500">Kelompok</span>
-          </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
-          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-            Total Target Penerima
+        <button
+          type="button"
+          onClick={() => updateViewQuery('sekolah')}
+          className={`flex-1 min-w-[180px] px-4 py-2.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 border ${
+            mainTab === 'sekolah'
+              ? 'bg-slate-900 text-white border-slate-900'
+              : 'bg-white text-slate-700 border-transparent hover:bg-slate-50 hover:border-slate-200'
+          }`}
+        >
+          <Building2 size={15} className={mainTab === 'sekolah' ? 'text-white' : 'text-slate-500'} />
+          <span>Lembaga Sekolah</span>
+          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+            mainTab === 'sekolah' ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-700 border border-slate-200'
+          }`}>
+            {tabCounts.sekolahCount}
           </span>
-          <div className="text-2xl font-bold text-slate-800 tracking-tight">
-            {stats.totalTarget.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500">Penerima Manfaat</span>
-          </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
-          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-            Total Rincian Terisi
+        <button
+          type="button"
+          onClick={() => updateViewQuery('3b', subFilter3B)}
+          className={`flex-1 min-w-[200px] px-4 py-2.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 border ${
+            mainTab === '3b'
+              ? 'bg-teal-700 text-white border-teal-700'
+              : 'bg-white text-slate-700 border-transparent hover:bg-slate-50 hover:border-slate-200'
+          }`}
+        >
+          <HeartHandshake size={15} className={mainTab === '3b' ? 'text-white' : 'text-teal-600'} />
+          <span>Spesifik 3B (Posyandu)</span>
+          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+            mainTab === '3b' ? 'bg-white text-teal-800' : 'bg-teal-50 text-teal-800 border border-teal-200'
+          }`}>
+            {tabCounts.posyanduCount}
           </span>
-          <div className="text-2xl font-bold text-slate-800 tracking-tight">
-            {stats.totalRincian.toLocaleString('id-ID')} <span className="text-xs font-semibold text-emerald-600">({stats.percentageTerisi}%)</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
-          <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
-            Belum Dilengkapi
-          </span>
-          <div className="text-2xl font-bold text-slate-800 tracking-tight">
-            {stats.totalBelumDetail} <span className="text-xs font-normal text-slate-500">Kelompok</span>
-          </div>
-        </div>
+        </button>
       </div>
+
+      {/* 2. Kartu KPI Metrik / Sub-Navigasi Khusus Mode 3B */}
+      {mainTab === '3b' ? (
+        <div className="space-y-3">
+          {/* Sub-Navigasi Cepat Pill 3B */}
+          <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mr-1">
+                Filter Sasaran 3B:
+              </span>
+              <button
+                type="button"
+                onClick={() => updateViewQuery('3b', 'semua')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  subFilter3B === 'semua'
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span>Semua 3B</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  subFilter3B === 'semua' ? 'bg-white text-slate-900' : 'bg-slate-200 text-slate-800'
+                }`}>
+                  {summary3B.pillCounts.semua}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updateViewQuery('3b', 'balita')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  subFilter3B === 'balita'
+                    ? 'bg-sky-700 text-white border-sky-700'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-sky-50 hover:border-sky-300'
+                }`}
+              >
+                <span>Balita</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  subFilter3B === 'balita' ? 'bg-white text-sky-800' : 'bg-sky-100 text-sky-800'
+                }`}>
+                  {summary3B.pillCounts.balitaTotal}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updateViewQuery('3b', 'bumil')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  subFilter3B === 'bumil'
+                    ? 'bg-rose-700 text-white border-rose-700'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-rose-50 hover:border-rose-300'
+                }`}
+              >
+                <span>Bumil (Ibu Hamil)</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  subFilter3B === 'bumil' ? 'bg-white text-rose-800' : 'bg-rose-100 text-rose-800'
+                }`}>
+                  {summary3B.pillCounts.bumilTotal}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updateViewQuery('3b', 'busui')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                  subFilter3B === 'busui'
+                    ? 'bg-violet-700 text-white border-violet-700'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-violet-50 hover:border-violet-300'
+                }`}
+              >
+                <span>Busui (Ibu Menyusui)</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  subFilter3B === 'busui' ? 'bg-white text-violet-800' : 'bg-violet-100 text-violet-800'
+                }`}>
+                  {summary3B.pillCounts.busuiTotal}
+                </span>
+              </button>
+            </div>
+
+            {subFilter3B !== 'semua' && (
+              <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
+                Menampilkan Posyandu dengan sasaran {subFilter3B === 'balita' ? 'Balita' : subFilter3B === 'bumil' ? 'Bumil' : 'Busui'} &gt; 0
+              </span>
+            )}
+          </div>
+
+          {/* 5 Kartu Rekap Real-Time Khusus Sasaran 3B */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Total Posyandu Aktif
+              </span>
+              <div className="text-2xl font-bold text-slate-900 tracking-tight font-mono">
+                {summary3B.totalPosyanduAktif}{' '}
+                <span className="text-xs font-sans font-normal text-slate-500">Titik</span>
+              </div>
+            </div>
+
+            <div className={`bg-white rounded-lg p-4 flex flex-col justify-between space-y-1 transition ${
+              subFilter3B === 'balita'
+                ? 'border-2 border-sky-600 bg-sky-50/40'
+                : subFilter3B !== 'semua'
+                ? 'border border-slate-200 opacity-55'
+                : 'border border-slate-200'
+            }`}>
+              <span className="text-[11px] font-semibold text-sky-800 uppercase tracking-wider block">
+                Total Balita
+              </span>
+              <div className="text-2xl font-bold text-slate-900 tracking-tight font-mono">
+                {summary3B.totalBalita.toLocaleString('id-ID')}{' '}
+                <span className="text-xs font-sans font-semibold text-slate-600">
+                  (L: {summary3B.balitaL.toLocaleString('id-ID')} · P: {summary3B.balitaP.toLocaleString('id-ID')})
+                </span>
+              </div>
+            </div>
+
+            <div className={`bg-white rounded-lg p-4 flex flex-col justify-between space-y-1 transition ${
+              subFilter3B === 'bumil'
+                ? 'border-2 border-rose-600 bg-rose-50/40'
+                : subFilter3B !== 'semua'
+                ? 'border border-slate-200 opacity-55'
+                : 'border border-slate-200'
+            }`}>
+              <span className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider block">
+                Total Ibu Hamil (Bumil)
+              </span>
+              <div className="text-2xl font-bold text-slate-900 tracking-tight font-mono">
+                {summary3B.totalBumil.toLocaleString('id-ID')}{' '}
+                <span className="text-xs font-sans font-normal text-slate-500">Orang</span>
+              </div>
+            </div>
+
+            <div className={`bg-white rounded-lg p-4 flex flex-col justify-between space-y-1 transition ${
+              subFilter3B === 'busui'
+                ? 'border-2 border-violet-600 bg-violet-50/40'
+                : subFilter3B !== 'semua'
+                ? 'border border-slate-200 opacity-55'
+                : 'border border-slate-200'
+            }`}>
+              <span className="text-[11px] font-semibold text-violet-800 uppercase tracking-wider block">
+                Total Ibu Menyusui (Busui)
+              </span>
+              <div className="text-2xl font-bold text-slate-900 tracking-tight font-mono">
+                {summary3B.totalBusui.toLocaleString('id-ID')}{' '}
+                <span className="text-xs font-sans font-normal text-slate-500">Orang</span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border-2 border-teal-700 p-4 flex flex-col justify-between space-y-1">
+              <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider block">
+                Grand Total Porsi 3B
+              </span>
+              <div className="text-2xl font-bold text-teal-900 tracking-tight font-mono">
+                {summary3B.grandTotal.toLocaleString('id-ID')}{' '}
+                <span className="text-xs font-sans font-semibold text-teal-700">
+                  {subFilter3B === 'semua' ? 'Porsi' : `(${subFilter3B.toUpperCase()})`}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+              {mainTab === 'sekolah' ? 'Total Sekolah Aktif' : 'Total Kelompok Aktif'}
+            </span>
+            <div className="text-2xl font-bold text-slate-800 tracking-tight">
+              {stats.totalAktif} <span className="text-xs font-normal text-slate-500">Kelompok</span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+              Total Target Penerima
+            </span>
+            <div className="text-2xl font-bold text-slate-800 tracking-tight">
+              {stats.totalTarget.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500">Penerima Manfaat</span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+              Total Rincian Terisi
+            </span>
+            <div className="text-2xl font-bold text-slate-800 tracking-tight">
+              {stats.totalRincian.toLocaleString('id-ID')} <span className="text-xs font-semibold text-emerald-600">({stats.percentageTerisi}%)</span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between space-y-1 shadow-none">
+            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">
+              Belum Dilengkapi
+            </span>
+            <div className="text-2xl font-bold text-slate-800 tracking-tight">
+              {stats.totalBelumDetail} <span className="text-xs font-normal text-slate-500">Kelompok</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 3. Alert Box Banner */}
       {showAlert && (
@@ -3108,6 +3671,234 @@ const getBnbaCountForGroup = (
       {/* 5. Tabel Data Flat & Compact */}
       {loading ? (
         <TableSkeleton />
+      ) : mainTab === '3b' ? (
+        <div className="bg-white border border-slate-200 rounded-lg shadow-none overflow-hidden transition-opacity duration-300 opacity-100">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap">
+                  <th className="py-3 px-3 text-center w-14">No</th>
+                  <th className="py-3 px-3 min-w-[220px]">Nama Posyandu / Dusun</th>
+                  <th className="py-3 px-3 min-w-[200px]">Rute &amp; PIC Kader</th>
+                  <th className={`py-3 px-3 text-right min-w-[140px] transition ${
+                    subFilter3B === 'balita' ? 'bg-sky-100 text-sky-900 border-x border-sky-300' : ''
+                  }`}>
+                    Balita (L / P)
+                  </th>
+                  <th className={`py-3 px-3 text-right min-w-[100px] transition ${
+                    subFilter3B === 'bumil' ? 'bg-rose-100 text-rose-900 border-x border-rose-300' : ''
+                  }`}>
+                    Bumil
+                  </th>
+                  <th className={`py-3 px-3 text-right min-w-[100px] transition ${
+                    subFilter3B === 'busui' ? 'bg-violet-100 text-violet-900 border-x border-violet-300' : ''
+                  }`}>
+                    Busui
+                  </th>
+                  <th className="py-3 px-3 text-right min-w-[130px]">Total Porsi 3B</th>
+                  <th className="py-3 px-3 text-center min-w-[155px]">Audit NIK</th>
+                  <th className="py-3 px-3 text-center min-w-[210px]">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
+                {filteredRows.length > 0 ? (
+                  filteredRows.slice(0, perPage).map((row, idx) => {
+                    const b3 = posyandu3BMap.get(row.id) || {
+                      balitaL: 0,
+                      balitaP: 0,
+                      balita: 0,
+                      bumil: 0,
+                      busui: 0,
+                      total3B: row.totalTarget,
+                      source: 'target' as const
+                    }
+                    const ruteVal = row.rute || getRuteSekolah(row.nama)
+
+                    return (
+                      <tr key={row.id} className={`hover:bg-slate-50 transition duration-150 whitespace-nowrap ${row.status === 'Non-Aktif' ? 'opacity-60 bg-slate-50' : ''}`}>
+                        <td className="py-3 px-3 text-center font-bold text-slate-700">
+                          <div className="flex items-center justify-center gap-1">
+                            <div className="flex flex-col items-center justify-center -my-1">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveRow(idx, 'up')}
+                                disabled={idx === 0 || isReordering}
+                                title="Pindah urutan ke atas"
+                                className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed rounded"
+                              >
+                                <ChevronUp size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveRow(idx, 'down')}
+                                disabled={idx === filteredRows.length - 1 || isReordering}
+                                title="Pindah urutan ke bawah"
+                                className="p-0.5 text-slate-400 hover:text-slate-900 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed rounded"
+                              >
+                                <ChevronDown size={13} />
+                              </button>
+                            </div>
+                            <span>{idx + 1}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-slate-900">{row.nama}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500">
+                            <span className="font-mono">[{row.npsnReg}]</span>
+                            <span>·</span>
+                            <span>{row.kelDesa !== '-' ? row.kelDesa : row.alamat}</span>
+                            {row.status === 'Non-Aktif' && (
+                              <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 font-semibold">Non-Aktif</span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                              ruteVal.includes('Kanan')
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                            }`}>
+                              {ruteVal}
+                            </span>
+                            <span className="font-semibold text-slate-800">{row.pimpinan}</span>
+                          </div>
+                          {row.hp && row.hp !== '-' && (
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">{row.hp}</div>
+                          )}
+                        </td>
+
+                        <td className={`py-3 px-3 text-right font-mono transition ${
+                          subFilter3B === 'balita' ? 'bg-sky-50 text-sky-900 font-bold border-x border-sky-200' : 'text-slate-800'
+                        }`}>
+                          <div className="font-bold">{b3.balita.toLocaleString('id-ID')}</div>
+                          <div className="text-[10px] text-slate-500">
+                            L: {b3.balitaL} / P: {b3.balitaP}
+                          </div>
+                        </td>
+
+                        <td className={`py-3 px-3 text-right font-mono transition ${
+                          subFilter3B === 'bumil' ? 'bg-rose-50 text-rose-900 font-extrabold border-x border-rose-200' : 'text-slate-800 font-semibold'
+                        }`}>
+                          {b3.bumil.toLocaleString('id-ID')}
+                        </td>
+
+                        <td className={`py-3 px-3 text-right font-mono transition ${
+                          subFilter3B === 'busui' ? 'bg-violet-50 text-violet-900 font-extrabold border-x border-violet-200' : 'text-slate-800 font-semibold'
+                        }`}>
+                          {b3.busui.toLocaleString('id-ID')}
+                        </td>
+
+                        <td className="py-3 px-3 text-right font-mono">
+                          <div className="font-bold text-slate-900">{b3.total3B.toLocaleString('id-ID')} Porsi</div>
+                          <div className="text-[10px] font-sans text-slate-500">
+                            {b3.source === 'bnba' ? `BNBA (${row.rincianTerisi}/${row.totalTarget})` : `Target Master`}
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3 text-center">
+                          {renderNikAuditBadge(row)}
+                        </td>
+
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenBnbaModal(row)}
+                              className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1.5 rounded transition cursor-pointer"
+                            >
+                              <UserPlus size={12} />
+                              <span>Lihat Rincian BNBA ({row.rincianTerisi})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditClick(row)}
+                              title="Edit Posyandu"
+                              className="p-1.5 text-slate-600 hover:bg-slate-200 rounded transition cursor-pointer"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteClick(row)}
+                              title="Hapus Posyandu"
+                              className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={9} className="py-10 text-center text-slate-400 font-medium">
+                      {loading ? 'Memuat data Posyandu 3B dari database Supabase...' : 'Tidak ada Posyandu 3B yang sesuai dengan filter.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {filteredRows.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-100 border-t-2 border-slate-300 text-slate-900 font-bold text-xs whitespace-nowrap">
+                    <td colSpan={3} className="py-3 px-3 text-right uppercase tracking-wider text-[11px]">
+                      Total Rekap ({filteredRows.length} Posyandu):
+                    </td>
+                    <td className={`py-3 px-3 text-right font-mono ${
+                      subFilter3B === 'balita' ? 'bg-sky-100 text-sky-900 border-x border-sky-300' : ''
+                    }`}>
+                      <div>{summary3B.totalBalita.toLocaleString('id-ID')}</div>
+                      <div className="text-[10px] font-normal text-slate-600">
+                        L: {summary3B.balitaL} / P: {summary3B.balitaP}
+                      </div>
+                    </td>
+                    <td className={`py-3 px-3 text-right font-mono ${
+                      subFilter3B === 'bumil' ? 'bg-rose-100 text-rose-900 border-x border-rose-300' : ''
+                    }`}>
+                      {summary3B.totalBumil.toLocaleString('id-ID')}
+                    </td>
+                    <td className={`py-3 px-3 text-right font-mono ${
+                      subFilter3B === 'busui' ? 'bg-violet-100 text-violet-900 border-x border-violet-300' : ''
+                    }`}>
+                      {summary3B.totalBusui.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono text-teal-900">
+                      {summary3B.grandTotal.toLocaleString('id-ID')} Porsi
+                    </td>
+                    <td colSpan={2} className="py-3 px-3" />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+
+          {/* Footer Pagination */}
+          <div className="p-3 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 font-medium">
+            <div>
+              Menampilkan 1-{Math.min(filteredRows.length, perPage)} dari {filteredRows.length} Posyandu 3B
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 mr-3">
+                <label className="text-xs text-slate-500">Tampilkan:</label>
+                <select
+                  value={perPage}
+                  onChange={(e) => setPerPage(Number(e.target.value))}
+                  className="px-2 py-1 border border-slate-300 rounded-md text-xs font-medium bg-white cursor-pointer"
+                >
+                  <option value={10}>10 baris</option>
+                  <option value={20}>20 baris</option>
+                  <option value={30}>30 baris</option>
+                  <option value={50}>50 baris</option>
+                  <option value={9999}>Semua</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-lg shadow-none overflow-hidden transition-opacity duration-300 opacity-100">
           <div className="overflow-x-auto scrollbar-thin">
@@ -3252,46 +4043,7 @@ const getBnbaCountForGroup = (
                       </td>
 
                       <td className="py-3 px-3 text-center">
-                        {(() => {
-                          const auditData = kpmNikAuditMap.get(row.id)
-                          if (!auditData || auditData.totalBnba === 0) {
-                            return (
-                              <span className="px-2.5 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
-                                ⚪ Belum Ada BNBA
-                              </span>
-                            )
-                          }
-                          if (auditData.problemCount === 0) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => setActiveAuditGroupModal(row)}
-                                className="px-2.5 py-1 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs hover:bg-emerald-200 cursor-pointer transition flex items-center justify-center gap-1 mx-auto"
-                                title="Klik untuk membuka Laporan Audit NIK 100% Valid"
-                              >
-                                <span>✅ 100% Valid</span>
-                              </button>
-                            )
-                          }
-
-                          let pillText = `⚠️ ${auditData.problemCount} NIK Perlu Cek`
-                          if (auditData.duplicateCount > 0 && auditData.tempZerosCount === 0) {
-                            pillText = `⚠️ ${auditData.duplicateCount} Duplikat`
-                          } else if (auditData.tempZerosCount > 0 && auditData.duplicateCount === 0) {
-                            pillText = `⚠️ ${auditData.tempZerosCount} Ujung 0000`
-                          }
-
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => setActiveAuditGroupModal(row)}
-                              className="px-2.5 py-1 rounded text-[10px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs cursor-pointer transition flex items-center justify-center gap-1.5 mx-auto animate-pulse"
-                              title="Klik untuk membuka Laporan Anomali & Masalah NIK"
-                            >
-                              <span>{pillText}</span>
-                            </button>
-                          )
-                        })()}
+                        {renderNikAuditBadge(row)}
                       </td>
 
                       <td className="py-3 px-3 text-center">
@@ -3975,7 +4727,7 @@ const getBnbaCountForGroup = (
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">Daftar penerima manfaat By Name By Address terverifikasi.</p>
               </div>
-              <button onClick={() => { setActiveBnbaGroup(null); loadData(); }} className="text-slate-400 hover:text-slate-600 p-1">
+              <button onClick={() => { setActiveBnbaGroup(null); setBnbaCategoryTab('semua'); loadData(); }} className="text-slate-400 hover:text-slate-600 p-1">
                 <X size={18} />
               </button>
             </div>
@@ -4050,19 +4802,77 @@ const getBnbaCountForGroup = (
               </div>
             )}
 
-            <div className="p-3 border-b border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-xs font-semibold text-slate-700">
-                Terisi: <strong className="text-slate-900">{bnbaList.length}</strong> / Target: <strong className="text-slate-900">{activeBnbaGroup.totalTarget}</strong>
-              </div>
+            <div className="p-3 border-b border-slate-200 bg-white flex flex-col gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-xs font-semibold text-slate-700 mr-1">
+                    Terisi: <strong className="text-slate-900">{bnbaList.length}</strong> / Target: <strong className="text-slate-900">{activeBnbaGroup.totalTarget}</strong>
+                    {isPosyandu3BItem(activeBnbaGroup) && bnbaCategoryTab !== 'semua' && (
+                      <span className="ml-2 text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        Tampil: {filteredBnbaList.length}
+                      </span>
+                    )}
+                  </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={bnbaSearch}
-                  onChange={(e) => setBnbaSearch(e.target.value)}
-                  placeholder="Cari NIK / Nama..."
-                  className="px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white"
-                />
+                  {/* Tab Filter Internal 3B di Modal Rincian BNBA */}
+                  {isPosyandu3BItem(activeBnbaGroup) && (
+                    <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => { setBnbaCategoryTab('semua'); setSelectedBnbaIds([]); }}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                          bnbaCategoryTab === 'semua'
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-700 hover:bg-white'
+                        }`}
+                      >
+                        Semua ({bnbaCategoryCounts.total})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setBnbaCategoryTab('balita'); setSelectedBnbaIds([]); }}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                          bnbaCategoryTab === 'balita'
+                            ? 'bg-sky-700 text-white'
+                            : 'text-slate-700 hover:bg-white'
+                        }`}
+                      >
+                        Balita ({bnbaCategoryCounts.balita})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setBnbaCategoryTab('bumil'); setSelectedBnbaIds([]); }}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                          bnbaCategoryTab === 'bumil'
+                            ? 'bg-rose-700 text-white'
+                            : 'text-slate-700 hover:bg-white'
+                        }`}
+                      >
+                        Bumil ({bnbaCategoryCounts.bumil})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setBnbaCategoryTab('busui'); setSelectedBnbaIds([]); }}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                          bnbaCategoryTab === 'busui'
+                            ? 'bg-violet-700 text-white'
+                            : 'text-slate-700 hover:bg-white'
+                        }`}
+                      >
+                        Busui ({bnbaCategoryCounts.busui})
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={bnbaSearch}
+                    onChange={(e) => setBnbaSearch(e.target.value)}
+                    placeholder="Cari NIK / Nama..."
+                    className="px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white"
+                  />
 
                 {/* Hidden File Input for Excel Import */}
                 <input
@@ -4139,6 +4949,7 @@ const getBnbaCountForGroup = (
                 >
                   <UserPlus size={13} /> + Tambah BNBA
                 </button>
+              </div>
               </div>
             </div>
 
@@ -5033,5 +5844,13 @@ const getBnbaCountForGroup = (
         </div>
       )}
     </div>
+  )
+}
+
+export default function KelompokPenerimaManfaatPage() {
+  return (
+    <Suspense fallback={<TableSkeleton />}>
+      <KelompokPenerimaManfaatContent />
+    </Suspense>
   )
 }
