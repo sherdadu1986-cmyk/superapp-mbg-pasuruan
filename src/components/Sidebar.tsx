@@ -9,6 +9,7 @@ import {
   Users, 
   UtensilsCrossed, 
   Camera,
+  ClipboardCheck,
   WalletCards 
 } from 'lucide-react'
 
@@ -69,6 +70,12 @@ export function Sidebar({ className = '', onItemClick }: SidebarProps) {
           icon: <Camera size={18} className="text-purple-600" />,
           path: '/foto-timemark',
           active: pathname === '/foto-timemark'
+        },
+        {
+          name: 'Laporan Relawan',
+          icon: <ClipboardCheck size={18} className="text-teal-600" />,
+          path: '/laporan-relawan',
+          active: pathname === '/laporan-relawan' || pathname?.startsWith('/laporan-relawan/')
         }
       ]
     },
