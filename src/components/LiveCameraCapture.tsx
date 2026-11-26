@@ -285,7 +285,7 @@ export default function LiveCameraCapture({
       aria-modal="true"
       aria-label="Kamera Laporan Relawan Langsung"
     >
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col my-auto">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-3xl max-w-full overflow-hidden flex flex-col my-auto">
         {/* Top Modal Header */}
         <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-2 bg-slate-50">
           <div className="flex items-center gap-2 min-w-0">

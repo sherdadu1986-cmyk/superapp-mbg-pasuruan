@@ -5,6 +5,7 @@ export const DIVISI_RELAWAN_OPTIONS = [
   'Divisi Pengolahan / Masak',
   'Divisi Pemorsian / Packing',
   'Divisi Distribusi',
+  'Divisi Cuci Ompreng',
   'Divisi Kebersihan & Sanitasi',
   'Divisi Umum / Keamanan'
 ] as const
@@ -17,6 +18,7 @@ export const DIVISI_FILTER_OPTIONS = [
   { label: 'Pengolahan', value: 'Divisi Pengolahan / Masak' },
   { label: 'Pemorsian', value: 'Divisi Pemorsian / Packing' },
   { label: 'Distribusi', value: 'Divisi Distribusi' },
+  { label: 'Cuci Ompreng', value: 'Divisi Cuci Ompreng' },
   { label: 'Kebersihan', value: 'Divisi Kebersihan & Sanitasi' },
   { label: 'Umum', value: 'Divisi Umum / Keamanan' }
 ] as const
