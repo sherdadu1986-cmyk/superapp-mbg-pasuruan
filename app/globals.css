@@ -68,6 +68,14 @@ body {
   border-radius: inherit;
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media print {
   /* Sembunyikan navbar, sidebar, footer, dan tombol interaksi */
   header,

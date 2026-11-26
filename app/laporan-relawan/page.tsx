@@ -5,7 +5,6 @@ import {
   Camera,
   MapPin,
   Clock,
-  Calendar,
   RefreshCw,
   Download,
   Share2,
@@ -107,11 +106,13 @@ export default function LaporanRelawanPage() {
   const [mapLabel, setMapLabel] = useState<string>('Menunggu GPS')
   const [isRefreshingGps, setIsRefreshingGps] = useState<boolean>(false)
 
-  // Locked Verification Photo Code (system-generated)
+  // Locked Verification Photo Code & Anti-Duplicate Save Marker
   const [kodeFoto, setKodeFoto] = useState<string>(() => generateTimemarkCode('SPPG'))
+  const [savedKodeFoto, setSavedKodeFoto] = useState<string | null>(null)
 
   // ─── Action & Save State ─────────────────────────────────
   const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [isSharingWa, setIsSharingWa] = useState<boolean>(false)
   const [isRendering, setIsRendering] = useState<boolean>(false)
   const [lastSavedRecord, setLastSavedRecord] = useState<LaporanRelawanRecord | null>(null)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
@@ -131,9 +132,14 @@ export default function LaporanRelawanPage() {
   const [lightboxItem, setLightboxItem] = useState<LaporanRelawanRecord | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // ─── Canvas & Preloaded Asset Refs ───────────────────────
+  // ─── Refs for Focus/Scroll Guidance & Canvas ─────────────
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const archiveSectionRef = useRef<HTMLElement | null>(null)
+  const gpsBannerRef = useRef<HTMLDivElement | null>(null)
+  const divisiSelectRef = useRef<HTMLSelectElement | null>(null)
+  const namaInputRef = useRef<HTMLInputElement | null>(null)
+  const cameraTriggerRef = useRef<HTMLButtonElement | null>(null)
+
   const bgnLogoRef = useRef<HTMLImageElement | null>(null)
   const regionalLogoRef = useRef<HTMLImageElement | null>(null)
   const mapFallbackRef = useRef<HTMLImageElement | null>(null)
@@ -230,6 +236,15 @@ export default function LaporanRelawanPage() {
   }, [gpsCoords])
 
   // ─── Initial Load: Live Clock (1s), GPS, Font, Relawan, Archive
+  const loadArchiveData = useCallback(async (silent = false) => {
+    if (!silent) setLoadingArchive(true)
+    const res = await fetchLaporanRelawanList()
+    setArchiveRecords(res.records)
+    setCloudReady(res.cloudReady)
+    setCloudWarning(res.cloudError || '')
+    if (!silent) setLoadingArchive(false)
+  }, [])
+
   useEffect(() => {
     setJakartaNow(getJakartaNowParts(new Date()))
     const clockTimer = setInterval(() => {
@@ -251,25 +266,15 @@ export default function LaporanRelawanPage() {
       .then((list) => setRelawanOptions(list || []))
       .catch(() => {})
 
-    loadArchiveData()
+    loadArchiveData(false)
 
     return () => clearInterval(clockTimer)
-  }, [])
+  }, [loadArchiveData])
 
-  // Trigger GPS request on mount
   useEffect(() => {
     requestRealTimeGps(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const loadArchiveData = async () => {
-    setLoadingArchive(true)
-    const res = await fetchLaporanRelawanList()
-    setArchiveRecords(res.records)
-    setCloudReady(res.cloudReady)
-    setCloudWarning(res.cloudError || '')
-    setLoadingArchive(false)
-  }
 
   // ─── Render Collage + Tamper-Proof Timemark Watermark ───
   const renderCollageCanvas = useCallback(async () => {
@@ -371,6 +376,15 @@ export default function LaporanRelawanPage() {
     renderCollageCanvas()
   }, [renderCollageCanvas])
 
+  // Helper to invalidate current saved state when report payload changes
+  const resetSavedVersionIfEdited = useCallback(() => {
+    if (savedKodeFoto !== null) {
+      setKodeFoto(generateTimemarkCode('SPPG'))
+      setSavedKodeFoto(null)
+      setLastSavedRecord(null)
+    }
+  }, [savedKodeFoto])
+
   // ─── Multi-Shot Camera Handlers ──────────────────────────
   const handleCameraShot = (item: CapturedPhotoItem) => {
     if (!gpsLocked) {
@@ -382,12 +396,15 @@ export default function LaporanRelawanPage() {
       return [...prev, item]
     })
     setKodeFoto(generateTimemarkCode('SPPG'))
+    setSavedKodeFoto(null)
     setLastSavedRecord(null)
     showToast(`Foto #${Math.min(6, photos.length + 1)} berhasil dijepret!`, 'success')
   }
 
   const handleRemovePhoto = (id: string) => {
     setPhotos((prev) => prev.filter((p) => p.id !== id))
+    setKodeFoto(generateTimemarkCode('SPPG'))
+    setSavedKodeFoto(null)
     setLastSavedRecord(null)
   }
 
@@ -401,11 +418,15 @@ export default function LaporanRelawanPage() {
       copy[nextIdx] = temp
       return copy
     })
+    setKodeFoto(generateTimemarkCode('SPPG'))
+    setSavedKodeFoto(null)
     setLastSavedRecord(null)
   }
 
   const handleClearPhotos = () => {
     setPhotos([])
+    setKodeFoto(generateTimemarkCode('SPPG'))
+    setSavedKodeFoto(null)
     setLastSavedRecord(null)
   }
 
@@ -437,73 +458,108 @@ export default function LaporanRelawanPage() {
     document.body.removeChild(link)
   }
 
-  // ─── Action 1: Simpan Laporan ke Web (Locked to Live GPS) ─
-  const handleSaveToWeb = async () => {
-    if (!gpsLocked) {
-      showToast(
-        'Simpan ditolak: GPS wajib aktif dan terkunci terlebih dahulu.',
-        'error'
-      )
-      return
-    }
+  // ─── Mandatory Validation Before Save / Share ────────────
+  const validateBeforeSaveOrShare = (): boolean => {
     if (!divisi) {
-      showToast('Pilih Divisi terlebih dahulu.', 'warning')
-      return
+      showToast('Pilih Divisi Relawan terlebih dahulu.', 'warning')
+      divisiSelectRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      divisiSelectRef.current?.focus()
+      return false
     }
     if (!namaRelawan.trim()) {
       showToast('Isi Nama Relawan / PIC Shift terlebih dahulu.', 'warning')
-      return
+      namaInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      namaInputRef.current?.focus()
+      return false
     }
     if (photos.length === 0) {
-      showToast('Ambil minimal 1 foto langsung dari kamera sebelum menyimpan.', 'warning')
+      showToast('Ambil minimal 1 foto langsung dari kamera sebelum melanjutkan.', 'warning')
+      cameraTriggerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      cameraTriggerRef.current?.focus()
+      return false
+    }
+    if (!gpsLocked || !gpsCoords) {
+      showToast(
+        'GPS belum terkunci! Aktifkan GPS perangkat & izinkan lokasi sebelum menyimpan.',
+        'error'
+      )
+      gpsBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return false
+    }
+    return true
+  }
+
+  // ─── Unified Anti-Duplicate Save Engine ──────────────────
+  const persistCurrentReportIfNeeded = async (): Promise<{
+    record: LaporanRelawanRecord
+    blob: Blob
+    newlySaved: boolean
+  }> => {
+    await renderCollageCanvas()
+    const blob = await getCanvasJpegBlob(0.92)
+
+    if (savedKodeFoto === kodeFoto && lastSavedRecord) {
+      return { record: lastSavedRecord, blob, newlySaved: false }
+    }
+
+    const fallbackDataUrl = canvasRef.current?.toDataURL('image/jpeg', 0.78) || ''
+    const lockedNow = getJakartaNowParts(new Date())
+
+    const result = await saveLaporanRelawan({
+      tanggal_laporan: lockedNow.tanggalISO,
+      waktu_laporan: lockedNow.timeStr,
+      divisi,
+      nama_relawan: namaRelawan,
+      keterangan,
+      lokasi_alamat: address || `Koordinat GPS Terverifikasi (${gpsCoords})`,
+      koordinat_gps: gpsCoords,
+      kode_foto: kodeFoto,
+      imageBlob: blob,
+      fallbackDataUrl
+    })
+
+    setSavedKodeFoto(result.record.kode_foto || kodeFoto)
+    setLastSavedRecord(result.record)
+    setHighlightedId(result.record.id)
+    setArchiveRecords((prev) => [
+      result.record,
+      ...prev.filter((r) => r.id !== result.record.id && r.kode_foto !== result.record.kode_foto)
+    ])
+
+    if (result.savedToCloud && result.storageUploaded) {
+      setCloudReady(true)
+      setCloudWarning('')
+      // Silent refetch so archive strictly reflects latest Supabase state
+      loadArchiveData(true)
+    } else if (result.warningMessage && isSupabaseMissingInfraError(result.warningMessage)) {
+      setCloudReady(false)
+      setCloudWarning(result.warningMessage)
+    }
+
+    return { record: result.record, blob, newlySaved: true }
+  }
+
+  // ─── Action 1: Simpan Laporan ke Web ─────────────────────
+  const handleSaveToWeb = async () => {
+    if (!validateBeforeSaveOrShare()) return
+
+    if (savedKodeFoto === kodeFoto && lastSavedRecord) {
+      showToast(`Laporan ${kodeFoto} sudah tersimpan di Arsip Web (anti-duplikat).`, 'success')
+      archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       return
     }
 
     setIsSaving(true)
     try {
-      await renderCollageCanvas()
-      const blob = await getCanvasJpegBlob(0.92)
-      const fallbackDataUrl = canvasRef.current?.toDataURL('image/jpeg', 0.78) || ''
-      const lockedNow = getJakartaNowParts(new Date())
-
-      const result = await saveLaporanRelawan({
-        tanggal_laporan: lockedNow.tanggalISO,
-        waktu_laporan: lockedNow.timeStr,
-        divisi,
-        nama_relawan: namaRelawan,
-        keterangan,
-        lokasi_alamat: address || `Koordinat GPS Terverifikasi (${gpsCoords})`,
-        koordinat_gps: gpsCoords,
-        kode_foto: kodeFoto,
-        imageBlob: blob,
-        fallbackDataUrl
-      })
-
-      setLastSavedRecord(result.record)
-      setArchiveRecords((prev) => [
-        result.record,
-        ...prev.filter((r) => r.id !== result.record.id)
-      ])
-      setHighlightedId(result.record.id)
-
-      if (result.savedToCloud && result.storageUploaded) {
-        setCloudReady(true)
-        setCloudWarning('')
-        showToast('Laporan kolase real-time berhasil disimpan ke web & Supabase Storage!', 'success')
+      const { record } = await persistCurrentReportIfNeeded()
+      if (!record.isLocalFallback) {
+        showToast('Laporan kolase berhasil disimpan ke Arsip Web & Supabase Storage!', 'success')
       } else {
-        if (result.warningMessage && isSupabaseMissingInfraError(result.warningMessage)) {
-          setCloudReady(false)
-          setCloudWarning(result.warningMessage)
-        }
-        showToast(
-          result.warningMessage || 'Laporan tersimpan di riwayat lokal browser.',
-          'warning'
-        )
+        showToast('Laporan tersimpan sementara di cache lokal (Supabase belum siap).', 'warning')
       }
-
       setTimeout(() => {
         archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 250)
+      }, 220)
     } catch (err: any) {
       console.error('Save laporan error:', err)
       showToast(err?.message || 'Gagal menyimpan laporan.', 'error')
@@ -534,31 +590,45 @@ export default function LaporanRelawanPage() {
     }
   }
 
-  // ─── Action 3: Share ke WhatsApp (File API + wa.me Fallback)
+  // ─── Action 3: Auto-Save + Share ke WhatsApp (Anti-Duplikat)
   const handleShareWhatsApp = async (customRecord?: LaporanRelawanRecord) => {
-    if (!customRecord && (!gpsLocked || photos.length === 0)) {
-      showToast('Pastikan GPS aktif dan minimal 1 foto sudah dijepret.', 'warning')
-      return
+    let recordForShare: LaporanRelawanRecord | undefined = customRecord
+    let shareBlob: Blob | null = null
+
+    if (!customRecord) {
+      if (!validateBeforeSaveOrShare()) return
+
+      setIsSharingWa(true)
+      try {
+        const persisted = await persistCurrentReportIfNeeded()
+        recordForShare = persisted.record
+        shareBlob = persisted.blob
+        if (persisted.newlySaved) {
+          showToast('Laporan tersimpan otomatis ke Arsip Web!', 'success')
+        }
+      } catch (err: any) {
+        setIsSharingWa(false)
+        showToast(err?.message || 'Gagal menyimpan laporan sebelum share WhatsApp.', 'error')
+        return
+      }
     }
 
-    const targetDivisi = customRecord?.divisi || divisi
-    const targetRelawan = customRecord?.nama_relawan || namaRelawan.trim() || '-'
-    const targetDate = customRecord
-      ? formatShortIndoDate(customRecord.tanggal_laporan)
+    const targetDivisi = recordForShare?.divisi || divisi
+    const targetRelawan = recordForShare?.nama_relawan || namaRelawan.trim() || '-'
+    const targetDate = recordForShare
+      ? formatShortIndoDate(recordForShare.tanggal_laporan)
       : jakartaNow.dateStr
-    const targetDateISO = customRecord?.tanggal_laporan || jakartaNow.tanggalISO
-    const targetTime = customRecord?.waktu_laporan || jakartaNow.timeStr
+    const targetDateISO = recordForShare?.tanggal_laporan || jakartaNow.tanggalISO
+    const targetTime = recordForShare?.waktu_laporan || jakartaNow.timeStr
     const targetAddress =
-      customRecord?.lokasi_alamat || address || `Koordinat GPS (${gpsCoords})`
-    const targetCoords = customRecord?.koordinat_gps || gpsCoords
-    const targetKet = customRecord?.keterangan || keterangan.trim() || '-'
-    const targetCode = customRecord?.kode_foto || kodeFoto
+      recordForShare?.lokasi_alamat || address || `Koordinat GPS (${gpsCoords})`
+    const targetCoords = recordForShare?.koordinat_gps || gpsCoords
+    const targetKet = recordForShare?.keterangan || keterangan.trim() || '-'
+    const targetCode = recordForShare?.kode_foto || kodeFoto
     const targetUrl =
-      customRecord?.image_url && !customRecord.image_url.startsWith('data:')
-        ? customRecord.image_url
-        : lastSavedRecord?.image_url && !lastSavedRecord.image_url.startsWith('data:')
-          ? lastSavedRecord.image_url
-          : ''
+      recordForShare?.image_url && !recordForShare.image_url.startsWith('data:')
+        ? recordForShare.image_url
+        : ''
 
     const filename = buildLaporanFilename(targetDivisi, targetDateISO, targetTime)
     const lines = [
@@ -573,47 +643,56 @@ export default function LaporanRelawanPage() {
     if (targetUrl) {
       lines.push(`Foto Kolase Web: ${targetUrl}`)
     }
-    const shareText = lines.join('\n')
+    const captionWA = lines.join('\n')
 
     try {
-      let blob: Blob | null = null
-      if (customRecord?.image_url) {
-        const res = await fetch(customRecord.image_url)
-        if (res.ok) blob = await res.blob()
-      } else {
-        blob = await getCanvasJpegBlob(0.92)
+      if (!shareBlob && recordForShare?.image_url) {
+        const res = await fetch(recordForShare.image_url)
+        if (res.ok) shareBlob = await res.blob()
       }
 
-      if (blob && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-        const file = new File([blob], filename, { type: 'image/jpeg' })
+      if (shareBlob && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        const jpgFile = new File([shareBlob], filename, { type: 'image/jpeg' })
         const canShareFiles =
-          typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })
+          typeof navigator.canShare === 'function' && navigator.canShare({ files: [jpgFile] })
 
         if (canShareFiles) {
           await navigator.share({
-            files: [file],
-            title: `Laporan ${targetDivisi} - ${targetRelawan}`,
-            text: shareText
+            files: [jpgFile],
+            title: 'Laporan Relawan SPPG',
+            text: captionWA
           })
-          showToast('Berhasil membuka menu share file WhatsApp!', 'success')
+          setIsSharingWa(false)
+          showToast('Berhasil membagikan kolase laporan ke WhatsApp!', 'success')
           return
         }
       }
     } catch (err: any) {
+      setIsSharingWa(false)
       if (err?.name === 'AbortError') return
-      console.warn('Web Share API fallback to wa.me:', err)
+      console.warn('Web Share API fallback to desktop download + wa.me:', err)
     }
 
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
+    // Desktop fallback: auto-download JPG to computer + open wa.me summary with web link
+    try {
+      if (shareBlob) {
+        const objectUrl = URL.createObjectURL(shareBlob)
+        triggerDownloadUrl(objectUrl, filename)
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 3000)
+      } else if (!customRecord && canvasRef.current) {
+        triggerDownloadUrl(canvasRef.current.toDataURL('image/jpeg', 0.95), filename)
+      }
+    } catch {}
+
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(captionWA)}`
     window.open(waUrl, '_blank', 'noopener,noreferrer')
-    if (!targetUrl) {
-      showToast(
-        'Membuka WhatsApp Web. Simpan laporan ke web terlebih dahulu agar tautan foto otomatis ikut terkirim.',
-        'warning'
-      )
-    } else {
-      showToast('Membuka WhatsApp dengan ringkasan laporan & tautan foto web.', 'success')
-    }
+    setIsSharingWa(false)
+    showToast(
+      customRecord
+        ? 'JPG diunduh & WhatsApp Web dibuka.'
+        : 'Laporan disimpan ke Arsip Web, JPG diunduh, & WhatsApp dibuka.',
+      'success'
+    )
   }
 
   // ─── Archive Actions ─────────────────────────────────────
@@ -645,6 +724,10 @@ export default function LaporanRelawanPage() {
     if (ok) {
       setArchiveRecords((prev) => prev.filter((r) => r.id !== item.id))
       if (lightboxItem?.id === item.id) setLightboxItem(null)
+      if (lastSavedRecord?.id === item.id) {
+        setLastSavedRecord(null)
+        setSavedKodeFoto(null)
+      }
       showToast('Laporan berhasil dihapus.', 'success')
     } else {
       showToast('Gagal menghapus laporan dari Supabase.', 'error')
@@ -680,25 +763,28 @@ export default function LaporanRelawanPage() {
     })
   }, [archiveRecords, filterDate, filterDivisi, searchQuery])
 
+  const isAlreadySaved = savedKodeFoto === kodeFoto && Boolean(lastSavedRecord)
+  const busyAction = isSaving || isSharingWa
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-14">
-      {/* ─── TOP HEADER (Tamper-Proof Light ERP) ──────────────── */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 md:p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold uppercase tracking-wider">
+    <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 pb-10 md:pb-14">
+      {/* ─── TOP HEADER: COMPACT ON MOBILE, FULL KPI ON DESKTOP ─ */}
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 md:p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="hidden md:inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold uppercase tracking-wider">
               <Lock size={12} />
               <span>Kamera Langsung &amp; Kunci GPS Real-Time SPPG</span>
             </div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-lg md:text-2xl font-bold text-slate-900 tracking-tight">
               Laporan Kerja Harian Relawan
             </h1>
-            <p className="text-xs md:text-sm text-slate-600 max-w-2xl">
-              Ambil 1–6 foto langsung menggunakan kamera perangkat dengan jam WIB &amp; koordinat GPS presisi tinggi yang dikunci otomatis oleh sistem (tanpa unggah galeri dan tanpa edit manual).
+            <p className="hidden md:block text-sm text-slate-600 max-w-2xl">
+              Ambil 1–6 foto langsung menggunakan kamera perangkat dengan jam WIB &amp; koordinat GPS yang dikunci otomatis oleh sistem. Klik Share WA untuk otomatis menyimpan ke web sekaligus mengirim ke WhatsApp.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="hidden md:flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => requestRealTimeGps(true)}
@@ -719,20 +805,56 @@ export default function LaporanRelawanPage() {
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 text-xs font-semibold transition cursor-pointer"
             >
               <Images size={14} />
-              <span>Arsip Laporan ({archiveRecords.length})</span>
+              <span>Lihat Arsip ({archiveRecords.length})</span>
             </button>
           </div>
         </div>
 
-        {/* Summary KPI Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-200">
+        {/* MOBILE ONLY: Single Compact Status Strip */}
+        <div className="md:hidden mt-2.5 flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={`inline-flex items-center gap-1.5 font-bold truncate ${
+                gpsLocked ? 'text-emerald-800' : 'text-rose-800'
+              }`}
+            >
+              <span
+                className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                  gpsLocked
+                    ? 'bg-emerald-600'
+                    : gpsStatus === 'searching'
+                      ? 'bg-rose-500 animate-pulse'
+                      : 'bg-rose-600'
+                }`}
+              />
+              <span className="truncate">{gpsLocked ? 'GPS Terkunci' : 'GPS Belum Aktif'}</span>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="font-mono font-bold text-slate-800 shrink-0">
+              {jakartaNow.timeWithSeconds} WIB
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => archiveSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            className="shrink-0 px-2.5 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold text-[11px] cursor-pointer"
+          >
+            Lihat Arsip ({archiveRecords.length})
+          </button>
+        </div>
+
+        {/* DESKTOP ONLY: 4 Full KPI Cards */}
+        <div className="hidden md:grid md:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-200">
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Laporan Hari Ini</p>
             <p className="text-lg font-bold text-slate-900 mt-0.5">{todayCount}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Arsip Web</p>
-            <p className="text-lg font-bold text-slate-900 mt-0.5">{archiveRecords.length}</p>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Divisi Aktif / Total Arsip</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">
+              {activeDivisionsToday}/6 · {archiveRecords.length}
+            </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Jam Sistem WIB</p>
@@ -778,15 +900,18 @@ export default function LaporanRelawanPage() {
           </div>
         </div>
 
-        {/* Strict GPS Blocker Notice when not locked */}
+        {/* Strict GPS Blocker Alert if not locked */}
         {!gpsLocked && (
-          <div className="mt-4 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-2.5 text-xs text-rose-950">
-              <AlertTriangle size={18} className="text-rose-700 shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
+          <div
+            ref={gpsBannerRef}
+            className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+          >
+            <div className="flex items-start gap-2 text-xs text-rose-950">
+              <AlertTriangle size={16} className="text-rose-700 shrink-0 mt-0.5" />
+              <div>
                 <p className="font-bold">GPS Belum Aktif / Izin Lokasi Diperlukan</p>
-                <p className="text-rose-800">
-                  {gpsErrorMessage} Tombol <strong>Cekrek Foto</strong> dan <strong>Simpan Laporan ke Web</strong> dinonaktifkan sampai koordinat GPS asli perangkat terkunci.
+                <p className="text-[11px] text-rose-800">
+                  {gpsErrorMessage} Tombol Cekrek &amp; Simpan terkunci sampai GPS aktif.
                 </p>
               </div>
             </div>
@@ -794,9 +919,9 @@ export default function LaporanRelawanPage() {
               type="button"
               onClick={() => requestRealTimeGps(true)}
               disabled={isRefreshingGps}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+              className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold cursor-pointer disabled:opacity-60"
             >
-              <RefreshCw size={13} className={isRefreshingGps ? 'animate-spin' : ''} />
+              <RefreshCw size={12} className={isRefreshingGps ? 'animate-spin' : ''} />
               <span>Aktifkan / Refresh GPS</span>
             </button>
           </div>
@@ -805,116 +930,127 @@ export default function LaporanRelawanPage() {
 
       {/* Conditional Cloud Setup Notice if migration SQL hasn't been executed */}
       {!cloudReady && cloudWarning && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start gap-2.5">
-            <Database size={18} className="text-amber-700 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-900 space-y-0.5">
-              <p className="font-bold">Database / Bucket Storage Supabase Belum Diinisialisasi</p>
-              <p className="text-amber-800">
-                Jalankan file migrasi <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">supabase/migration_laporan_relawan.sql</code> di Supabase SQL Editor agar laporan tersimpan ke cloud. Sementara ini laporan tetap disimpan aman di cache browser lokal.
-              </p>
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-start gap-2">
+            <Database size={16} className="text-amber-700 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-900">
+              <span className="font-bold">Database / Bucket Storage Supabase Belum Diinisialisasi:</span>{' '}
+              Jalankan <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">supabase/migration_laporan_relawan.sql</code> di Supabase SQL Editor. Data sementara disimpan aman di browser lokal.
             </div>
           </div>
           <button
             type="button"
             onClick={() => {
               navigator.clipboard?.writeText('supabase/migration_laporan_relawan.sql')
-              showToast('Path file migrasi disalin: supabase/migration_laporan_relawan.sql', 'success')
+              showToast('Path file migrasi disalin!', 'success')
             }}
             className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer"
           >
-            <Copy size={13} />
+            <Copy size={12} />
             <span>Salin Path SQL</span>
           </button>
         </div>
       )}
 
-      {/* ─── MAIN WORKSPACE: FORM + LIVE CAMERA CAPTURE + CANVAS ─── */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: FORM INPUT & CAMERA TRIGGER (5 Cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <div className="flex items-center gap-2">
-              <FileText size={18} className="text-blue-700" />
-              <h2 className="text-sm md:text-base font-bold text-slate-900">
-                1. Data Relawan &amp; Kamera Langsung
+      {/* ─── MAIN WORKSPACE: 3-STEP NATURAL MOBILE-FIRST FLOW ───── */}
+      <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-12 md:gap-6 md:items-start">
+        {/* LEFT COLUMN (Steps 1, 2 & Read-Only Location Strip) */}
+        <div className="md:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-xs p-4 md:p-5 space-y-4">
+          {/* LANGKAH 1: IDENTITAS PELAPOR */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-700 text-white text-[11px] font-bold inline-flex items-center justify-center">
+                  1
+                </span>
+                <span>Identitas Pelapor</span>
               </h2>
+              <span className="text-[11px] font-semibold text-slate-500">Wajib diisi</span>
             </div>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-              {photos.length}/6 Foto
-            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-3">
+              {/* Divisi (h-11 touch-friendly) */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Briefcase size={13} className="text-amber-600" />
+                  <span>Divisi Relawan</span>
+                  <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  ref={divisiSelectRef}
+                  value={divisi}
+                  onChange={(e) => {
+                    setDivisi(e.target.value)
+                    resetSavedVersionIfEdited()
+                  }}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-300 bg-white text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                >
+                  {DIVISI_RELAWAN_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Nama Relawan / PIC Shift */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <User size={13} className="text-blue-700" />
+                  <span>Nama Relawan / PIC Shift</span>
+                  <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  ref={namaInputRef}
+                  type="text"
+                  list="relawan-sppg-datalist"
+                  value={namaRelawan}
+                  onChange={(e) => {
+                    setNamaRelawan(e.target.value)
+                    resetSavedVersionIfEdited()
+                  }}
+                  placeholder="Contoh: Budi Santoso"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                />
+                <datalist id="relawan-sppg-datalist">
+                  {relawanOptions.map((r) => (
+                    <option key={r.id} value={r.nama_lengkap}>
+                      {r.divisi}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            {/* Catatan Pekerjaan (Opsional) */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <FileText size={13} className="text-emerald-700" />
+                <span>Catatan Pekerjaan</span>
+                <span className="text-[11px] font-normal text-slate-500">(Opsional)</span>
+              </label>
+              <textarea
+                rows={2}
+                value={keterangan}
+                onChange={(e) => {
+                  setKeterangan(e.target.value)
+                  resetSavedVersionIfEdited()
+                }}
+                placeholder="Selesai pemorsian 3.200 ompreng rute kiri dalam kondisi higienis"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none"
+              />
+            </div>
           </div>
 
-          {/* Dropdown Divisi */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Briefcase size={14} className="text-amber-600" />
-              <span>Divisi Relawan</span>
-              <span className="text-rose-600">*</span>
-            </label>
-            <select
-              value={divisi}
-              onChange={(e) => {
-                setDivisi(e.target.value)
-                setLastSavedRecord(null)
-              }}
-              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
-            >
-              {DIVISI_RELAWAN_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Nama Relawan / PIC Shift */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <User size={14} className="text-blue-700" />
-              <span>Nama Relawan / PIC Shift</span>
-              <span className="text-rose-600">*</span>
-            </label>
-            <input
-              type="text"
-              list="relawan-sppg-datalist"
-              value={namaRelawan}
-              onChange={(e) => setNamaRelawan(e.target.value)}
-              placeholder="Contoh: Siti Aminah / Budi Santoso"
-              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
-            />
-            <datalist id="relawan-sppg-datalist">
-              {relawanOptions.map((r) => (
-                <option key={r.id} value={r.nama_lengkap}>
-                  {r.divisi}
-                </option>
-              ))}
-            </datalist>
-          </div>
-
-          {/* Ringkasan Hasil Pekerjaan */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <FileText size={14} className="text-emerald-700" />
-              <span>Ringkasan Hasil Pekerjaan</span>
-            </label>
-            <textarea
-              rows={2}
-              value={keterangan}
-              onChange={(e) => setKeterangan(e.target.value)}
-              placeholder="Selesai pemorsian 3.200 ompreng rute kiri dalam kondisi higienis"
-              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-none"
-            />
-          </div>
-
-          {/* Live Camera Multi-Shot Trigger (NO File Upload / Gallery) */}
-          <div className="space-y-2.5">
+          {/* LANGKAH 2: AMBIL FOTO KAMERA LANGSUNG (Right below Nama/Catatan) */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <Camera size={14} className="text-indigo-700" />
-                <span>Pengambilan Foto Langsung (1–6 Foto)</span>
-                <span className="text-rose-600">*</span>
-              </span>
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-700 text-white text-[11px] font-bold inline-flex items-center justify-center">
+                  2
+                </span>
+                <span>Ambil Foto Kamera Langsung</span>
+              </h2>
               {photos.length > 0 && (
                 <button
                   type="button"
@@ -927,26 +1063,15 @@ export default function LaporanRelawanPage() {
             </div>
 
             <button
+              ref={cameraTriggerRef}
               type="button"
               onClick={() => setIsCameraOpen(true)}
-              className="w-full flex flex-col items-center justify-center gap-1.5 px-4 py-4 rounded-xl border-2 border-blue-600 bg-blue-700 hover:bg-blue-800 text-white transition text-center shadow-xs cursor-pointer"
+              className="h-12 w-full rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
             >
-              <div className="flex items-center gap-2">
-                <Camera size={20} />
-                <span className="text-sm font-extrabold">
-                  {photos.length === 0
-                    ? 'Buka Kamera Laporan'
-                    : photos.length < 6
-                      ? `Buka Kamera & Tambah Foto (${photos.length}/6)`
-                      : `Kelola / Edit Jepretan Kamera (${photos.length}/6)`}
-                </span>
-              </div>
-              <span className="text-[11px] text-blue-100">
-                Kamera WebRTC multi-cekrek langsung tanpa akses galeri HP
-              </span>
+              <Camera size={19} />
+              <span>Buka Kamera Laporan ({photos.length}/6 Foto)</span>
             </button>
 
-            {/* Thumbnail Strip of Camera Captures */}
             {photos.length > 0 && (
               <div className="grid grid-cols-3 gap-2 pt-1">
                 {photos.map((photo, index) => (
@@ -976,7 +1101,6 @@ export default function LaporanRelawanPage() {
                           type="button"
                           onClick={() => handleMovePhoto(index, -1)}
                           disabled={index === 0}
-                          title="Geser kiri"
                           className="p-1 rounded bg-white/90 hover:bg-white text-slate-800 disabled:opacity-30 shadow cursor-pointer"
                         >
                           <ArrowLeft size={11} />
@@ -985,7 +1109,6 @@ export default function LaporanRelawanPage() {
                           type="button"
                           onClick={() => handleMovePhoto(index, 1)}
                           disabled={index === photos.length - 1}
-                          title="Geser kanan"
                           className="p-1 rounded bg-white/90 hover:bg-white text-slate-800 disabled:opacity-30 shadow cursor-pointer"
                         >
                           <ArrowRight size={11} />
@@ -998,131 +1121,84 @@ export default function LaporanRelawanPage() {
             )}
           </div>
 
-          {/* Read-Only Tamper-Proof Real-Time Lock Panel */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
+          {/* INFO WAKTU & LOKASI RINGKAS (READ-ONLY) */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                <Lock size={14} className="text-blue-700" />
-                <span>Data Waktu &amp; Lokasi (Terkunci Sistem)</span>
-              </span>
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                  gpsLocked
-                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                    : 'bg-rose-100 text-rose-900 border-rose-300'
-                }`}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Lock size={12} className="text-blue-700 shrink-0" />
+                <span className="font-mono font-bold text-slate-900 shrink-0">
+                  {jakartaNow.timeStr} WIB
+                </span>
+                <span className="text-slate-300">·</span>
+                <span className="truncate text-slate-700 font-medium">
+                  {gpsLocked
+                    ? address || `GPS (${gpsCoords})`
+                    : 'Menunggu lokasi GPS aktif...'}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => requestRealTimeGps(true)}
+                disabled={isRefreshingGps}
+                className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-300 text-blue-700 text-[11px] font-bold cursor-pointer disabled:opacity-50"
               >
-                {gpsLocked ? 'READ-ONLY TERKUNCI' : 'MENUNGGU GPS'}
+                <RefreshCw size={11} className={isRefreshingGps ? 'animate-spin' : ''} />
+                <span>Refresh GPS</span>
+              </button>
+            </div>
+
+            {/* Extra read-only coordinates + photo code details */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-200/80 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1 font-mono truncate">
+                <Compass size={11} className="text-slate-400 shrink-0" />
+                <span>{gpsLocked ? gpsCoords : 'Koordinat belum terkunci'}</span>
               </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
-                  <Clock size={10} /> Jam Server WIB
-                </p>
-                <p className="text-xs font-mono font-bold text-slate-900 mt-0.5">
-                  {jakartaNow.timeWithSeconds} WIB
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
-                  <Calendar size={10} /> Tanggal Real-Time
-                </p>
-                <p className="text-xs font-bold text-slate-900 mt-0.5 truncate">
-                  {jakartaNow.dateStr}
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
-                  <MapPin size={10} className="text-rose-600" /> Alamat Lokasi GPS
-                </p>
-                <button
-                  type="button"
-                  onClick={() => requestRealTimeGps(true)}
-                  disabled={isRefreshingGps}
-                  className="text-[10px] font-bold text-blue-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <RefreshCw size={10} className={isRefreshingGps ? 'animate-spin' : ''} />
-                  <span>Refresh GPS</span>
-                </button>
-              </div>
-              <p
-                className={`text-xs mt-1 leading-snug ${
-                  gpsLocked ? 'text-slate-900 font-medium' : 'text-rose-700 font-semibold'
-                }`}
-              >
-                {gpsLocked
-                  ? address || `Koordinat GPS Terverifikasi (${gpsCoords})`
-                  : gpsErrorMessage}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
-                  <Compass size={10} /> Koordinat GPS
-                </p>
-                <p
-                  className={`text-[11px] font-mono mt-0.5 truncate ${
-                    gpsLocked ? 'text-slate-900 font-bold' : 'text-rose-700 font-semibold'
-                  }`}
-                >
-                  {gpsLocked ? gpsCoords : 'Belum Terkunci'}
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
-                  <ShieldCheck size={10} /> Kode Foto
-                </p>
-                <p className="text-[11px] font-mono font-bold text-slate-900 mt-0.5 truncate">
-                  {kodeFoto}
-                </p>
-              </div>
+              <span className="flex items-center gap-1 font-mono font-semibold text-slate-700">
+                <ShieldCheck size={11} className="text-emerald-600 shrink-0" />
+                <span>{kodeFoto}</span>
+              </span>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: LIVE COLLAGE CANVAS & ACTIONS (7 Cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
-            <div className="flex items-center gap-2">
-              <Camera size={18} className="text-indigo-700" />
-              <h2 className="text-sm md:text-base font-bold text-slate-900">
-                2. Pratinjau Kolase &amp; Watermark Timemark
-              </h2>
-            </div>
+        {/* RIGHT COLUMN (Step 3 — Pratinjau Kolase & Desktop Action Bar) */}
+        <div className="md:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-xs p-4 md:p-5 space-y-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
+            <h2 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-700 text-white text-[11px] font-bold inline-flex items-center justify-center">
+                3
+              </span>
+              <span>Pratinjau Kolase &amp; Kirim</span>
+            </h2>
 
             <div className="flex items-center gap-2">
               <div className="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-[11px] font-semibold">
                 <button
                   type="button"
                   onClick={() => setCanvasAspect('4:3')}
-                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                  className={`px-2 py-1 rounded-md transition cursor-pointer ${
                     canvasAspect === '4:3'
                       ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  4:3 (1200×900)
+                  4:3
                 </button>
                 <button
                   type="button"
                   onClick={() => setCanvasAspect('1:1')}
-                  className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                  className={`px-2 py-1 rounded-md transition cursor-pointer ${
                     canvasAspect === '1:1'
                       ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  1:1 (1200×1200)
+                  1:1
                 </button>
               </div>
               {isRendering && (
-                <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
                   Merender...
                 </span>
               )}
@@ -1130,92 +1206,101 @@ export default function LaporanRelawanPage() {
           </div>
 
           {/* Canvas Frame */}
-          <div className="relative rounded-xl overflow-hidden border border-slate-300 bg-slate-100 p-1.5 flex items-center justify-center">
+          <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100 p-1 flex items-center justify-center">
             <canvas
               ref={canvasRef}
-              className="w-full h-auto max-h-[70vh] object-contain rounded-lg shadow-sm block"
+              className="w-full h-auto max-h-[65vh] object-contain rounded-xl shadow-sm block"
             />
             {photos.length === 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4 text-center">
-                <div className="bg-white/95 border border-slate-200 rounded-xl px-4 py-3 shadow-md max-w-sm">
+                <div className="bg-white/95 border border-slate-200 rounded-xl px-4 py-3 shadow-md max-w-xs">
                   <p className="text-xs font-bold text-slate-900">
-                    Belum Ada Jepretan Kamera
+                    Pratinjau Kolase Siap
                   </p>
                   <p className="text-[11px] text-slate-600 mt-1">
-                    {gpsLocked
-                      ? 'Tekan "Buka Kamera Laporan" untuk mengambil 1–6 foto langsung di lokasi.'
-                      : 'Aktifkan GPS terlebih dahulu, lalu tekan "Buka Kamera Laporan" untuk mulai memotret.'}
+                    Tekan <strong>Buka Kamera Laporan</strong> di Langkah 2 untuk memotret 1–6 foto.
                   </p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Layout Summary Info */}
+          {/* Layout & Sync Status Strip */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
-            <span className="font-medium">
-              Layout aktif:{' '}
+            <span>
+              Layout:{' '}
               <strong className="text-slate-900">
                 {photos.length === 0
-                  ? 'Menunggu Jepretan Kamera'
+                  ? 'Menunggu Kamera'
                   : photos.length === 1
-                    ? '1 Frame Penuh'
+                    ? '1 Foto Penuh'
                     : photos.length === 2
-                      ? 'Split 2 Kolom (50%-50%)'
+                      ? '2 Kolom'
                       : photos.length === 3
-                        ? '1 Besar Kiri + 2 Kanan'
+                        ? '1 Besar + 2 Kanan'
                         : photos.length === 4
-                          ? 'Grid 2×2 Simetris'
+                          ? 'Grid 2×2'
                           : photos.length === 5
-                            ? 'Grid 2 Atas + 3 Bawah Simetris'
-                            : 'Grid 3×2 Simetris (6 Foto)'}
+                            ? 'Grid 2 + 3'
+                            : 'Grid 3×2 (6 Foto)'}
               </strong>
             </span>
-            <span className="text-[11px] text-slate-500">
-              Pemisah putih 4px · Object-cover center-crop
-            </span>
+            {isAlreadySaved ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                <CheckCircle2 size={13} />
+                <span>Tersimpan di Arsip Web</span>
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-500">
+                Otomatis tersimpan ke Web saat Share WA
+              </span>
+            )}
           </div>
 
-          {/* 3 Primary Action Buttons (Save disabled until GPS is locked) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          {/* DESKTOP ACTION BAR */}
+          <div className="hidden md:grid md:grid-cols-12 gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={() => handleShareWhatsApp()}
+              disabled={busyAction}
+              style={{ backgroundColor: '#25D366' }}
+              className="md:col-span-6 h-12 px-4 rounded-xl hover:brightness-95 disabled:opacity-60 text-white text-sm font-extrabold shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Share2 size={17} />
+              <span>
+                {isSharingWa
+                  ? 'Menyimpan ke Arsip & Menyiapkan WA...'
+                  : 'Simpan & Share ke WhatsApp'}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={handleSaveToWeb}
-              disabled={isSaving || !gpsLocked || photos.length === 0}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
+              disabled={busyAction || !gpsLocked || photos.length === 0}
+              className="md:col-span-3 h-12 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
             >
-              <Save size={16} />
-              <span>{isSaving ? 'Menyimpan...' : 'Simpan Laporan ke Web'}</span>
+              <Save size={15} />
+              <span>{isSaving ? 'Menyimpan...' : isAlreadySaved ? 'Tersimpan' : 'Simpan Web'}</span>
             </button>
 
             <button
               type="button"
               onClick={handleDownloadCollage}
               disabled={!gpsLocked || photos.length === 0}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
+              className="md:col-span-3 h-12 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
             >
-              <Download size={16} />
-              <span>Download Foto Kolase (JPG)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleShareWhatsApp()}
-              disabled={!gpsLocked || photos.length === 0}
-              style={gpsLocked && photos.length > 0 ? { backgroundColor: '#25D366' } : undefined}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:brightness-95 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
-            >
-              <Share2 size={16} />
-              <span>Share ke WhatsApp</span>
+              <Download size={15} />
+              <span>Download JPG</span>
             </button>
           </div>
 
           {lastSavedRecord && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-900">
               <div className="flex items-center gap-2 font-semibold">
-                <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+                <CheckCircle2 size={15} className="text-emerald-700 shrink-0" />
                 <span>
-                  Laporan <strong className="font-mono">{lastSavedRecord.kode_foto}</strong> sudah masuk ke riwayat web.
+                  Tersimpan di Arsip (<span className="font-mono">{lastSavedRecord.kode_foto}</span>).
                 </span>
               </div>
               {lastSavedRecord.image_url && !lastSavedRecord.image_url.startsWith('data:') && (
@@ -1232,20 +1317,64 @@ export default function LaporanRelawanPage() {
             </div>
           )}
         </div>
-      </section>
+
+        {/* MOBILE ONLY: Sticky Bottom Action Bar covering Steps 1–3 */}
+        <div className="md:hidden sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 -mx-4 px-3 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleShareWhatsApp()}
+            disabled={busyAction}
+            style={{ backgroundColor: '#25D366' }}
+            className="flex-1 h-12 px-3 rounded-xl hover:brightness-95 disabled:opacity-60 text-white text-xs sm:text-sm font-extrabold shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Share2 size={17} className="shrink-0" />
+            <span className="truncate">
+              {isSharingWa
+                ? 'Menyimpan & Menyiapkan WA...'
+                : 'Simpan & Share ke WhatsApp'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSaveToWeb}
+            disabled={busyAction}
+            title="Simpan Laporan ke Web"
+            className={`h-12 px-3 rounded-xl border font-bold text-xs flex flex-col items-center justify-center shrink-0 cursor-pointer ${
+              isAlreadySaved
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                : 'bg-blue-700 border-blue-700 text-white'
+            }`}
+          >
+            <Save size={15} />
+            <span className="text-[10px] mt-0.5">{isAlreadySaved ? 'Tersimpan' : 'Simpan'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadCollage}
+            disabled={!gpsLocked || photos.length === 0}
+            title="Download JPG"
+            className="h-12 px-3 rounded-xl bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs flex flex-col items-center justify-center shrink-0 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <Download size={15} />
+            <span className="text-[10px] mt-0.5">JPG</span>
+          </button>
+        </div>
+      </div>
 
       {/* ─── SECTION 5: ARSIP & MONITORING LAPORAN RELAWAN ──────── */}
       <section
         ref={archiveSectionRef}
-        className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 md:p-6 space-y-5 scroll-mt-20"
+        className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 md:p-6 space-y-4 scroll-mt-20"
       >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200">
           <div>
             <h2 className="text-base md:text-lg font-bold text-slate-900">
               Arsip &amp; Monitoring Laporan Relawan di Web
             </h2>
             <p className="text-xs text-slate-600 mt-0.5">
-              Pantau dokumentasi kerja harian tiap divisi, klik gambar untuk zoom, unduh ulang JPG, atau teruskan ke WhatsApp.
+              Tap foto untuk zoom penuh, bagikan ulang ke WhatsApp, atau unduh JPG.
             </p>
           </div>
 
@@ -1279,18 +1408,18 @@ export default function LaporanRelawanPage() {
 
             <button
               type="button"
-              onClick={loadArchiveData}
+              onClick={() => loadArchiveData(false)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer"
             >
               <RefreshCw size={13} className={loadingArchive ? 'animate-spin' : ''} />
-              <span>Muat Ulang</span>
+              <span className="hidden sm:inline">Muat Ulang</span>
             </button>
           </div>
         </div>
 
-        {/* Filter Bar */}
+        {/* Filter Bar + Horizontal Swipeable Division Pills */}
         <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <div className="flex items-center gap-2">
               <input
                 type="date"
@@ -1301,7 +1430,7 @@ export default function LaporanRelawanPage() {
               <button
                 type="button"
                 onClick={() => setFilterDate(filterDate === todayISO ? '' : todayISO)}
-                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer shrink-0 ${
                   filterDate === todayISO
                     ? 'bg-blue-700 border-blue-700 text-white'
                     : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
@@ -1313,9 +1442,9 @@ export default function LaporanRelawanPage() {
                 <button
                   type="button"
                   onClick={() => setFilterDate('')}
-                  className="px-2.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 cursor-pointer"
+                  className="px-2.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 cursor-pointer shrink-0"
                 >
-                  Semua Tanggal
+                  Semua
                 </button>
               )}
             </div>
@@ -1326,13 +1455,14 @@ export default function LaporanRelawanPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cari nama relawan, keterangan, lokasi, atau kode foto..."
+                placeholder="Cari relawan, keterangan, atau kode foto..."
                 className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 bg-white text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
               />
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
+          {/* Horizontal Scrollable Pills on Mobile */}
+          <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
             {DIVISI_FILTER_OPTIONS.map((opt) => {
               const active = filterDivisi === opt.value
               return (
@@ -1340,7 +1470,7 @@ export default function LaporanRelawanPage() {
                   key={opt.value}
                   type="button"
                   onClick={() => setFilterDivisi(opt.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                  className={`shrink-0 whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-semibold border transition cursor-pointer ${
                     active
                       ? 'bg-slate-900 border-slate-900 text-white'
                       : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -1355,15 +1485,15 @@ export default function LaporanRelawanPage() {
 
         {/* Archive Content */}
         {loadingArchive ? (
-          <div className="py-12 text-center text-xs font-medium text-slate-500">
+          <div className="py-10 text-center text-xs font-medium text-slate-500">
             Memuat arsip laporan relawan...
           </div>
         ) : filteredArchive.length === 0 ? (
-          <div className="py-12 text-center rounded-xl border border-dashed border-slate-300 bg-slate-50 space-y-2">
-            <Images size={28} className="mx-auto text-slate-400" />
+          <div className="py-10 text-center rounded-xl border border-dashed border-slate-300 bg-slate-50 space-y-1.5">
+            <Images size={26} className="mx-auto text-slate-400" />
             <p className="text-sm font-bold text-slate-800">Belum ada laporan pada filter ini</p>
             <p className="text-xs text-slate-500">
-              Ambil foto lewat Kamera Laporan dan klik &ldquo;Simpan Laporan ke Web&rdquo; untuk mencatat laporan relawan.
+              Ambil foto lewat Kamera Laporan lalu tekan &ldquo;Simpan &amp; Share ke WhatsApp&rdquo;.
             </p>
           </div>
         ) : archiveViewMode === 'gallery' ? (
@@ -1405,7 +1535,7 @@ export default function LaporanRelawanPage() {
                     )}
                   </button>
 
-                  <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                  <div className="p-3.5 md:p-4 flex-1 flex flex-col justify-between space-y-3">
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <span
@@ -1441,21 +1571,21 @@ export default function LaporanRelawanPage() {
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                       <button
                         type="button"
-                        onClick={() => handleDownloadArchiveItem(item)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-semibold transition cursor-pointer"
-                      >
-                        <Download size={13} />
-                        <span>Download Ulang</span>
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={() => handleShareWhatsApp(item)}
                         style={{ backgroundColor: '#25D366' }}
                         className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg hover:brightness-95 text-white text-xs font-bold transition cursor-pointer"
                       >
                         <Share2 size={13} />
-                        <span>Share WA</span>
+                        <span>Share Ulang WA</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadArchiveItem(item)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-semibold transition cursor-pointer"
+                      >
+                        <Download size={13} />
+                        <span>Unduh JPG</span>
                       </button>
 
                       <button
@@ -1483,7 +1613,7 @@ export default function LaporanRelawanPage() {
                   <th className="py-3 px-3">Tanggal &amp; Jam</th>
                   <th className="py-3 px-3">Divisi</th>
                   <th className="py-3 px-3">Nama Relawan</th>
-                  <th className="py-3 px-3">Ringkasan Pekerjaan</th>
+                  <th className="py-3 px-3">Catatan</th>
                   <th className="py-3 px-3">Lokasi &amp; Kode</th>
                   <th className="py-3 px-3 text-right">Aksi</th>
                 </tr>
@@ -1546,7 +1676,7 @@ export default function LaporanRelawanPage() {
                         <button
                           type="button"
                           onClick={() => handleDownloadArchiveItem(item)}
-                          title="Download Ulang JPG"
+                          title="Unduh JPG"
                           className="p-1.5 rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 cursor-pointer"
                         >
                           <Download size={13} />
@@ -1554,7 +1684,7 @@ export default function LaporanRelawanPage() {
                         <button
                           type="button"
                           onClick={() => handleShareWhatsApp(item)}
-                          title="Share ke WhatsApp"
+                          title="Share Ulang WA"
                           style={{ backgroundColor: '#25D366' }}
                           className="p-1.5 rounded text-white hover:brightness-95 cursor-pointer"
                         >
@@ -1658,7 +1788,7 @@ export default function LaporanRelawanPage() {
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold cursor-pointer"
                 >
                   <Download size={14} />
-                  <span>Download JPG</span>
+                  <span>Unduh JPG</span>
                 </button>
                 <button
                   type="button"
@@ -1667,7 +1797,7 @@ export default function LaporanRelawanPage() {
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg hover:brightness-95 text-white text-xs font-bold cursor-pointer"
                 >
                   <Share2 size={14} />
-                  <span>Share WA</span>
+                  <span>Share Ulang WA</span>
                 </button>
               </div>
             </div>
