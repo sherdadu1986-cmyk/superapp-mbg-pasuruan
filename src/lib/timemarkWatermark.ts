@@ -21,6 +21,68 @@ export const getNowJam = (d: Date = new Date()): string =>
 export const getLocalDateISO = (d: Date = new Date()): string =>
   d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
 
+export interface JakartaTimeParts {
+  tanggalISO: string
+  timeStr: string
+  timeWithSeconds: string
+  dateStr: string
+}
+
+/**
+ * Strictly format date and time in Asia/Jakarta (WIB) timezone regardless of device timezone.
+ */
+export function getJakartaNowParts(d: Date = new Date()): JakartaTimeParts {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  })
+
+  const partsMap: Record<string, string> = {}
+  for (const p of formatter.formatToParts(d)) {
+    if (p.type !== 'literal') partsMap[p.type] = p.value
+  }
+
+  const weekdayMap: Record<string, string> = {
+    Sun: 'Minggu',
+    Mon: 'Senin',
+    Tue: 'Selasa',
+    Wed: 'Rabu',
+    Thu: 'Kamis',
+    Fri: 'Jumat',
+    Sat: 'Sabtu'
+  }
+  const monthNames = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ]
+
+  const year = partsMap.year || String(d.getFullYear())
+  const monthNum = parseInt(partsMap.month || '1', 10)
+  const dayNum = parseInt(partsMap.day || '1', 10)
+  const dayPadded = String(dayNum).padStart(2, '0')
+  const monthPadded = String(monthNum).padStart(2, '0')
+  const rawHour = partsMap.hour === '24' ? '00' : (partsMap.hour || '00').padStart(2, '0')
+  const minute = (partsMap.minute || '00').padStart(2, '0')
+  const second = (partsMap.second || '00').padStart(2, '0')
+
+  const dayIndo = weekdayMap[partsMap.weekday || ''] || 'Hari'
+  const monthIndo = monthNames[Math.max(0, Math.min(11, monthNum - 1))] || 'Januari'
+
+  return {
+    tanggalISO: `${year}-${monthPadded}-${dayPadded}`,
+    timeStr: `${rawHour}:${minute}`,
+    timeWithSeconds: `${rawHour}:${minute}:${second}`,
+    dateStr: `${dayIndo}, ${dayNum} ${monthIndo} ${year}`
+  }
+}
+
 export function generateTimemarkCode(prefix = 'SPPG'): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let code = prefix

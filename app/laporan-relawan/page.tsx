@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Camera,
-  Upload,
   MapPin,
   Clock,
   Calendar,
@@ -29,21 +28,23 @@ import {
   Copy,
   Database,
   ExternalLink,
-  Images
+  Images,
+  Lock
 } from 'lucide-react'
 import { showToast } from '@/components/toast'
 import { fetchRelawanSppgList, type RelawanSppg } from '@/lib/data-helpers'
+import LiveCameraCapture, { type CapturedPhotoItem } from '@/components/LiveCameraCapture'
 import {
   formatIndoDate,
-  getNowJam,
-  getLocalDateISO,
+  getJakartaNowParts,
   generateTimemarkCode,
   formatGpsCoords,
   parseGpsCoords,
   getTileXY,
   loadCanvasImage,
   renderCollageBackgroundCanvas,
-  drawTimemarkWatermark
+  drawTimemarkWatermark,
+  type JakartaTimeParts
 } from '@/lib/timemarkWatermark'
 import {
   DIVISI_RELAWAN_OPTIONS,
@@ -57,17 +58,6 @@ import {
 } from '@/lib/laporan-relawan'
 
 export const dynamic = 'force-dynamic'
-
-interface UploadedPhotoItem {
-  id: string
-  file: File
-  previewUrl: string
-  img: HTMLImageElement
-}
-
-const DEFAULT_COORDS = '7.721026°S, 112.797828°E'
-const DEFAULT_ADDRESS = 'Jl. Rahayu No. 06, Kidul Dalem, Wonorejo, Kab. Pasuruan, Jawa Timur 67173'
-const DEFAULT_MAP_LABEL = 'Wonorejo / Pasuruan'
 
 const DIVISI_BADGE_COLORS: Record<string, string> = {
   'Divisi Persiapan': 'bg-amber-100 text-amber-900 border-amber-300',
@@ -99,19 +89,25 @@ export default function LaporanRelawanPage() {
   const [divisi, setDivisi] = useState<string>(DIVISI_RELAWAN_OPTIONS[2])
   const [namaRelawan, setNamaRelawan] = useState<string>('')
   const [keterangan, setKeterangan] = useState<string>('')
-  const [photos, setPhotos] = useState<UploadedPhotoItem[]>([])
+  const [photos, setPhotos] = useState<CapturedPhotoItem[]>([])
   const [canvasAspect, setCanvasAspect] = useState<'4:3' | '1:1'>('4:3')
+  const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false)
 
-  // ─── Real-Time Clock, GPS & Watermark State ──────────────
-  const [tanggalISO, setTanggalISO] = useState<string>(() => getLocalDateISO())
-  const [timeStr, setTimeStr] = useState<string>(() => getNowJam())
-  const [dateStr, setDateStr] = useState<string>(() => formatIndoDate())
-  const [autoClockActive, setAutoClockActive] = useState<boolean>(true)
+  // ─── Strict Read-Only Real-Time Clock (Asia/Jakarta) ──────
+  const [jakartaNow, setJakartaNow] = useState<JakartaTimeParts>(() => getJakartaNowParts())
 
-  const [gpsCoords, setGpsCoords] = useState<string>(DEFAULT_COORDS)
-  const [address, setAddress] = useState<string>(DEFAULT_ADDRESS)
-  const [mapLabel, setMapLabel] = useState<string>(DEFAULT_MAP_LABEL)
-  const [gpsStatus, setGpsStatus] = useState<'loading' | 'active' | 'fallback'>('loading')
+  // ─── Strict High-Accuracy GPS Lock State (No Static Fallback)
+  const [gpsStatus, setGpsStatus] = useState<'searching' | 'locked' | 'error'>('searching')
+  const [gpsCoords, setGpsCoords] = useState<string>('')
+  const [gpsAccuracyMeters, setGpsAccuracyMeters] = useState<number | null>(null)
+  const [gpsErrorMessage, setGpsErrorMessage] = useState<string>(
+    'Mengambil koordinat GPS presisi tinggi dari perangkat...'
+  )
+  const [address, setAddress] = useState<string>('')
+  const [mapLabel, setMapLabel] = useState<string>('Menunggu GPS')
+  const [isRefreshingGps, setIsRefreshingGps] = useState<boolean>(false)
+
+  // Locked Verification Photo Code (system-generated)
   const [kodeFoto, setKodeFoto] = useState<string>(() => generateTimemarkCode('SPPG'))
 
   // ─── Action & Save State ─────────────────────────────────
@@ -137,86 +133,109 @@ export default function LaporanRelawanPage() {
 
   // ─── Canvas & Preloaded Asset Refs ───────────────────────
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const archiveSectionRef = useRef<HTMLElement | null>(null)
   const bgnLogoRef = useRef<HTMLImageElement | null>(null)
   const regionalLogoRef = useRef<HTMLImageElement | null>(null)
   const mapFallbackRef = useRef<HTMLImageElement | null>(null)
   const tileCacheRef = useRef<Map<string, HTMLImageElement | null>>(new Map())
-  const photosRef = useRef<UploadedPhotoItem[]>([])
 
-  useEffect(() => {
-    photosRef.current = photos
-  }, [photos])
+  const gpsLocked = gpsStatus === 'locked' && Boolean(gpsCoords)
 
-  // Revoke object URLs on unmount
-  useEffect(() => {
-    return () => {
-      photosRef.current.forEach((p) => {
-        try {
-          URL.revokeObjectURL(p.previewUrl)
-        } catch {}
-      })
-    }
-  }, [])
-
-  // ─── Fetch Geolocation + Reverse Geocoding ───────────────
-  const refreshLocationAndTime = useCallback(async (manualTrigger = false) => {
-    const now = new Date()
-    setTanggalISO(getLocalDateISO(now))
-    setTimeStr(getNowJam(now))
-    setDateStr(formatIndoDate(now))
-    setAutoClockActive(true)
-
+  // ─── Strict High-Accuracy GPS Fetch + Reverse Geocoding ──
+  const requestRealTimeGps = useCallback((manualTrigger = false) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setGpsStatus('fallback')
+      setGpsStatus('error')
+      setGpsCoords('')
+      setAddress('')
+      setGpsAccuracyMeters(null)
+      setGpsErrorMessage(
+        'Browser atau perangkat ini tidak mendukung GPS (Geolocation API).'
+      )
       if (manualTrigger) {
-        showToast('Perangkat tidak mendukung GPS; menggunakan lokasi default SPPG Wonorejo.', 'warning')
+        showToast('Perangkat ini tidak mendukung GPS.', 'error')
       }
       return
     }
 
-    setGpsStatus('loading')
+    setIsRefreshingGps(true)
+    if (!gpsCoords) {
+      setGpsStatus('searching')
+      setGpsErrorMessage('Mengunci sinyal satelit / lokasi GPS presisi tinggi...')
+    }
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude
         const lng = pos.coords.longitude
-        setGpsCoords(formatGpsCoords(lat, lng))
-        setGpsStatus('active')
+        const acc = Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null
+        const formatted = formatGpsCoords(lat, lng)
+
+        setGpsCoords(formatted)
+        setGpsAccuracyMeters(acc)
+        setGpsStatus('locked')
+        setGpsErrorMessage('')
 
         try {
           const res = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`)
           if (res.ok) {
             const geo = await res.json()
-            if (geo?.address) setAddress(geo.address)
-            if (geo?.mapLabel) setMapLabel(geo.mapLabel)
+            if (geo?.success && geo?.address) {
+              setAddress(geo.address)
+              setMapLabel(geo.mapLabel || 'Lokasi Terkunci')
+            } else {
+              setAddress(`Koordinat GPS Terverifikasi (${formatted})`)
+              setMapLabel(geo?.mapLabel || 'Lokasi GPS')
+            }
+          } else {
+            setAddress(`Koordinat GPS Terverifikasi (${formatted})`)
           }
-        } catch (err) {
-          console.warn('Reverse geocode error:', err)
+        } catch {
+          setAddress(`Koordinat GPS Terverifikasi (${formatted})`)
+        } finally {
+          setIsRefreshingGps(false)
         }
 
         if (manualTrigger) {
-          showToast('Lokasi GPS & waktu real-time berhasil diperbarui!', 'success')
+          showToast(
+            `GPS terkunci (${formatted}${acc !== null ? ` • Akurasi ±${acc}m` : ''})`,
+            'success'
+          )
         }
       },
       (err) => {
-        console.warn('Geolocation fallback:', err?.message)
-        setGpsStatus('fallback')
-        setGpsCoords((prev) => prev || DEFAULT_COORDS)
-        setAddress((prev) => prev || DEFAULT_ADDRESS)
+        setIsRefreshingGps(false)
+        setGpsStatus('error')
+        setGpsCoords('')
+        setAddress('')
+        setGpsAccuracyMeters(null)
+
+        let friendly = 'Gagal mengunci GPS. Nyalakan GPS HP lalu tekan "Aktifkan / Refresh GPS".'
+        if (err?.code === 1) {
+          friendly =
+            'Izin lokasi ditolak oleh browser. Aktifkan GPS HP dan izinkan akses Lokasi pada situs ini.'
+        } else if (err?.code === 2) {
+          friendly =
+            'Sinyal GPS tidak tersedia. Pastikan Layanan Lokasi (GPS) HP menyala dan berada di area terbuka.'
+        } else if (err?.code === 3) {
+          friendly =
+            'Waktu pencarian GPS habis (timeout). Tekan "Aktifkan / Refresh GPS" untuk mencoba lagi.'
+        }
+        setGpsErrorMessage(friendly)
         if (manualTrigger) {
-          showToast('Izin GPS tertunda; waktu diperbarui dengan lokasi default SPPG Wonorejo.', 'warning')
+          showToast(friendly, 'error')
         }
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
-  }, [])
+  }, [gpsCoords])
 
-  // ─── Initial Load: Clock, GPS, Logos, Relawan, Archive ──
+  // ─── Initial Load: Live Clock (1s), GPS, Font, Relawan, Archive
   useEffect(() => {
-    refreshLocationAndTime(false)
+    setJakartaNow(getJakartaNowParts(new Date()))
+    const clockTimer = setInterval(() => {
+      setJakartaNow(getJakartaNowParts(new Date()))
+    }, 1000)
 
-    // Ensure Bebas Neue webfont is attached
     if (typeof document !== 'undefined') {
       const fontId = 'bebas-neue-google-font'
       if (!document.getElementById(fontId)) {
@@ -233,19 +252,15 @@ export default function LaporanRelawanPage() {
       .catch(() => {})
 
     loadArchiveData()
-  }, [refreshLocationAndTime])
 
-  // Keep live system clock ticking every 20 seconds when autoClockActive is enabled
+    return () => clearInterval(clockTimer)
+  }, [])
+
+  // Trigger GPS request on mount
   useEffect(() => {
-    if (!autoClockActive) return
-    const interval = setInterval(() => {
-      const now = new Date()
-      setTanggalISO(getLocalDateISO(now))
-      setTimeStr(getNowJam(now))
-      setDateStr(formatIndoDate(now))
-    }, 20000)
-    return () => clearInterval(interval)
-  }, [autoClockActive])
+    requestRealTimeGps(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadArchiveData = async () => {
     setLoadingArchive(true)
@@ -256,7 +271,7 @@ export default function LaporanRelawanPage() {
     setLoadingArchive(false)
   }
 
-  // ─── Render Collage + Timemark Watermark onto Canvas ─────
+  // ─── Render Collage + Tamper-Proof Timemark Watermark ───
   const renderCollageCanvas = useCallback(async () => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -290,19 +305,20 @@ export default function LaporanRelawanPage() {
         mapFallbackRef.current = await loadCanvasImage('/peta.png').catch(() => null)
       }
 
-      // Fetch live OSM tile (cached by coordinate tile key)
-      const { lat, lng } = parseGpsCoords(gpsCoords)
-      const tileZoom = 16
-      const { x, y } = getTileXY(lat, lng, tileZoom)
-      const tileKey = `${tileZoom}/${x}/${y}`
       let dynamicMapTileImg: HTMLImageElement | null = null
+      if (gpsLocked && gpsCoords) {
+        const { lat, lng } = parseGpsCoords(gpsCoords)
+        const tileZoom = 16
+        const { x, y } = getTileXY(lat, lng, tileZoom)
+        const tileKey = `${tileZoom}/${x}/${y}`
 
-      if (tileCacheRef.current.has(tileKey)) {
-        dynamicMapTileImg = tileCacheRef.current.get(tileKey) || null
-      } else {
-        const tileUrl = `https://tile.openstreetmap.org/${tileZoom}/${x}/${y}.png`
-        dynamicMapTileImg = await loadCanvasImage(tileUrl).catch(() => null)
-        tileCacheRef.current.set(tileKey, dynamicMapTileImg)
+        if (tileCacheRef.current.has(tileKey)) {
+          dynamicMapTileImg = tileCacheRef.current.get(tileKey) || null
+        } else {
+          const tileUrl = `https://tile.openstreetmap.org/${tileZoom}/${x}/${y}.png`
+          dynamicMapTileImg = await loadCanvasImage(tileUrl).catch(() => null)
+          tileCacheRef.current.set(tileKey, dynamicMapTileImg)
+        }
       }
 
       const collageBg =
@@ -320,88 +336,58 @@ export default function LaporanRelawanPage() {
         height: H,
         bgImg: collageBg,
         activity: (divisi || 'LAPORAN RELAWAN').toUpperCase(),
-        timeStr: timeStr || getNowJam(),
-        dateStr: dateStr || formatIndoDate(),
-        address: address || DEFAULT_ADDRESS,
-        gpsCoords: gpsCoords || DEFAULT_COORDS,
+        timeStr: jakartaNow.timeStr,
+        dateStr: jakartaNow.dateStr,
+        address: gpsLocked
+          ? address || `Koordinat GPS Terverifikasi (${gpsCoords})`
+          : 'GPS belum aktif — nyalakan GPS perangkat untuk mengunci alamat',
+        gpsCoords: gpsLocked ? gpsCoords : 'GPS Belum Terkunci (Menunggu Lokasi Asli)',
         timemarkCode: kodeFoto,
         showBgnLogo: true,
         showRegionalLogo: true,
         bgnLogo: bgnLogoRef.current,
         regionalLogo: regionalLogoRef.current,
-        mapImg: mapFallbackRef.current,
+        mapImg: gpsLocked ? mapFallbackRef.current : null,
         dynamicMapTileImg,
-        mapLabel
+        mapLabel: gpsLocked ? mapLabel : 'Menunggu GPS'
       })
     } finally {
       setIsRendering(false)
     }
-  }, [photos, canvasAspect, divisi, timeStr, dateStr, address, gpsCoords, kodeFoto, mapLabel])
+  }, [
+    photos,
+    canvasAspect,
+    divisi,
+    jakartaNow.timeStr,
+    jakartaNow.dateStr,
+    gpsLocked,
+    gpsCoords,
+    address,
+    kodeFoto,
+    mapLabel
+  ])
 
   useEffect(() => {
     renderCollageCanvas()
   }, [renderCollageCanvas])
 
-  // ─── Multi-Photo Upload Handlers ─────────────────────────
-  const handleSelectPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    e.target.value = ''
-    if (files.length === 0) return
-
-    const remainingSlots = 6 - photos.length
-    if (remainingSlots <= 0) {
-      showToast('Maksimal 6 foto per kolase sudah tercapai.', 'warning')
+  // ─── Multi-Shot Camera Handlers ──────────────────────────
+  const handleCameraShot = (item: CapturedPhotoItem) => {
+    if (!gpsLocked) {
+      showToast('GPS belum aktif! Aktifkan GPS terlebih dahulu sebelum memotret.', 'error')
       return
     }
-
-    const accepted = files.slice(0, remainingSlots)
-    if (files.length > remainingSlots) {
-      showToast(`Maksimal 6 foto per laporan. ${remainingSlots} foto ditambahkan.`, 'warning')
-    }
-
-    const loadedItems: UploadedPhotoItem[] = []
-    for (const file of accepted) {
-      if (!file.type.startsWith('image/')) continue
-      const previewUrl = URL.createObjectURL(file)
-      try {
-        const img = await loadCanvasImage(previewUrl)
-        loadedItems.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          file,
-          previewUrl,
-          img
-        })
-      } catch {
-        URL.revokeObjectURL(previewUrl)
-      }
-    }
-
-    if (loadedItems.length > 0) {
-      setPhotos((prev) => [...prev, ...loadedItems].slice(0, 6))
-      setKodeFoto(generateTimemarkCode('SPPG'))
-      setLastSavedRecord(null)
-      if (autoClockActive) {
-        const now = new Date()
-        setTanggalISO(getLocalDateISO(now))
-        setTimeStr(getNowJam(now))
-        setDateStr(formatIndoDate(now))
-      }
-      showToast(`${loadedItems.length} foto ditambahkan ke kolase.`, 'success')
-    } else {
-      showToast('Gagal memuat file gambar yang dipilih.', 'error')
-    }
+    setPhotos((prev) => {
+      if (prev.length >= 6) return prev
+      return [...prev, item]
+    })
+    setKodeFoto(generateTimemarkCode('SPPG'))
+    setLastSavedRecord(null)
+    showToast(`Foto #${Math.min(6, photos.length + 1)} berhasil dijepret!`, 'success')
   }
 
   const handleRemovePhoto = (id: string) => {
-    setPhotos((prev) => {
-      const target = prev.find((p) => p.id === id)
-      if (target) {
-        try {
-          URL.revokeObjectURL(target.previewUrl)
-        } catch {}
-      }
-      return prev.filter((p) => p.id !== id)
-    })
+    setPhotos((prev) => prev.filter((p) => p.id !== id))
     setLastSavedRecord(null)
   }
 
@@ -419,11 +405,6 @@ export default function LaporanRelawanPage() {
   }
 
   const handleClearPhotos = () => {
-    photos.forEach((p) => {
-      try {
-        URL.revokeObjectURL(p.previewUrl)
-      } catch {}
-    })
     setPhotos([])
     setLastSavedRecord(null)
   }
@@ -456,8 +437,15 @@ export default function LaporanRelawanPage() {
     document.body.removeChild(link)
   }
 
-  // ─── Action 1: Simpan Laporan ke Web ─────────────────────
+  // ─── Action 1: Simpan Laporan ke Web (Locked to Live GPS) ─
   const handleSaveToWeb = async () => {
+    if (!gpsLocked) {
+      showToast(
+        'Simpan ditolak: GPS wajib aktif dan terkunci terlebih dahulu.',
+        'error'
+      )
+      return
+    }
     if (!divisi) {
       showToast('Pilih Divisi terlebih dahulu.', 'warning')
       return
@@ -467,7 +455,7 @@ export default function LaporanRelawanPage() {
       return
     }
     if (photos.length === 0) {
-      showToast('Unggah minimal 1 foto untuk membuat kolase laporan.', 'warning')
+      showToast('Ambil minimal 1 foto langsung dari kamera sebelum menyimpan.', 'warning')
       return
     }
 
@@ -476,14 +464,15 @@ export default function LaporanRelawanPage() {
       await renderCollageCanvas()
       const blob = await getCanvasJpegBlob(0.92)
       const fallbackDataUrl = canvasRef.current?.toDataURL('image/jpeg', 0.78) || ''
+      const lockedNow = getJakartaNowParts(new Date())
 
       const result = await saveLaporanRelawan({
-        tanggal_laporan: tanggalISO,
-        waktu_laporan: timeStr || getNowJam(),
+        tanggal_laporan: lockedNow.tanggalISO,
+        waktu_laporan: lockedNow.timeStr,
         divisi,
         nama_relawan: namaRelawan,
         keterangan,
-        lokasi_alamat: address,
+        lokasi_alamat: address || `Koordinat GPS Terverifikasi (${gpsCoords})`,
         koordinat_gps: gpsCoords,
         kode_foto: kodeFoto,
         imageBlob: blob,
@@ -500,7 +489,7 @@ export default function LaporanRelawanPage() {
       if (result.savedToCloud && result.storageUploaded) {
         setCloudReady(true)
         setCloudWarning('')
-        showToast('Laporan kolase berhasil disimpan ke web & Supabase Storage!', 'success')
+        showToast('Laporan kolase real-time berhasil disimpan ke web & Supabase Storage!', 'success')
       } else {
         if (result.warningMessage && isSupabaseMissingInfraError(result.warningMessage)) {
           setCloudReady(false)
@@ -530,13 +519,13 @@ export default function LaporanRelawanPage() {
       showToast('Kanvas kolase belum siap.', 'error')
       return
     }
-    if (photos.length === 0) {
-      showToast('Unggah minimal 1 foto sebelum mengunduh JPG.', 'warning')
+    if (!gpsLocked || photos.length === 0) {
+      showToast('Pastikan GPS aktif dan minimal 1 foto sudah dijepret.', 'warning')
       return
     }
     try {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-      const filename = buildLaporanFilename(divisi, tanggalISO, timeStr)
+      const filename = buildLaporanFilename(divisi, jakartaNow.tanggalISO, jakartaNow.timeStr)
       triggerDownloadUrl(dataUrl, filename)
       showToast(`Foto kolase diunduh (${filename})`, 'success')
     } catch (err) {
@@ -547,14 +536,20 @@ export default function LaporanRelawanPage() {
 
   // ─── Action 3: Share ke WhatsApp (File API + wa.me Fallback)
   const handleShareWhatsApp = async (customRecord?: LaporanRelawanRecord) => {
+    if (!customRecord && (!gpsLocked || photos.length === 0)) {
+      showToast('Pastikan GPS aktif dan minimal 1 foto sudah dijepret.', 'warning')
+      return
+    }
+
     const targetDivisi = customRecord?.divisi || divisi
     const targetRelawan = customRecord?.nama_relawan || namaRelawan.trim() || '-'
     const targetDate = customRecord
       ? formatShortIndoDate(customRecord.tanggal_laporan)
-      : dateStr
-    const targetDateISO = customRecord?.tanggal_laporan || tanggalISO
-    const targetTime = customRecord?.waktu_laporan || timeStr
-    const targetAddress = customRecord?.lokasi_alamat || address
+      : jakartaNow.dateStr
+    const targetDateISO = customRecord?.tanggal_laporan || jakartaNow.tanggalISO
+    const targetTime = customRecord?.waktu_laporan || jakartaNow.timeStr
+    const targetAddress =
+      customRecord?.lokasi_alamat || address || `Koordinat GPS (${gpsCoords})`
     const targetCoords = customRecord?.koordinat_gps || gpsCoords
     const targetKet = customRecord?.keterangan || keterangan.trim() || '-'
     const targetCode = customRecord?.kode_foto || kodeFoto
@@ -564,11 +559,6 @@ export default function LaporanRelawanPage() {
         : lastSavedRecord?.image_url && !lastSavedRecord.image_url.startsWith('data:')
           ? lastSavedRecord.image_url
           : ''
-
-    if (!customRecord && photos.length === 0) {
-      showToast('Unggah foto kolase terlebih dahulu sebelum membagikan laporan.', 'warning')
-      return
-    }
 
     const filename = buildLaporanFilename(targetDivisi, targetDateISO, targetTime)
     const lines = [
@@ -585,7 +575,6 @@ export default function LaporanRelawanPage() {
     }
     const shareText = lines.join('\n')
 
-    // Attempt Web Share API with JPEG File (supported on modern mobile browsers -> directly attaches image to WA)
     try {
       let blob: Blob | null = null
       if (customRecord?.image_url) {
@@ -611,13 +600,10 @@ export default function LaporanRelawanPage() {
         }
       }
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        return
-      }
+      if (err?.name === 'AbortError') return
       console.warn('Web Share API fallback to wa.me:', err)
     }
 
-    // Desktop / non-file-share fallback to wa.me
     const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
     window.open(waUrl, '_blank', 'noopener,noreferrer')
     if (!targetUrl) {
@@ -630,7 +616,7 @@ export default function LaporanRelawanPage() {
     }
   }
 
-  // ─── Download Archive Image ──────────────────────────────
+  // ─── Archive Actions ─────────────────────────────────────
   const handleDownloadArchiveItem = async (item: LaporanRelawanRecord) => {
     const filename = buildLaporanFilename(item.divisi, item.tanggal_laporan, item.waktu_laporan)
     try {
@@ -666,7 +652,7 @@ export default function LaporanRelawanPage() {
   }
 
   // ─── Derived Stats & Filtered Archive ────────────────────
-  const todayISO = getLocalDateISO()
+  const todayISO = jakartaNow.tanggalISO
   const todayCount = useMemo(
     () => archiveRecords.filter((r) => r.tanggal_laporan === todayISO).length,
     [archiveRecords, todayISO]
@@ -696,30 +682,35 @@ export default function LaporanRelawanPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-14">
-      {/* ─── TOP HEADER (Institutional Light ERP) ────────────── */}
+      {/* ─── TOP HEADER (Tamper-Proof Light ERP) ──────────────── */}
       <section className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 md:p-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold uppercase tracking-wider">
-              <Camera size={13} />
-              <span>Operasional Harian SPPG Pasuruan</span>
+              <Lock size={12} />
+              <span>Kamera Langsung &amp; Kunci GPS Real-Time SPPG</span>
             </div>
             <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               Laporan Kerja Harian Relawan
             </h1>
             <p className="text-xs md:text-sm text-slate-600 max-w-2xl">
-              Gabungkan 1–6 foto kegiatan menjadi kolase resmi ber-watermark GPS &amp; waktu Timemark, simpan ke web, unduh JPG, atau bagikan langsung ke grup WhatsApp.
+              Ambil 1–6 foto langsung menggunakan kamera perangkat dengan jam WIB &amp; koordinat GPS presisi tinggi yang dikunci otomatis oleh sistem (tanpa unggah galeri dan tanpa edit manual).
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
-              onClick={() => refreshLocationAndTime(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-semibold transition cursor-pointer"
+              onClick={() => requestRealTimeGps(true)}
+              disabled={isRefreshingGps}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
+                gpsLocked
+                  ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900'
+                  : 'bg-rose-700 hover:bg-rose-800 border-rose-700 text-white'
+              }`}
             >
-              <RefreshCw size={14} className={gpsStatus === 'loading' ? 'animate-spin text-blue-600' : 'text-blue-700'} />
-              <span>🔄 Perbarui Lokasi &amp; Jam</span>
+              <RefreshCw size={14} className={isRefreshingGps ? 'animate-spin' : ''} />
+              <span>Aktifkan / Refresh GPS</span>
             </button>
 
             <button
@@ -744,31 +735,72 @@ export default function LaporanRelawanPage() {
             <p className="text-lg font-bold text-slate-900 mt-0.5">{archiveRecords.length}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Divisi Lapor Hari Ini</p>
-            <p className="text-lg font-bold text-slate-900 mt-0.5">{activeDivisionsToday} / 6</p>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Jam Sistem WIB</p>
+            <p className="text-base font-mono font-bold text-slate-900 mt-0.5 flex items-center gap-1.5">
+              <Lock size={13} className="text-blue-700 shrink-0" />
+              <span>{jakartaNow.timeWithSeconds}</span>
+            </p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status GPS &amp; Jam</p>
+          <div
+            className={`rounded-xl border px-3.5 py-2.5 ${
+              gpsLocked
+                ? 'border-emerald-300 bg-emerald-50'
+                : 'border-rose-300 bg-rose-50'
+            }`}
+          >
+            <p
+              className={`text-[11px] font-semibold uppercase tracking-wide ${
+                gpsLocked ? 'text-emerald-800' : 'text-rose-800'
+              }`}
+            >
+              Status Kunci GPS
+            </p>
             <div className="flex items-center gap-1.5 mt-1">
               <span
-                className={`inline-block w-2 h-2 rounded-full ${
-                  gpsStatus === 'active'
-                    ? 'bg-emerald-500'
-                    : gpsStatus === 'loading'
-                      ? 'bg-amber-500 animate-pulse'
-                      : 'bg-slate-400'
+                className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
+                  gpsLocked
+                    ? 'bg-emerald-600'
+                    : gpsStatus === 'searching'
+                      ? 'bg-rose-500 animate-pulse'
+                      : 'bg-rose-600'
                 }`}
               />
-              <span className="text-xs font-bold text-slate-800 truncate">
-                {gpsStatus === 'active'
-                  ? `GPS Aktif · ${timeStr}`
-                  : gpsStatus === 'loading'
-                    ? `Mencari GPS · ${timeStr}`
-                    : `SPPG Default · ${timeStr}`}
+              <span
+                className={`text-xs font-bold truncate ${
+                  gpsLocked ? 'text-emerald-900' : 'text-rose-900'
+                }`}
+              >
+                {gpsLocked
+                  ? `GPS Terkunci${gpsAccuracyMeters !== null ? ` • Akurasi ±${gpsAccuracyMeters}m` : ''}`
+                  : 'GPS Belum Aktif / Izin Ditolak'}
               </span>
             </div>
           </div>
         </div>
+
+        {/* Strict GPS Blocker Notice when not locked */}
+        {!gpsLocked && (
+          <div className="mt-4 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5 text-xs text-rose-950">
+              <AlertTriangle size={18} className="text-rose-700 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-bold">GPS Belum Aktif / Izin Lokasi Diperlukan</p>
+                <p className="text-rose-800">
+                  {gpsErrorMessage} Tombol <strong>Cekrek Foto</strong> dan <strong>Simpan Laporan ke Web</strong> dinonaktifkan sampai koordinat GPS asli perangkat terkunci.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => requestRealTimeGps(true)}
+              disabled={isRefreshingGps}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw size={13} className={isRefreshingGps ? 'animate-spin' : ''} />
+              <span>Aktifkan / Refresh GPS</span>
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Conditional Cloud Setup Notice if migration SQL hasn't been executed */}
@@ -787,7 +819,7 @@ export default function LaporanRelawanPage() {
             type="button"
             onClick={() => {
               navigator.clipboard?.writeText('supabase/migration_laporan_relawan.sql')
-              showToast('Nama file migrasi disalin: supabase/migration_laporan_relawan.sql', 'success')
+              showToast('Path file migrasi disalin: supabase/migration_laporan_relawan.sql', 'success')
             }}
             className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer"
           >
@@ -797,15 +829,15 @@ export default function LaporanRelawanPage() {
         </div>
       )}
 
-      {/* ─── MAIN WORKSPACE: FORM INPUT + LIVE COLLAGE CANVAS ─── */}
+      {/* ─── MAIN WORKSPACE: FORM + LIVE CAMERA CAPTURE + CANVAS ─── */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: FORM INPUT (5 Cols) */}
+        {/* LEFT COLUMN: FORM INPUT & CAMERA TRIGGER (5 Cols) */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-200">
             <div className="flex items-center gap-2">
               <FileText size={18} className="text-blue-700" />
               <h2 className="text-sm md:text-base font-bold text-slate-900">
-                1. Form Laporan &amp; Multi-Foto
+                1. Data Relawan &amp; Kamera Langsung
               </h2>
             </div>
             <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
@@ -875,14 +907,14 @@ export default function LaporanRelawanPage() {
             />
           </div>
 
-          {/* Upload Multi-Foto (1–6 Foto) */}
+          {/* Live Camera Multi-Shot Trigger (NO File Upload / Gallery) */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <Upload size={14} className="text-indigo-700" />
-                <span>Upload Multi-Foto (1–6 Foto)</span>
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Camera size={14} className="text-indigo-700" />
+                <span>Pengambilan Foto Langsung (1–6 Foto)</span>
                 <span className="text-rose-600">*</span>
-              </label>
+              </span>
               {photos.length > 0 && (
                 <button
                   type="button"
@@ -894,37 +926,27 @@ export default function LaporanRelawanPage() {
               )}
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleSelectPhotos}
-              className="hidden"
-              id="multi-photo-upload"
-            />
-            <label
-              htmlFor="multi-photo-upload"
-              className={`w-full flex flex-col items-center justify-center gap-1.5 px-4 py-4 rounded-xl border-2 border-dashed cursor-pointer transition text-center ${
-                photos.length >= 6
-                  ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
-                  : 'border-blue-300 bg-blue-50/70 hover:bg-blue-50 hover:border-blue-500 text-blue-900'
-              }`}
+            <button
+              type="button"
+              onClick={() => setIsCameraOpen(true)}
+              className="w-full flex flex-col items-center justify-center gap-1.5 px-4 py-4 rounded-xl border-2 border-blue-600 bg-blue-700 hover:bg-blue-800 text-white transition text-center shadow-xs cursor-pointer"
             >
-              <Camera size={22} className="text-blue-700" />
-              <span className="text-xs font-bold">
-                {photos.length === 0
-                  ? 'Tap untuk Pilih 1–6 Foto dari Galeri / Kamera HP'
-                  : photos.length < 6
-                    ? `+ Tambah Foto Lagi (${photos.length}/6 Terpilih)`
-                    : 'Maksimal 6 Foto Tercapai'}
+              <div className="flex items-center gap-2">
+                <Camera size={20} />
+                <span className="text-sm font-extrabold">
+                  {photos.length === 0
+                    ? 'Buka Kamera Laporan'
+                    : photos.length < 6
+                      ? `Buka Kamera & Tambah Foto (${photos.length}/6)`
+                      : `Kelola / Edit Jepretan Kamera (${photos.length}/6)`}
+                </span>
+              </div>
+              <span className="text-[11px] text-blue-100">
+                Kamera WebRTC multi-cekrek langsung tanpa akses galeri HP
               </span>
-              <span className="text-[11px] text-slate-500">
-                Kolase &amp; pemotongan proporsional otomatis dibuat sesuai jumlah foto
-              </span>
-            </label>
+            </button>
 
-            {/* Thumbnail Grid with Order Controls */}
+            {/* Thumbnail Strip of Camera Captures */}
             {photos.length > 0 && (
               <div className="grid grid-cols-3 gap-2 pt-1">
                 {photos.map((photo, index) => (
@@ -934,7 +956,7 @@ export default function LaporanRelawanPage() {
                   >
                     <img
                       src={photo.previewUrl}
-                      alt={`Foto ${index + 1}`}
+                      alt={`Jepretan ${index + 1}`}
                       className="w-full h-full object-cover"
                     />
                     <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-slate-900/80 text-white text-[10px] font-bold">
@@ -976,97 +998,89 @@ export default function LaporanRelawanPage() {
             )}
           </div>
 
-          {/* GPS & Real-time Watermark Metadata */}
+          {/* Read-Only Tamper-Proof Real-Time Lock Panel */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <MapPin size={14} className="text-rose-600" />
-                <span>Lokasi GPS &amp; Stempel Waktu</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <Lock size={14} className="text-blue-700" />
+                <span>Data Waktu &amp; Lokasi (Terkunci Sistem)</span>
               </span>
-              <button
-                type="button"
-                onClick={() => refreshLocationAndTime(true)}
-                className="text-[11px] font-bold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1 cursor-pointer"
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                  gpsLocked
+                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                    : 'bg-rose-100 text-rose-900 border-rose-300'
+                }`}
               >
-                <RefreshCw size={12} className={gpsStatus === 'loading' ? 'animate-spin' : ''} />
-                <span>Perbarui Lokasi &amp; Jam</span>
-              </button>
+                {gpsLocked ? 'READ-ONLY TERKUNCI' : 'MENUNGGU GPS'}
+              </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
-                  <Clock size={11} /> Jam (WIB)
-                </label>
-                <input
-                  type="text"
-                  value={timeStr}
-                  onChange={(e) => {
-                    setAutoClockActive(false)
-                    setTimeStr(e.target.value)
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-bold text-slate-900"
-                />
+              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
+                  <Clock size={10} /> Jam Server WIB
+                </p>
+                <p className="text-xs font-mono font-bold text-slate-900 mt-0.5">
+                  {jakartaNow.timeWithSeconds} WIB
+                </p>
               </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
-                  <Calendar size={11} /> Tanggal
-                </label>
-                <input
-                  type="date"
-                  value={tanggalISO}
-                  onChange={(e) => {
-                    setAutoClockActive(false)
-                    setTanggalISO(e.target.value)
-                    setDateStr(formatShortIndoDate(e.target.value))
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900"
-                />
+              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
+                  <Calendar size={10} /> Tanggal Real-Time
+                </p>
+                <p className="text-xs font-bold text-slate-900 mt-0.5 truncate">
+                  {jakartaNow.dateStr}
+                </p>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-slate-600">Alamat Lokasi</label>
-              <textarea
-                rows={2}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs text-slate-900 resize-none"
-              />
+            <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
+                  <MapPin size={10} className="text-rose-600" /> Alamat Lokasi GPS
+                </p>
+                <button
+                  type="button"
+                  onClick={() => requestRealTimeGps(true)}
+                  disabled={isRefreshingGps}
+                  className="text-[10px] font-bold text-blue-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw size={10} className={isRefreshingGps ? 'animate-spin' : ''} />
+                  <span>Refresh GPS</span>
+                </button>
+              </div>
+              <p
+                className={`text-xs mt-1 leading-snug ${
+                  gpsLocked ? 'text-slate-900 font-medium' : 'text-rose-700 font-semibold'
+                }`}
+              >
+                {gpsLocked
+                  ? address || `Koordinat GPS Terverifikasi (${gpsCoords})`
+                  : gpsErrorMessage}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
-                  <Compass size={11} /> Koordinat GPS
-                </label>
-                <input
-                  type="text"
-                  value={gpsCoords}
-                  onChange={(e) => setGpsCoords(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-[11px] font-mono text-slate-800"
-                />
+              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
+                  <Compass size={10} /> Koordinat GPS
+                </p>
+                <p
+                  className={`text-[11px] font-mono mt-0.5 truncate ${
+                    gpsLocked ? 'text-slate-900 font-bold' : 'text-rose-700 font-semibold'
+                  }`}
+                >
+                  {gpsLocked ? gpsCoords : 'Belum Terkunci'}
+                </p>
               </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1">
-                  <ShieldCheck size={11} /> Kode Foto
-                </label>
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={kodeFoto}
-                    onChange={(e) => setKodeFoto(e.target.value.toUpperCase())}
-                    className="w-full px-2 py-1.5 rounded-md border border-slate-300 bg-white text-[11px] font-mono font-bold text-slate-800 uppercase"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setKodeFoto(generateTimemarkCode('SPPG'))}
-                    title="Buat kode foto baru"
-                    className="px-2 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold cursor-pointer"
-                  >
-                    ↻
-                  </button>
-                </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 uppercase">
+                  <ShieldCheck size={10} /> Kode Foto
+                </p>
+                <p className="text-[11px] font-mono font-bold text-slate-900 mt-0.5 truncate">
+                  {kodeFoto}
+                </p>
               </div>
             </div>
           </div>
@@ -1125,10 +1139,12 @@ export default function LaporanRelawanPage() {
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4 text-center">
                 <div className="bg-white/95 border border-slate-200 rounded-xl px-4 py-3 shadow-md max-w-sm">
                   <p className="text-xs font-bold text-slate-900">
-                    Belum Ada Foto Dipilih
+                    Belum Ada Jepretan Kamera
                   </p>
                   <p className="text-[11px] text-slate-600 mt-1">
-                    Pilih 1 hingga 6 foto pada panel sebelah kiri untuk menyusun kolase otomatis dengan watermark SPPG Pasuruan.
+                    {gpsLocked
+                      ? 'Tekan "Buka Kamera Laporan" untuk mengambil 1–6 foto langsung di lokasi.'
+                      : 'Aktifkan GPS terlebih dahulu, lalu tekan "Buka Kamera Laporan" untuk mulai memotret.'}
                   </p>
                 </div>
               </div>
@@ -1141,7 +1157,7 @@ export default function LaporanRelawanPage() {
               Layout aktif:{' '}
               <strong className="text-slate-900">
                 {photos.length === 0
-                  ? 'Menunggu Foto'
+                  ? 'Menunggu Jepretan Kamera'
                   : photos.length === 1
                     ? '1 Frame Penuh'
                     : photos.length === 2
@@ -1160,13 +1176,13 @@ export default function LaporanRelawanPage() {
             </span>
           </div>
 
-          {/* 3 Primary Action Buttons */}
+          {/* 3 Primary Action Buttons (Save disabled until GPS is locked) */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <button
               type="button"
               onClick={handleSaveToWeb}
-              disabled={isSaving}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:opacity-60 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer"
+              disabled={isSaving || !gpsLocked || photos.length === 0}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
             >
               <Save size={16} />
               <span>{isSaving ? 'Menyimpan...' : 'Simpan Laporan ke Web'}</span>
@@ -1175,7 +1191,8 @@ export default function LaporanRelawanPage() {
             <button
               type="button"
               onClick={handleDownloadCollage}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer"
+              disabled={!gpsLocked || photos.length === 0}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
             >
               <Download size={16} />
               <span>Download Foto Kolase (JPG)</span>
@@ -1184,8 +1201,9 @@ export default function LaporanRelawanPage() {
             <button
               type="button"
               onClick={() => handleShareWhatsApp()}
-              style={{ backgroundColor: '#25D366' }}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:brightness-95 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer"
+              disabled={!gpsLocked || photos.length === 0}
+              style={gpsLocked && photos.length > 0 ? { backgroundColor: '#25D366' } : undefined}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:brightness-95 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs md:text-sm font-bold shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
             >
               <Share2 size={16} />
               <span>Share ke WhatsApp</span>
@@ -1221,7 +1239,6 @@ export default function LaporanRelawanPage() {
         ref={archiveSectionRef}
         className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 md:p-6 space-y-5 scroll-mt-20"
       >
-        {/* Archive Header + View Toggle */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
           <div>
             <h2 className="text-base md:text-lg font-bold text-slate-900">
@@ -1271,7 +1288,7 @@ export default function LaporanRelawanPage() {
           </div>
         </div>
 
-        {/* Filter Bar: Tanggal, Pencarian, dan Pill Divisi */}
+        {/* Filter Bar */}
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex items-center gap-2">
@@ -1315,7 +1332,6 @@ export default function LaporanRelawanPage() {
             </div>
           </div>
 
-          {/* Divisi Filter Pills */}
           <div className="flex flex-wrap gap-1.5">
             {DIVISI_FILTER_OPTIONS.map((opt) => {
               const active = filterDivisi === opt.value
@@ -1347,7 +1363,7 @@ export default function LaporanRelawanPage() {
             <Images size={28} className="mx-auto text-slate-400" />
             <p className="text-sm font-bold text-slate-800">Belum ada laporan pada filter ini</p>
             <p className="text-xs text-slate-500">
-              Unggah foto kolase di atas dan klik &ldquo;Simpan Laporan ke Web&rdquo; untuk mencatat laporan relawan.
+              Ambil foto lewat Kamera Laporan dan klik &ldquo;Simpan Laporan ke Web&rdquo; untuk mencatat laporan relawan.
             </p>
           </div>
         ) : archiveViewMode === 'gallery' ? (
@@ -1363,7 +1379,6 @@ export default function LaporanRelawanPage() {
                       : 'border-slate-200 hover:border-slate-300 shadow-2xs'
                   }`}
                 >
-                  {/* Clickable Thumbnail for Zoom Lightbox */}
                   <button
                     type="button"
                     onClick={() => setLightboxItem(item)}
@@ -1390,7 +1405,6 @@ export default function LaporanRelawanPage() {
                     )}
                   </button>
 
-                  {/* Card Body */}
                   <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
@@ -1416,7 +1430,7 @@ export default function LaporanRelawanPage() {
                       <div className="text-[11px] text-slate-500 space-y-0.5 pt-1 border-t border-slate-100">
                         <p className="truncate flex items-center gap-1">
                           <MapPin size={11} className="text-rose-500 shrink-0" />
-                          <span className="truncate">{item.lokasi_alamat || DEFAULT_ADDRESS}</span>
+                          <span className="truncate">{item.lokasi_alamat || item.koordinat_gps || '-'}</span>
                         </p>
                         <p className="font-mono text-[10px] text-slate-400">
                           Kode: {item.kode_foto || '-'}
@@ -1424,7 +1438,6 @@ export default function LaporanRelawanPage() {
                       </div>
                     </div>
 
-                    {/* Quick Card Actions */}
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                       <button
                         type="button"
@@ -1461,7 +1474,6 @@ export default function LaporanRelawanPage() {
             })}
           </div>
         ) : (
-          /* Institutional ERP Table View */
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
@@ -1565,6 +1577,26 @@ export default function LaporanRelawanPage() {
           </div>
         )}
       </section>
+
+      {/* ─── LIVE CAMERA MULTI-SHOT MODAL ───────────────────────── */}
+      <LiveCameraCapture
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        photos={photos}
+        onCapturePhoto={handleCameraShot}
+        onRemovePhoto={handleRemovePhoto}
+        onMovePhoto={handleMovePhoto}
+        maxPhotos={6}
+        gpsLocked={gpsLocked}
+        gpsStatusMessage={gpsErrorMessage}
+        gpsAccuracyMeters={gpsAccuracyMeters}
+        onRefreshGps={() => requestRealTimeGps(true)}
+        isRefreshingGps={isRefreshingGps}
+        liveClockWithSeconds={jakartaNow.timeWithSeconds}
+        liveDateStr={jakartaNow.dateStr}
+        divisiLabel={divisi}
+        liveAddress={address || `Koordinat GPS Terverifikasi (${gpsCoords})`}
+      />
 
       {/* ─── LIGHTBOX MODAL FOR ZOOM INSPECTION ─────────────────── */}
       {lightboxItem && (

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const FALLBACK_ADDRESS = 'Wonorejo, Pasuruan, Jawa Timur, 67173'
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const latStr = searchParams.get('lat')
@@ -13,8 +11,9 @@ export async function GET(req: NextRequest) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json({
       success: false,
-      address: FALLBACK_ADDRESS,
-      source: 'fallback'
+      address: '',
+      mapLabel: 'GPS',
+      source: 'invalid_coords'
     })
   }
 
@@ -60,20 +59,20 @@ export async function GET(req: NextRequest) {
     const formattedAddress =
       uniqueParts.length > 0
         ? uniqueParts.join(', ')
-        : data?.display_name || FALLBACK_ADDRESS
+        : data?.display_name || ''
 
     return NextResponse.json({
-      success: true,
+      success: Boolean(formattedAddress),
       address: formattedAddress,
-      mapLabel: a.city_district || a.village || a.county || 'Wonorejo / Pasuruan',
+      mapLabel: a.city_district || a.village || a.county || 'Lokasi GPS',
       source: 'nominatim'
     })
   } catch (err) {
-    console.warn('Reverse geocode fallback triggered:', err)
+    console.warn('Reverse geocode error:', err)
     return NextResponse.json({
       success: false,
-      address: FALLBACK_ADDRESS,
-      mapLabel: 'Wonorejo / Pasuruan',
+      address: '',
+      mapLabel: 'Lokasi GPS',
       source: 'fallback'
     })
   }
